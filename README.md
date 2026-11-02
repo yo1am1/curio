@@ -7,9 +7,7 @@ Its tools are validated and read-only.
 The app opens with a conversation. You can also browse personalized recommendations,
 search by text or photo, and explore product connections.
 
-![Curio conversation home](docs/screenshots/curio-home.jpg)
-
-[Mobile conversation home](docs/screenshots/curio-home-mobile.jpg).
+![Curio fashion recommendations](docs/screenshots/curio-fashion.jpg)
 
 | Capability | Evidence and behavior |
 | --- | --- |
@@ -68,8 +66,6 @@ collaborative, visual-style and graph approaches remain inspectable alternatives
 These screenshots use the 5,000-customer sample and a partial photo index covering
 3,537 of 14,300 catalog products. The app has no current stock information or checkout.
 
-![Curio fashion recommendations](docs/screenshots/curio-fashion.jpg)
-
 [Product details](docs/screenshots/mvp-product-detail.jpg) show descriptions,
 approximate prices and related pieces.
 [Mobile feed](docs/screenshots/mvp-mobile.jpg) uses the same native controls and stacks cards.
@@ -117,8 +113,11 @@ Your conversation stays available when you navigate or close the panel. **New ch
 clears it. The assistant uses a limited number of recent messages as context.
 If the configured LLM provider is unavailable, the app shows an error and lets you retry.
 
-[Earlier assistant capture](docs/screenshots/mvp-assistant.jpg).
-Older screenshots use the original Clothy name. The home and Fashion screenshots show Curio.
+![Curio assistant entry screen](docs/screenshots/curio-home.jpg)
+
+[Mobile assistant entry screen](docs/screenshots/curio-home-mobile.jpg).
+[Earlier assistant conversation](docs/screenshots/mvp-assistant.jpg).
+Older screenshots use the original Clothy name. The feed and assistant entry screenshots show Curio.
 
 ## Data
 
