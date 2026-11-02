@@ -1,11 +1,11 @@
-# Curio — agentic recommendations, fashion edition
+# Curio: agentic recommendations, fashion edition
 
-Curio helps people discover fashion through conversation. Describe a style, occasion
-or budget; the agent finds real catalog items, compares their details and refines
-its search using validated, read-only tools.
+Curio is a fashion recommendation app you can talk to. Describe what you want or
+set a budget, then ask the agent to compare catalog items or refine the search.
+Its tools are validated and read-only.
 
-The conversation is the home screen. Personalized recommendations, text/photo
-search and product connections remain available as separate browsing views.
+The app opens with a conversation. You can also browse personalized recommendations,
+search by text or photo, and explore product connections.
 
 ![Curio conversation home](docs/screenshots/curio-home.jpg)
 
@@ -19,7 +19,7 @@ search and product connections remain available as separate browsing views.
 
 ## Fashion engine
 
-The fashion domain uses real historical H&M transactions and a separate photo index.
+Recommendations use historical H&M transactions. Photo search has its own image index.
 
 | Feature | How it works |
 |---|---|
@@ -37,8 +37,8 @@ The fashion domain uses real historical H&M transactions and a separate photo in
 Users without usable purchase history get the products all shoppers bought most in the last
 week of data, which also fill lists that come up short.
 
-The Fashion page offers ten real historical customers whose recommendations can be judged at a glance,
-two per section (Ladieswear, Divided, Menswear, Sport, Baby/Children). Each has a coherent
+The Fashion page has ten example customers from the historical data, two per section
+(Ladieswear, Divided, Menswear, Sport, Baby/Children). Each has a coherent
 history (6-30 products, at least 80% from one section), ten collaborative recommendations
 all backed by co-purchases (no best-seller filler) that stay in their sections and cover
 their main product group, and a purchase with co-purchased complements for the graph. The checks only read the
@@ -50,23 +50,23 @@ everyone else accessible, and offline evaluation scores all eligible customers.
 The conversation home leads to **Fashion**, **Discover**, and
 **Product connections**. **Model quality** stays outside navigation at `/quality`
 and in the research records. **Ask Curio** also opens a floating assistant on browsing
-pages. Only the active page and open
-chat run their requests. A compact toolbar holds shopping-history and method controls.
+pages. Only the active page and open chat make requests. The toolbar holds
+shopping-history and recommendation-method controls.
 Cards group name, price and type below the photo; detailed ranking evidence opens
 on demand. Every card opens a product viewer with related pieces. Selected
 histories persist across navigation.
 Text and photo search share one discovery workspace. A mode switch leads to a
 focused search panel, with section filtering, query examples and a 10 MB upload limit.
-Matching pieces appear below the controls; catalog context stays in the footer.
-Missing images, empty results, unavailable services and an unconfigured assistant
-have explicit states.
+Matching pieces appear below the controls, with catalog details in the footer.
+The app explains when images are missing, a search has no matches, a service is
+unavailable or the assistant needs configuration.
 
 ### Personalized discovery
 
 The learned ranker is the default when its model is available. Buy-again,
 collaborative, visual-style and graph approaches remain inspectable alternatives.
-These captures use the real 5,000-customer sample and an explicitly partial index
-of 3,537 of 14,300 catalog photos; they show no current stock or checkout capability.
+These screenshots use the 5,000-customer sample and a partial photo index covering
+3,537 of 14,300 catalog products. The app has no current stock information or checkout.
 
 ![Curio fashion recommendations](docs/screenshots/curio-fashion.jpg)
 
@@ -113,13 +113,12 @@ Earlier graph theme captures remain available:
 
 Open **Ask Curio** to describe a piece, set a budget, or refine the previous search.
 Replies use the catalog search and show product previews that open the product viewer.
-The conversation stays available while navigating or closing the panel; **New chat**
-clears it. Recent messages provide bounded context, keeping long conversations usable.
-The assistant uses the configured LLM provider; an unavailable provider produces an
-error with a retry path rather than fabricated results.
+Your conversation stays available when you navigate or close the panel. **New chat**
+clears it. The assistant uses a limited number of recent messages as context.
+If the configured LLM provider is unavailable, the app shows an error and lets you retry.
 
 [Earlier assistant capture](docs/screenshots/mvp-assistant.jpg).
-Older captures retain the original Clothy branding; current entry screens are shown above.
+Older screenshots use the original Clothy name. The home and Fashion screenshots show Curio.
 
 ## Data
 
@@ -127,9 +126,9 @@ The app uses the [H&M Personalized Fashion Recommendations](https://www.kaggle.c
 dataset from Kaggle: 105k articles with photos and 31.8M real purchases from 2018 to 2020.
 `scripts/prepare_data.py` keeps the last 12 weeks of transactions, samples 5,000 customers
 with at least five purchases, and extracts the photos of the products they bought.
-It also writes `co_purchases.parquet`: links between catalog products learned from all
+It also writes `co_purchases.parquet`, with links between catalog products learned from all
 shoppers in that window, including shoppers outside the demo sample. Repeated purchases
-of one item count once per basket; pairs need at least two shared baskets. And it writes
+of one item count once per basket; pairs need at least two shared baskets. It also writes
 `shopper_purchases.parquet`: every shopper's purchases of catalog products (3.0M rows from
 about 480,000 shoppers, under anonymous integer ids), which popularity and collaborative
 filtering learn from. The 5,000 sampled customers alone made 2% of those purchases, far
@@ -392,7 +391,7 @@ customers, seed 42; 819 of them bought in the holdout week, 794 something new):
 Recommenders never repeat a past purchase, so "new items" is the fair column. JSON output
 also includes list fill. Users without both training and holdout purchases are excluded.
 
-### Audit: where the signal was lost
+### What the recommendation audit found
 
 An audit of the earlier system found the recommenders learning from the 5,000 sampled
 customers only, 2% of the window's purchases. Each fix was measured on the holdout week:
@@ -445,5 +444,5 @@ uv run python -m scripts.take_screenshots --example 5 --skip-chat
 
 This is Curio's fashion-only portfolio release. The installable distribution is
 `curio-recommendations`; the `clothes_recommender` import path remains stable for
-existing scripts. The broader multi-domain work is preserved separately on
-`next/curio-multidomain` and is not part of this release.
+existing scripts. Work on other recommendation domains is saved on
+`next/curio-multidomain`, outside this release.
