@@ -1,5 +1,7 @@
 # Curio: agentic recommendations, fashion edition
 
+[![CI](https://github.com/yo1am1/curio/actions/workflows/ci.yml/badge.svg?branch=release%2Ffashion-mvp)](https://github.com/yo1am1/curio/actions/workflows/ci.yml)
+
 Find fashion through personalized recommendations, photo search or a conversation.
 Curio uses historical H&M purchases and real product photos, with a tool-using
 assistant that searches the catalog and compares items.
@@ -76,7 +78,7 @@ The research dataset is downloaded separately and is not included in this reposi
 [Data, architecture, Docker and API reference](docs/technical-guide.md) ·
 [LLM setup](docs/technical-guide.md#llm-configuration) ·
 [Tests and development](docs/technical-guide.md#development) ·
-[Recommendation research](docs/recommendation-research.md)
+[Documentation and research](docs/README.md)
 
 This release covers fashion. Work on other domains is saved separately on
 `next/curio-multidomain`.

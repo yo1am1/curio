@@ -4,7 +4,6 @@
 
 ## Fashion engine
 
-
 Recommendations use historical H&M transactions. Photo search has its own image index.
 
 | Feature | How it works |
@@ -110,6 +109,10 @@ flowchart LR
     API --> S[ProductSearch]
     API --> CB[ContentBasedRecommender]
     API --> CF[CollaborativeRecommender]
+    API --> R[LearnedRecommender]
+    API --> RP[RepeatPurchaseRecommender]
+    R --> CF & P
+    RP --> P
     API --> G[GraphRecommender]
     API --> A[ShoppingAssistant]
     S --> E[CLIP encoder]
@@ -132,8 +135,8 @@ src/clothes_recommender/
 ├── embeddings.py      # CLIP encoder (lazy-loaded)
 ├── vector_store.py    # Qdrant wrapper: upsert, filtered search, vector lookup
 ├── search.py          # Text and image search
-├── recommenders/      # content_based, collaborative, graph, popularity
-├── chat/              # llm (provider-agnostic), intent, prompts, assistant
+├── recommenders/      # learned, repeat, content_based, collaborative, graph, popularity
+├── chat/              # llm (provider-agnostic), intent, prompts, tools, assistant
 ├── services.py        # Composition root
 ├── api.py             # FastAPI app
 └── ui.py              # Streamlit client
@@ -184,6 +187,13 @@ uv run python -m scripts.fetch_query_photos --articles data/raw/articles.csv
 uv run python -m scripts.evaluate --qdrant-path .qdrant --output data/evaluation.json
 uv run uvicorn clothes_recommender.api:create_app --factory --reload   # http://localhost:8000/docs
 uv run streamlit run src/clothes_recommender/ui.py     # http://localhost:8501
+```
+
+To enable the learned ranking shown in the screenshots, train its optional model
+before starting the API. Without it, the feed defaults to buy-again recommendations:
+
+```bash
+uv run python -m scripts.train_ranker --data-dir data --train-through 2020-09-15
 ```
 
 The example photos show H&M garments that are not in the sampled catalog, so image search
@@ -287,6 +297,12 @@ uv run python -m scripts.evaluate --data-dir data
 uv run python -m scripts.evaluate --data-dir data --qdrant-path .qdrant --output data/evaluation.json
 ```
 
+### Historical discovery benchmark
+
+The following results describe the earlier system, before repeat-aware ranking.
+For the current learned model and buy-again comparison, see the beginning of this
+section and the [recommendation audit](recommendation-audit.md).
+
 The last seven calendar days (2020-09-16 to 09-22) are held out. Popularity, collaborative
 filtering and co-purchase links are rebuilt from every shopper's purchases before that
 week; nothing from the holdout week reaches training. Results on the default sample (5,000
@@ -299,8 +315,9 @@ customers, seed 42; 819 of them bought in the holdout week, 794 something new):
 | Knowledge graph | 0.0101 | 0.85x | 0.0097 | 18.4% |
 | Content-based | 0.0054 | 0.45x | 0.0052 | 32.4% |
 
-Recommenders never repeat a past purchase, so "new items" is the fair column. JSON output
-also includes list fill. Users without both training and holdout purchases are excluded.
+These discovery methods excluded past purchases, so new-item MAP was their primary
+comparison. JSON output also included list fill. Users without both training and
+holdout purchases were excluded.
 
 ### What the recommendation audit found
 
@@ -328,8 +345,9 @@ validation mean; 7 days of popularity beat 5 and 14. Two ideas were tested and d
   hybrid was removed.
 
 Re-recommending a customer's own recent purchases would score 0.0212 on all purchases,
-because many H&M customers rebuy items. The recommenders exclude past purchases by design,
-which costs that signal on the "all purchases" column.
+because many H&M customers rebuy items. Those earlier recommenders excluded past
+purchases and lost that signal on the "all purchases" column. The current repeat
+baseline and learned ranker can recommend past purchases.
 
 The prepared sample and catalog can reflect the full observation window (the catalog is
 the set of products the sample bought), so these are sample-level results, not a
@@ -357,4 +375,3 @@ This is Curio's fashion-only portfolio release. The installable distribution is
 `curio-recommendations`; the `clothes_recommender` import path remains stable for
 existing scripts. Work on other recommendation domains is saved on
 `next/curio-multidomain`, outside this release.
-
