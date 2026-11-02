@@ -8,9 +8,10 @@
 - [Recommendation audit](recommendation-audit.md): repeat-aware ranking, baselines, chronological evaluation and uncertainty.
 - [Research direction](recommendation-research.md): retrieval bottlenecks, dataset comparisons and proposed experiments.
 
-The technical guide describes the fashion release. Screenshots with Clothy branding
-show earlier versions; the README labels them. The app uses historical research
-data, approximate prices and a partial photo index. No hosted demo is available yet.
+The technical guide describes the fashion release. README screenshots show the
+current Curio UI; historical development records retain earlier captures. The app
+uses historical research data, approximate prices and a partial photo index.
+No hosted demo is available yet.
 
 ## Experiment records
 

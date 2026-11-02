@@ -14,31 +14,29 @@ Describe what you want, set a budget, then refine your search or compare product
 The agent uses validated, read-only catalog tools and keeps context across follow-ups.
 It is available from the conversation home and a floating panel on browsing pages.
 
-![Shopping assistant with catalog results, earlier Clothy branding](docs/screenshots/mvp-assistant.jpg)
+![Curio floating shopping assistant](docs/screenshots/curio-assistant.jpg)
 
 ## Search by description or photo
 
 Search in everyday language, upload a photo, or try an example garment.
 
-![Description search results](docs/screenshots/mvp-discover-text.jpg)
+![Description search results](docs/screenshots/curio-discover-text.jpg)
 
-![Photo search results](docs/screenshots/mvp-discover-photo.jpg)
+![Photo search results](docs/screenshots/curio-discover-photo.jpg)
 
 ## Explore product connections
 
 Browse co-purchased pieces, visually similar products and higher-priced alternatives.
 Open a product to inspect its details and the evidence behind its recommendations.
 
-![Product connections](docs/screenshots/mvp-connections.jpg)
+![Product connections](docs/screenshots/curio-connections.jpg)
 
-![Product details and related pieces](docs/screenshots/mvp-product-detail.jpg)
+![Product details and related pieces](docs/screenshots/curio-product-detail.jpg)
 
 ## On your phone
 
-![Fashion feed on mobile](docs/screenshots/mvp-mobile.jpg)
+![Fashion feed on mobile](docs/screenshots/curio-mobile.jpg)
 
-The feed screenshot at the top uses Curio branding. Earlier captures show the
-same fashion features under the original Clothy name.
 [Conversation home](docs/screenshots/curio-home.jpg) ·
 [Mobile conversation home](docs/screenshots/curio-home-mobile.jpg)
 
