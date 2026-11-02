@@ -445,3 +445,8 @@ This is Curio's fashion-only portfolio release. The installable distribution is
 `curio-recommendations`; the `clothes_recommender` import path remains stable for
 existing scripts. Work on other recommendation domains is saved on
 `next/curio-multidomain`, outside this release.
+
+## Contributors
+
+Created and maintained by [Yehor Trepalin](https://github.com/yo1am1).
+AI development assistance: Claude Code, Codex and Antigravity.
