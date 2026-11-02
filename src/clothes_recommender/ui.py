@@ -1,4 +1,4 @@
-"""Clothy fashion-discovery MVP: a thin Streamlit client over the HTTP API.
+"""Curio fashion-discovery MVP: a thin Streamlit client over the HTTP API.
 
 Run with: uv run streamlit run src/clothes_recommender/ui.py
 """
@@ -880,6 +880,16 @@ def discovery_page() -> None:
         image_search_tab()
 
 
+def agent_home() -> None:
+    st.title("Find your next favorite.")
+    st.caption(
+        "Tell Curio your style, occasion or budget. Explore options and compare the details."
+    )
+    st.button("New conversation", type="tertiary", key="chat_reset_home", on_click=reset_chat)
+    with st.container(key="agent_conversation"):
+        chat_conversation("home")
+
+
 def show_chat_turn(turn: dict, index: int, context: str) -> None:
     with st.chat_message(turn["role"]):
         st.markdown(turn["content"])
@@ -917,7 +927,12 @@ def chat_conversation(context: str) -> None:
         )
         return
     history: list[dict] = st.session_state.setdefault("chat_history", [])
-    transcript = st.container(height=360, border=False, autoscroll=True, key=f"chat_log_{context}")
+    transcript = st.container(
+        height=240 if context == "home" and not history else 360,
+        border=False,
+        autoscroll=True,
+        key=f"chat_log_{context}",
+    )
     with transcript:
         if not history:
             with st.chat_message("assistant"):
@@ -957,7 +972,7 @@ def chat_conversation(context: str) -> None:
 
 
 def chat_tab() -> None:
-    st.title("Shopping assistant")
+    st.title("Ask Curio")
     st.button("New chat", key="chat_reset_page", on_click=reset_chat)
     chat_conversation("page")
 
@@ -966,7 +981,7 @@ def chat_tab() -> None:
 def assistant_popup() -> None:
     with st.container(key="assistant_launcher"):
         popup = st.popover(
-            "Ask Clothy",
+            "Ask Curio",
             icon=":material/chat_bubble:",
             type="primary",
             key="assistant_popup",
@@ -976,7 +991,7 @@ def assistant_popup() -> None:
         return
     with popup, st.container(key="assistant_panel"):
         with st.container(horizontal=True, vertical_alignment="center"):
-            st.subheader("Clothy", width="stretch", anchor=False)
+            st.subheader("Curio", width="stretch", anchor=False)
             st.button("New chat", key="chat_reset_popup", type="tertiary", on_click=reset_chat)
             st.button("Close", key="chat_close", type="tertiary", on_click=close_assistant)
         st.caption("Find pieces. Refine by colour, style or budget.")
@@ -985,19 +1000,20 @@ def assistant_popup() -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Clothy · Fashion discovery", page_icon="C", layout="wide")
+    st.set_page_config(page_title="Curio · Agentic recommendations", page_icon="C", layout="wide")
     st.html("<style>" + Path(__file__).with_name("ui.css").read_text() + "</style>")
     health = call_api("GET", "/health")
-    st.html('<div class="clothy-brand">Clothy<span>FASHION DISCOVERY</span></div>')
+    st.html('<div class="curio-brand">Curio<span>AGENTIC RECOMMENDATIONS</span></div>')
     if health is None:
-        st.info("Clothy cannot connect right now. Please try again shortly.")
+        st.info("Curio cannot connect right now. Please try again shortly.")
         if st.button("Retry connection"):
             st.rerun()
         return
     st.session_state["service_health"] = health
     page = st.navigation(
         [
-            st.Page(recommendations_tab, title="For you", default=True),
+            st.Page(agent_home, title="Ask Curio", default=True),
+            st.Page(recommendations_tab, title="Fashion", url_path="fashion"),
             st.Page(discovery_page, title="Discover", url_path="discover"),
             st.Page(knowledge_graph_tab, title="Product connections", url_path="connections"),
             st.Page(evaluation_tab, title="Model quality", url_path="quality", visibility="hidden"),
@@ -1006,7 +1022,8 @@ def main() -> None:
         position="top",
     )
     page.run()
-    assistant_popup()
+    if page.title != "Ask Curio":
+        assistant_popup()
     with st.container(key="catalog_note"):
         indexed = f"{health['indexed_products']:,}"
         total = f" of {health['catalog_products']:,}" if health.get("catalog_products") else ""

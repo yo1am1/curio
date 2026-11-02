@@ -1,7 +1,25 @@
-# Clothy: multimodal fashion recommender
+# Curio — agentic recommendations, fashion edition
 
-Clothy is a fashion-discovery MVP built on real H&M purchase data. It combines CLIP vector
-search, classic and graph recommendations, and an LLM shopping assistant:
+Curio helps people discover fashion through conversation. Describe a style, occasion
+or budget; the agent finds real catalog items, compares their details and refines
+its search using validated, read-only tools.
+
+The conversation is the home screen. Personalized recommendations, text/photo
+search and product connections remain available as separate browsing views.
+
+![Curio conversation home](docs/screenshots/curio-home.jpg)
+
+[Mobile conversation home](docs/screenshots/curio-home-mobile.jpg).
+
+| Capability | Evidence and behavior |
+| --- | --- |
+| Agentic discovery | Refine searches and inspect exact products, with up to four validated read-only tool calls per turn and grounded follow-ups. |
+| Personalized recommendations | Historical H&M purchase signals, buy-again and collaborative candidates, with reproducible offline evaluation. |
+| Visual exploration | CLIP text/photo search and product connections, using real catalog images. |
+
+## Fashion engine
+
+The fashion domain uses real historical H&M transactions and a separate photo index.
 
 | Feature | How it works |
 |---|---|
@@ -10,29 +28,29 @@ search, classic and graph recommendations, and an LLM shopping assistant:
 | Image search | An uploaded photo is embedded with CLIP's image encoder and compared the same way. Example photos show H&M garments outside the sampled catalog, so every match is a different product. |
 | Visually similar products | A product's own image embedding is the query (CLIP item-to-item), shown next to the graph's co-purchase complements and alternatives. |
 | Content-based recommendations | One *taste vector* per interest: for each of the three product groups a user buys most (e.g. dresses, leggings), the recency-weighted mean of those purchases' image embeddings, searched within that group and the sections it was bought from. Groups get slots by weight, so a dress buyer who also buys leggings sees both. |
-| Collaborative recommendations | Item-to-item collaborative filtering over all ~480,000 shoppers in the 12-week window, not just the sample: a product scores by how many shoppers bought it together with the customer's purchases, recent purchases weighted more and best-sellers damped. Each result names the purchase behind it ("163 shoppers who bought Bradley trousers also bought this"). The best strategy offline. |
+| Collaborative recommendations | Item-to-item collaborative filtering over all ~480,000 shoppers in the 12-week window, not just the sample: a product scores by how many shoppers bought it together with the customer's purchases, recent purchases weighted more and best-sellers damped. Each result names the purchase behind it ("163 shoppers who bought Bradley trousers also bought this"). Its explanations expose the underlying co-purchase evidence. |
 | Graph recommendations | Past purchases seed an in-memory graph of co-purchases, Shopify categories and attributes. Shared attributes are weighted by inverse degree; each result includes its evidence. |
 | Knowledge graph | Explore a product's category, attributes and co-purchased neighbors, with complementary products and higher-priced alternatives. |
-| Offline evaluation | Every strategy is trained on purchases before a cutoff and scored on the following week (MAP@12, catalog coverage); the Evaluation tab compares them. |
+| Offline evaluation | Every strategy is trained on purchases before a cutoff and scored on the following week (MAP@12, catalog coverage); the Model quality page compares them. |
 | Tool-using shopping agent | The LLM extracts constraints, retrieves matches, and can refine a visual search or inspect exact product IDs for details and comparisons. Follow-ups reload prior cards from the catalog. Up to four validated read-only tool calls per turn; budget and metadata filters survive query refinements. |
 
 Users without usable purchase history get the products all shoppers bought most in the last
 week of data, which also fill lists that come up short.
 
-The demo opens with ten real customers whose recommendations can be judged at a glance,
+The Fashion page offers ten real historical customers whose recommendations can be judged at a glance,
 two per section (Ladieswear, Divided, Menswear, Sport, Baby/Children). Each has a coherent
 history (6-30 products, at least 80% from one section), ten collaborative recommendations
 all backed by co-purchases (no best-seller filler) that stay in their sections and cover
 their main product group, and a purchase with co-purchased complements for the graph. The checks only read the
 recommenders' output; nothing is tuned for these customers. "Browse all customers" keeps
-everyone else accessible, and the Evaluation tab scores all eligible customers.
+everyone else accessible, and offline evaluation scores all eligible customers.
 
 ## MVP interface
 
-Three visible pages organize shopping: **For you**, **Discover**, and
-**Product connections**. **Model quality** remains available directly at `/quality`
-and through the research records, outside the shopping navigation. **Ask Clothy** opens a floating shopping
-assistant from the bottom-right corner on every page. Only the active page and open
+The conversation home leads to **Fashion**, **Discover**, and
+**Product connections**. **Model quality** stays outside navigation at `/quality`
+and in the research records. **Ask Curio** also opens a floating assistant on browsing
+pages. Only the active page and open
 chat run their requests. A compact toolbar holds shopping-history and method controls.
 Cards group name, price and type below the photo; detailed ranking evidence opens
 on demand. Every card opens a product viewer with related pieces. Selected
@@ -50,7 +68,7 @@ collaborative, visual-style and graph approaches remain inspectable alternatives
 These captures use the real 5,000-customer sample and an explicitly partial index
 of 3,537 of 14,300 catalog photos; they show no current stock or checkout capability.
 
-![Clothy personalized feed](docs/screenshots/mvp-for-you.jpg)
+![Curio fashion recommendations](docs/screenshots/curio-fashion.jpg)
 
 [Product details](docs/screenshots/mvp-product-detail.jpg) show descriptions,
 approximate prices and related pieces.
@@ -64,14 +82,14 @@ interval and catalog-selection limitations; the observed gain is not presented a
 established superiority. A [subsequent tuning round](docs/recommendation-tuning.md)
 failed confirmation and was not promoted.
 
-![Clothy model quality](docs/screenshots/mvp-quality.jpg)
+[Historical evaluation capture](docs/screenshots/mvp-quality.jpg).
 
 ### Search by description or photo
 
 Describe a piece and select **Search photos**, or start with a query example.
 Photo search accepts uploads or example garments from outside the catalog.
 
-![Clothy discovery workspace](docs/screenshots/mvp-discover-start.jpg)
+[Earlier fashion discovery capture](docs/screenshots/mvp-discover-start.jpg).
 
 See [description matches](docs/screenshots/mvp-discover-text.jpg),
 [photo matches](docs/screenshots/mvp-discover-photo.jpg), and the
@@ -83,7 +101,7 @@ Choose a starting piece, explore the graph, then browse related products.
 The relationship table expands on demand, and the graph keeps its layout limitation
 visible. Shopping-history controls use the same toolbar pattern as the feed.
 
-![Clothy product connections](docs/screenshots/mvp-connections.jpg)
+[Earlier product connections capture](docs/screenshots/mvp-connections.jpg).
 
 [Phone layout](docs/screenshots/mvp-connections-mobile.jpg).
 Earlier graph theme captures remain available:
@@ -93,14 +111,15 @@ Earlier graph theme captures remain available:
 
 ### Shopping assistant
 
-Open **Ask Clothy** to describe a piece, set a budget, or refine the previous search.
+Open **Ask Curio** to describe a piece, set a budget, or refine the previous search.
 Replies use the catalog search and show product previews that open the product viewer.
 The conversation stays available while navigating or closing the panel; **New chat**
 clears it. Recent messages provide bounded context, keeping long conversations usable.
 The assistant uses the configured LLM provider; an unavailable provider produces an
 error with a retry path rather than fabricated results.
 
-![Clothy shopping assistant](docs/screenshots/mvp-assistant.jpg)
+[Earlier assistant capture](docs/screenshots/mvp-assistant.jpg).
+Older captures retain the original Clothy branding; current entry screens are shown above.
 
 ## Data
 
@@ -213,7 +232,7 @@ scripts/fetch_photos.py # Download the sampled products' photos from the mirror
 scripts/fetch_query_photos.py # Example image-search photos of garments outside the catalog
 scripts/build_index.py # Embed product photos with CLIP, upsert into Qdrant
 scripts/classify_product_types.py # Reviewable H&M-to-Shopify category decisions
-scripts/evaluate.py # Chronological holdout evaluation; JSON results for the Evaluation tab
+scripts/evaluate.py # Chronological holdout evaluation; JSON results for the Model quality page
 scripts/take_screenshots.py # Re-capture the README screenshots with Playwright
 ```
 
@@ -259,7 +278,7 @@ uv run streamlit run src/clothes_recommender/ui.py     # http://localhost:8501
 
 The example photos show H&M garments that are not in the sampled catalog, so image search
 always has to find a different product that looks alike. `scripts.evaluate` writes the
-results that the Evaluation tab shows; without it, that tab explains how to create them.
+results that the Model quality page shows; without it, that tab explains how to create them.
 
 `build_index --limit N` indexes a smaller subset spread across sections. Qdrant runs
 embedded (stored in `.qdrant/`) unless `QDRANT_URL` is set, so no external service is needed.
@@ -354,7 +373,7 @@ Use `--holdout-end YYYY-MM-DD` to reproduce earlier validation weeks.
 ```bash
 uv run python -m scripts.evaluate --data-dir data
 # Content-based recommendations need an explicitly chosen matching image index;
-# --output saves the JSON that GET /evaluation and the Evaluation tab show:
+# --output saves the JSON that GET /evaluation and the Model quality page show:
 uv run python -m scripts.evaluate --data-dir data --qdrant-path .qdrant --output data/evaluation.json
 ```
 
@@ -421,3 +440,10 @@ uv run ruff check . && uv run ruff format --check .
 # Re-capture README screenshots (API + UI running; uses the local Google Chrome)
 uv run python -m scripts.take_screenshots --example 5 --skip-chat
 ```
+
+### Release scope and compatibility
+
+This is Curio's fashion-only portfolio release. The installable distribution is
+`curio-recommendations`; the `clothes_recommender` import path remains stable for
+existing scripts. The broader multi-domain work is preserved separately on
+`next/curio-multidomain` and is not part of this release.

@@ -747,7 +747,7 @@ def test_main_renders_only_selected_native_page(mocked_api):
     calls, _ = mocked_api
     app = AppTest.from_function(run_main).run()
     assert not app.exception
-    assert app.title[0].value == "For you"
+    assert app.title[0].value == "Find your next favorite."
     assert any(path == "/health" for path, _ in calls)
     assert not any(
         path in ("/evaluation", "/search/examples") or path.endswith("/graph") for path, _ in calls
@@ -757,7 +757,7 @@ def test_main_renders_only_selected_native_page(mocked_api):
 
 def test_product_detail_is_reachable_from_catalog_and_keeps_names_plain(mocked_api):
     calls, _ = mocked_api
-    app = AppTest.from_function(run_main).run()
+    app = AppTest.from_string("from clothes_recommender import ui; ui.recommendations_tab()").run()
     app.button(key="detail_recommendations_2_0").click().run()
     assert not app.exception
     assert ("/products/2", {}) in calls
@@ -786,7 +786,9 @@ def test_validated_ranker_is_default_when_api_reports_it_ready(mocked_api):
             }
         },
     )
-    app = AppTest.from_function(run_main).run()
+    app = AppTest.from_string("from clothes_recommender import ui; ui.recommendations_tab()")
+    app.session_state["service_health"] = overrides["/health"][1]["json"]
+    app.run()
     assert not app.exception
     assert next(widget for widget in app.radio if widget.label == "Strategy").value == "learned"
     assert ("/users/7/recommendations", {"strategy": "learned", "top_k": "12"}) in calls

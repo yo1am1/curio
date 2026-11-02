@@ -1,3 +1,28 @@
+# Curio fashion release checkpoint — 2026-11-02
+
+`release/fashion-mvp` starts from fashion-only `7c46cd8` and presents Curio
+with an agent-first home, Fashion feed, Discover and Product connections.
+Model quality stays available directly at `/quality`, outside shopping navigation.
+Fresh desktop home, mobile home and fashion screenshots are linked in README.
+
+Paused multi-domain work is preserved on published `next/curio-multidomain`
+at `8bab988`; do not merge it into this fashion release without a new request.
+No recommendation model, dataset or scoring protocol was changed for publication.
+
+Verification: 542 offline tests passed (one integration test deselected), Ruff
+lint/format and lock checks passed. Real browser checks covered desktop/mobile,
+the feed, popup, hidden quality navigation and absence of cocktail routes.
+A real OmniRoute fashion query returned grounded catalog products. Local evidence
+remains under ignored `data/experiments/fashion-release-20261030`.
+
+Stop here for the night. Next session: check remote CI/public landing page and
+profile pin status before any new implementation. Production/load behavior is
+unverified; model-provider latency remains variable. The historical photo index
+covers 3,537 of 14,300 catalog products. Do not claim full photo coverage or
+production readiness.
+
+---
+
 # Agent tools and public repository — 2026-10-30
 
 Model quality is hidden from navigation, with `/quality` and research records
