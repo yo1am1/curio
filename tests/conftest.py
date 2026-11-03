@@ -98,3 +98,106 @@ def vector_store(
     store.upsert(sample_products, fake_encoder.encode_texts([p.name for p in sample_products]))
     yield store
     client.close()
+
+
+COCKTAIL_ROWS = [
+    # drink_id, name, alcoholic, category, glass, ingredients (name, measure)
+    (
+        1,
+        "Mojito",
+        "Alcoholic",
+        "Cocktail",
+        "Highball glass",
+        [
+            ("Light rum", "2 oz"),
+            ("Lime juice", "1 oz"),
+            ("Mint", "6 leaves"),
+            ("Sugar", "2 tsp"),
+            ("Soda water", None),
+        ],
+    ),
+    (
+        2,
+        "Daiquiri",
+        "Alcoholic",
+        "Ordinary Drink",
+        "Cocktail glass",
+        [("Light rum", "1 1/2 oz"), ("Lime juice", "1 oz"), ("Sugar", "1/2 tsp")],
+    ),
+    (
+        3,
+        "Virgin Mojito",
+        "Non alcoholic",
+        "Cocktail",
+        "Highball glass",
+        [("Lime juice", "1 oz"), ("Mint", "8 leaves"), ("Sugar", "2 tsp"), ("Soda water", "4 oz")],
+    ),
+    (
+        4,
+        "Gin and Tonic",
+        "Alcoholic",
+        "Ordinary Drink",
+        "Highball glass",
+        [("Gin", "2 oz"), ("Tonic water", "5 oz"), ("Lime", "1 wedge")],
+    ),
+    (
+        5,
+        "Margarita",
+        "Alcoholic",
+        "Ordinary Drink",
+        "Cocktail glass",
+        [("Tequila", "1 1/2 oz"), ("Triple sec", "1/2 oz"), ("Lime juice", "1 oz"), ("Salt", None)],
+    ),
+    (
+        6,
+        "Lemonade",
+        "Non alcoholic",
+        "Soft Drink",
+        "Collins glass",
+        [("Lemon juice", "2 oz"), ("Sugar", "2 tsp"), ("Water", "6 oz")],
+    ),
+    (
+        7,
+        "Espresso Martini",
+        "Alcoholic",
+        "Cocktail",
+        "Cocktail glass",
+        [("Vodka", "2 oz"), ("Kahlua", "1/2 oz"), ("Espresso", "1 oz")],
+    ),
+    (
+        8,
+        "Shirley Temple",
+        "Optional alcohol",
+        "Soft Drink",
+        "Highball glass",
+        [("Ginger ale", "6 oz"), ("Grenadine", "1/2 oz"), ("Maraschino cherry", "1")],
+    ),
+]
+
+
+def cocktail_frame():
+    """The prepared cocktails.parquet layout for a tiny, varied recipe set."""
+    import json as _json
+
+    return pd.DataFrame(
+        [
+            {
+                "drink_id": drink_id,
+                "name": name,
+                "alcoholic": alcoholic,
+                "category": category,
+                "glass": glass,
+                "instructions": f"Build the {name} in a {glass.lower()}.",
+                "image_url": f"https://www.thecocktaildb.com/images/media/drink/{drink_id}.jpg",
+                "ingredients": _json.dumps([{"name": n, "measure": m} for n, m in ingredients]),
+            }
+            for drink_id, name, alcoholic, category, glass, ingredients in COCKTAIL_ROWS
+        ]
+    )
+
+
+@pytest.fixture
+def cocktail_catalog():
+    from clothes_recommender.cocktails.catalog import CocktailCatalog
+
+    return CocktailCatalog(cocktail_frame())
