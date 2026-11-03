@@ -23,11 +23,9 @@ GitHub URL) and writes `data/cocktails.parquet` with columns:
 | image_url | str or null | only `https://www.thecocktaildb.com/...` kept |
 | ingredients | str | JSON list of `{"name", "measure"}` (measure null when blank) |
 
-`source_url` is derived in the catalog: `https://www.thecocktaildb.com/drink/{name-slug}` is not
-reliable, so use the image page's host root `https://www.thecocktaildb.com/` plus a search link:
-`https://www.thecocktaildb.com/search.php?s={url-encoded name}` is NOT a page either; v1 uses
-`https://www.thecocktaildb.com/` as the attribution link and credits "Recipe data: TheCocktailDB".
-The data is not committed; it is downloaded like the H&M data.
+`source_url` is the constant attribution link `https://www.thecocktaildb.com/` (the CSV ids are
+not TheCocktailDB drink ids, so per-drink pages cannot be linked). UIs credit
+"Recipe data: TheCocktailDB". The data is not committed; it is downloaded like the H&M data.
 
 Settings: `Settings.cocktails_path -> data_dir / "cocktails.parquet"`. The domain is enabled
 when that file exists. No API key and no network at serving time.
