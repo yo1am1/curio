@@ -109,3 +109,49 @@ h1, h2, h3 { text-wrap: balance; }
         height: min(22rem, max(3rem, calc(100dvh - 27rem)));
     }
 }
+
+/* Agent conversation: answer cards, approvals, quick replies and the session panel. */
+.st-key-agent_conversation [class*="st-key-chat_product_home_"] [data-testid="stImage"] img,
+[class*="st-key-chat_product_page_"] [data-testid="stImage"] img {
+    width: 100%; height: auto; aspect-ratio: 3 / 4; object-fit: contain;
+}
+.st-key-agent_conversation [class*="st-key-chat_product_"],
+[class*="st-key-chat_product_page_"] { border-block-start: 0; padding-block: .25rem .75rem; }
+[class*="st-key-chat_product_"] button { min-height: 2.25rem; padding-inline: .7rem; font-size: .85rem; }
+[class*="st-key-chat_product_"] [data-testid="stCaptionContainer"] { font-variant-numeric: tabular-nums; }
+[class*="st-key-approval_"] {
+    background: color-mix(in srgb, #9c4935 6%, transparent);
+    border-color: color-mix(in srgb, #9c4935 40%, transparent);
+    border-radius: .65rem;
+}
+[class*="st-key-chat_options_"] button { border-radius: 999px; min-height: 2.5rem; }
+[class*="st-key-chat_suggestions_"] { row-gap: .25rem; }
+[class*="st-key-chat_suggestions_"] button { font-size: .875rem; }
+[data-testid="stChatMessage"] [data-testid="stExpander"] details {
+    border-color: color-mix(in srgb, currentColor 12%, transparent);
+}
+[data-testid="stChatMessage"] [data-testid="stExpander"] summary { font-size: .85rem; }
+[data-testid="stChatMessage"] [data-testid="stExpander"] [data-testid="stMarkdownContainer"] p {
+    font-size: .875rem; margin-bottom: .2rem;
+}
+.st-key-agent_session { border-radius: .65rem; position: sticky; top: 4rem; }
+.st-key-agent_session h3 { font: 600 1.15rem/1.4 system-ui, sans-serif; padding-block: 0 .25rem; }
+.st-key-agent_session [data-testid="stImage"] img {
+    width: 40px; height: 52px; object-fit: contain; background: white;
+}
+.st-key-agent_session [class*="st-key-shortlist_"] [data-testid="stText"] { font-size: .875rem; }
+.st-key-session_memory button { border-radius: 999px; min-height: 2rem; font-size: .8rem; }
+[class*="st-key-compare_"] [data-testid="stImage"] img {
+    width: 100%; aspect-ratio: 3 / 4; object-fit: contain; background: white;
+}
+@media (max-width: 640px) {
+    .st-key-agent_session { position: static; }
+    .st-key-agent_conversation [data-testid="stHorizontalBlock"]:has([class*="st-key-chat_product_"]) {
+        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .st-key-agent_conversation [data-testid="stColumn"]:has([class*="st-key-chat_product_"]) {
+        width: auto; min-width: 0;
+    }
+}
+.st-key-product_detail_body button [data-testid="stMarkdownContainer"] { font-size: .9rem; }
+[class*="st-key-compare_"] [data-testid="stImage"] img { max-height: min(20rem, 40dvh); }

@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     llm_base_url: str | None = None
     llm_temperature: float = 0.2
     llm_timeout_seconds: float = 60.0
+    # Signs the agent's approval proposals. Unset: a random per-process key, so pending
+    # proposals expire on restart. Set it when running several API workers.
+    agent_signing_key: SecretStr | None = None
 
     # --- UI ---------------------------------------------------------------
     api_url: str = "http://localhost:8000"

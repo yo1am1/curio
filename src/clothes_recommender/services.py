@@ -9,7 +9,9 @@ import pandas as pd
 
 from clothes_recommender.catalog import CustomerData, ProductCatalog, load_shopper_purchases
 from clothes_recommender.chat.assistant import ShoppingAssistant
+from clothes_recommender.chat.guardrails import ActionSigner
 from clothes_recommender.chat.llm import build_chat_model
+from clothes_recommender.chat.navigator import RecommenderNavigator
 from clothes_recommender.config import Settings
 from clothes_recommender.demo import DemoCustomer, select_demo_customers
 from clothes_recommender.embeddings import ClipEncoder
@@ -68,12 +70,6 @@ def build_services(settings: Settings) -> Services:
             )
             links = pd.DataFrame(columns=["product_id", "other_id", "count", "lift"])
 
-        assistant = None
-        if settings.llm_configured:
-            assistant = ShoppingAssistant(build_chat_model(settings), search, catalog)
-        else:
-            logger.warning("LLM_MODEL is not set: the shopping assistant is disabled.")
-
         collaborative = CollaborativeRecommender(customers, catalog, shopper_purchases, popularity)
         learned = None
         if settings.ranker_path.is_file():
@@ -90,6 +86,20 @@ def build_services(settings: Settings) -> Services:
                 as_of,
                 feature_version=model.feature_version,
             )
+        graph = GraphRecommender(customers, catalog, popularity, links)
+        assistant = None
+        if settings.llm_configured:
+            key = settings.agent_signing_key
+            assistant = ShoppingAssistant(
+                build_chat_model(settings),
+                search,
+                catalog,
+                # The validated ranker when present; collaborative filtering otherwise.
+                navigator=RecommenderNavigator(graph, search, learned or collaborative),
+                signer=ActionSigner(key.get_secret_value().encode() if key else None),
+            )
+        else:
+            logger.warning("LLM_MODEL is not set: the shopping assistant is disabled.")
         return Services(
             catalog=catalog,
             customers=customers,
@@ -98,7 +108,7 @@ def build_services(settings: Settings) -> Services:
             content_based=ContentBasedRecommender(customers, catalog, store, popularity),
             collaborative=collaborative,
             learned=learned,
-            graph=GraphRecommender(customers, catalog, popularity, links),
+            graph=graph,
             repeat=RepeatPurchaseRecommender(customers, popularity),
             images_dir=settings.images_dir,
             assistant=assistant,

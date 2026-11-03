@@ -5,6 +5,7 @@
 ## Running and understanding the app
 
 - [Technical guide](technical-guide.md): data preparation, local setup, Docker, architecture, API and tests.
+- [Agent architecture](agent-architecture.md): tool policies, human-in-the-loop approvals, grounding checks and the review behind them.
 - [Recommendation audit](recommendation-audit.md): repeat-aware ranking, baselines, chronological evaluation and uncertainty.
 - [Research direction](recommendation-research.md): retrieval bottlenecks, dataset comparisons and proposed experiments.
 

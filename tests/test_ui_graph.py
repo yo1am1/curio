@@ -822,13 +822,13 @@ def test_chat_keeps_long_sessions_within_request_limits(mocked_api, request_bodi
         200,
         {"json": {"status": "ok", "indexed_products": 2, "chat_enabled": True}},
     )
-    overrides["/chat"] = (200, {"json": {"text": "x" * 4001, "products": []}})
+    overrides["/chat/stream"] = (200, {"json": {"text": "x" * 4001, "products": []}})
     app = AppTest.from_string("from clothes_recommender import ui; ui.chat_tab()").run()
     assert app.chat_input[0].proto.max_chars == 2000
     for number in range(28):
         app.chat_input[0].set_value(f"Show me coat {number}").run()
         assert not app.exception
-        payload = ChatRequest.model_validate_json(request_bodies["/chat"][-1])
+        payload = ChatRequest.model_validate_json(request_bodies["/chat/stream"][-1])
         assert len(payload.history) == min(number * 2, 10)
         assert all(len(turn.content) <= 4000 for turn in payload.history)
     assert len(app.session_state["chat_history"]) == 56
@@ -855,13 +855,16 @@ def test_popup_keeps_conversation_on_close_and_can_reset(mocked_api, request_bod
         200,
         {"json": {"status": "ok", "indexed_products": 2, "chat_enabled": True}},
     )
-    overrides["/chat"] = (200, {"json": {"text": "Try this coat.", "products": [PRODUCT]}})
+    overrides["/chat/stream"] = (200, {"json": {"text": "Try this coat.", "products": [PRODUCT]}})
     app = AppTest.from_string("from clothes_recommender import ui; ui.assistant_popup()")
     app.session_state["assistant_popup"] = True
     app.run()
     app.chat_input(key="chat_input_popup").set_value("A blue coat").run()
     assert not app.exception
-    assert json.loads(request_bodies["/chat"][-1]) == {"message": "A blue coat", "history": []}
+    assert json.loads(request_bodies["/chat/stream"][-1]) == {
+        "message": "A blue coat",
+        "history": [],
+    }
     assert len(app.session_state["chat_history"]) == 2
     assert any(text.value == PRODUCT["name"] for text in app.text)
     app.button(key="chat_close").click().run()
@@ -887,7 +890,10 @@ def test_popup_provider_error_does_not_poison_history(mocked_api, request_bodies
         200,
         {"json": {"status": "ok", "indexed_products": 2, "chat_enabled": True}},
     )
-    overrides["/chat"] = (502, {"json": {"detail": "Assistant unavailable. Please try again."}})
+    overrides["/chat/stream"] = (
+        502,
+        {"json": {"detail": "Assistant unavailable. Please try again."}},
+    )
     app = AppTest.from_string("from clothes_recommender import ui; ui.assistant_popup()")
     app.session_state["assistant_popup"] = True
     app.run()
@@ -895,10 +901,10 @@ def test_popup_provider_error_does_not_poison_history(mocked_api, request_bodies
     assert not app.exception
     assert app.error[0].value == "Assistant unavailable. Please try again."
     assert app.session_state["chat_history"] == []
-    overrides["/chat"] = (200, {"json": {"text": "Try a coat.", "products": []}})
+    overrides["/chat/stream"] = (200, {"json": {"text": "Try a coat.", "products": []}})
     app.chat_input[0].set_value("A blue coat").run()
     assert not app.exception
-    assert json.loads(request_bodies["/chat"][-1])["history"] == []
+    assert json.loads(request_bodies["/chat/stream"][-1])["history"] == []
     assert len(app.session_state["chat_history"]) == 2
 
 
@@ -929,11 +935,11 @@ def test_chat_sends_prior_product_ids_for_followup(mocked_api, request_bodies):
         200,
         {"json": {"status": "ok", "indexed_products": 2, "chat_enabled": True}},
     )
-    overrides["/chat"] = (200, {"json": {"text": "Try this piece.", "products": [PRODUCT]}})
+    overrides["/chat/stream"] = (200, {"json": {"text": "Try this piece.", "products": [PRODUCT]}})
     app = AppTest.from_string("from clothes_recommender import ui; ui.chat_tab()").run()
     app.chat_input[0].set_value("Show me a coat").run()
     app.chat_input[0].set_value("What material is that?").run()
     assert not app.exception
-    request = ChatRequest.model_validate_json(request_bodies["/chat"][-1])
+    request = ChatRequest.model_validate_json(request_bodies["/chat/stream"][-1])
     assert request.history[-1].product_ids == [PRODUCT["product_id"]]
     assert request.history[0].product_ids == []

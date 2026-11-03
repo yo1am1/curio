@@ -17,7 +17,7 @@ Recommendations use historical H&M transactions. Photo search has its own image 
 | Graph recommendations | Past purchases seed an in-memory graph of co-purchases, Shopify categories and attributes. Shared attributes are weighted by inverse degree; each result includes its evidence. |
 | Knowledge graph | Explore a product's category, attributes and co-purchased neighbors, with complementary products and higher-priced alternatives. |
 | Offline evaluation | Every strategy is trained on purchases before a cutoff and scored on the following week (MAP@12, catalog coverage); the Model quality page compares them. |
-| Tool-using shopping agent | The LLM extracts constraints, retrieves matches, and can refine a visual search or inspect exact product IDs for details and comparisons. Follow-ups reload prior cards from the catalog. Up to four validated read-only tool calls per turn; budget and metadata filters survive query refinements. |
+| Tool-using shopping agent | The LLM plans a structured search, then uses policy-gated tools: catalog search, exact inspection, related pieces from the graph/CLIP index and personal picks from the ranker. It can ask a clarifying question, and proposes shortlist or memory changes for the shopper to approve. Answers are checked against tool evidence, with a streamed step trace. See [agent architecture](agent-architecture.md). |
 
 Users without usable purchase history get the products all shoppers bought most in the last
 week of data, which also fill lists that come up short.
@@ -124,6 +124,8 @@ flowchart LR
     G --> KG[(Co-purchases + Shopify metadata)]
     A --> LLM[[Any LLM provider]]
     A --> S
+    A --> N[RecommenderNavigator]
+    N --> G & R & CF
     B[scripts/build_index.py] --> E & Q
 ```
 
@@ -136,7 +138,8 @@ src/clothes_recommender/
 ├── vector_store.py    # Qdrant wrapper: upsert, filtered search, vector lookup
 ├── search.py          # Text and image search
 ├── recommenders/      # learned, repeat, content_based, collaborative, graph, popularity
-├── chat/              # llm (provider-agnostic), intent, prompts, tools, assistant
+├── chat/              # llm, intent, prompts, tools (policies), schemas, guardrails,
+│                      # navigator (recommender bridge), assistant (agent loop)
 ├── services.py        # Composition root
 ├── api.py             # FastAPI app
 └── ui.py              # Streamlit client
@@ -228,7 +231,8 @@ Any OpenAI-compatible gateway (OmniRoute, OpenRouter, LiteLLM, Ollama, vLLM) wor
 `LLM_BASE_URL=http://127.0.0.1:20128/v1`, choose an available gateway model ID for
 `LLM_MODEL`, and keep the gateway key in `.env`. The API uses this configuration
 for both intent extraction and catalog-grounded replies. Without `LLM_MODEL`
-every feature except chat still works.
+every feature except chat still works. Set `AGENT_SIGNING_KEY` to a long random
+string when running several API workers, so approval proposals verify on any worker.
 
 ## API
 
@@ -246,7 +250,9 @@ every feature except chat still works.
 | GET | `/users`, `/users/{id}` | User ids; profile with purchase history |
 | GET | `/demo/customers` | Up to ten descriptive customer examples and starting products |
 | GET | `/users/{id}/recommendations?strategy=learned\|repeat\|collaborative\|graph\|content` | Personalised recommendations; learned, repeat, collaborative and graph hits include reasons |
-| POST | `/chat` | `{"message": "...", "history": [...]}` |
+| POST | `/chat` | One agent turn: `{"message", "history", "preferences", "shopper_id", "shortlist", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal |
+| POST | `/chat/stream` | The same turn as NDJSON: `step` events, then `reply` (or `error`) |
+| POST, GET | `/chat/feedback` | Rate an answer; summary of ratings and recent negative feedback |
 | GET | `/evaluation` | Offline evaluation results saved by `scripts.evaluate --output` |
 
 Interactive docs at `http://localhost:8000/docs`.

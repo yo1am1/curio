@@ -23,14 +23,14 @@ from clothes_recommender.services import Services
 
 
 class EchoAssistant:
-    def reply(self, message, history) -> AssistantReply:
+    def reply(self, message, history, context=None) -> AssistantReply:
         return AssistantReply(
             text=f"echo: {message}", products=[], intent=SearchIntent(query=message)
         )
 
 
 class BrokenAssistant:
-    def reply(self, message, history) -> AssistantReply:
+    def reply(self, message, history, context=None) -> AssistantReply:
         raise ConnectionError("gateway down")
 
 
@@ -301,7 +301,7 @@ def test_chat_returns_retryable_rate_limit_without_provider_details(services):
         status_code = 429
 
     class RateLimitedAssistant:
-        def reply(self, message, history):
+        def reply(self, message, history, context=None):
             raise RateLimitedError("private provider details")
 
     with TestClient(
@@ -310,3 +310,82 @@ def test_chat_returns_retryable_rate_limit_without_provider_details(services):
         response = client.post("/chat", json={"message": "hi"})
     assert response.status_code == 429
     assert response.json() == {"detail": "The assistant is busy. Please try again shortly."}
+
+
+def _agent_services(services, *replies):
+    from langchain_core.messages import AIMessage
+
+    from clothes_recommender.chat.assistant import ShoppingAssistant
+    from tests.chat.conftest import FakeToolCallingChatModel
+
+    model = FakeToolCallingChatModel(messages=iter([AIMessage(**reply) for reply in replies]))
+    assistant = ShoppingAssistant(model, services.search, services.catalog)
+    return dataclasses.replace(services, assistant=assistant)
+
+
+def _intent(**args):
+    return {
+        "content": "",
+        "tool_calls": [{"name": "SearchIntent", "args": {"query": "", **args}, "id": "i"}],
+    }
+
+
+def test_chat_stream_sends_steps_then_reply(services):
+    agent = _agent_services(services, _intent(wants_products=False), {"content": "Hello!"})
+    with TestClient(create_app(agent)) as client:
+        response = client.post("/chat/stream", json={"message": "hi"})
+    assert response.headers["content-type"].startswith("application/x-ndjson")
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert [event["type"] for event in events] == ["step", "step", "reply"]
+    assert events[0]["step"]["name"] == "Understand request"
+    assert events[-1]["reply"]["text"] == "Hello!"
+
+
+def test_chat_stream_reports_provider_errors_as_safe_events(services):
+    with TestClient(
+        create_app(dataclasses.replace(services, assistant=BrokenStreamAssistant()))
+    ) as client:
+        response = client.post("/chat/stream", json={"message": "hi"})
+    (event,) = [json.loads(line) for line in response.text.splitlines()]
+    assert event == {
+        "type": "error",
+        "status": 502,
+        "detail": "LLM provider request failed; see server logs.",
+    }
+
+
+class BrokenStreamAssistant:
+    def stream(self, message, history, context=None, *, decision=None):
+        raise ConnectionError("gateway down")
+        yield
+
+
+def test_chat_approval_round_trip_and_tamper_rejection(services):
+    proposal = {
+        "content": "",
+        "tool_calls": [{"name": "SaveToShortlist", "args": {"product_ids": [1]}, "id": "t"}],
+    }
+    agent = _agent_services(
+        services, _intent(wants_products=False), proposal, {"content": "Saved it."}
+    )
+    with TestClient(create_app(agent)) as client:
+        reply = client.post("/chat", json={"message": "save it"}).json()
+        assert reply["status"] == "needs_approval"
+        pending = reply["pending_action"]
+        forged = {**pending, "args": {"product_ids": [2]}}
+        rejected = client.post("/chat", json={"decision": {"action": forged, "approved": True}})
+        assert rejected.status_code == 409
+        done = client.post("/chat", json={"decision": {"action": pending, "approved": True}})
+        assert done.json()["applied"] == [
+            {"kind": "shortlist", "product_ids": [1], "preferences": None}
+        ]
+        assert client.post("/chat", json={"message": " "}).status_code == 422
+
+
+def test_chat_feedback_is_recorded_and_summarized(client):
+    rating = {"rating": "down", "message": "jeans", "answer": "Try these.", "tools": ["Search"]}
+    assert client.post("/chat/feedback", json=rating).status_code == 204
+    assert client.post("/chat/feedback", json={**rating, "rating": "up"}).status_code == 204
+    summary = client.get("/chat/feedback").json()
+    assert (summary["up"], summary["down"]) == (1, 1)
+    assert summary["recent_down"][0]["message"] == "jeans"

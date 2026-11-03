@@ -1,6 +1,24 @@
-"""Validated read-only actions available to the shopping assistant."""
+"""Validated actions available to the shopping assistant, each with an execution policy.
 
-from pydantic import BaseModel, ConfigDict, Field, PositiveInt
+Every action is a strict pydantic schema: unknown fields, empty queries and out-of-range IDs
+are rejected before anything runs. The policy decides what happens to a valid call:
+
+- READ actions only look things up and run immediately.
+- ASK actions stop the turn and hand a question with quick replies back to the shopper.
+- APPROVE actions change shopper state (shortlist, remembered preferences). They never run
+  on the model's say-so: the turn stops with a proposal the shopper approves, edits or rejects.
+"""
+
+from enum import StrEnum
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt, model_validator
+
+
+class Policy(StrEnum):
+    READ = "read"
+    ASK = "ask"
+    APPROVE = "approve"
 
 
 class SearchCatalog(BaseModel):
@@ -17,4 +35,87 @@ class InspectProducts(BaseModel):
     product_ids: list[PositiveInt] = Field(min_length=1, max_length=5)
 
 
-TOOLS = {schema.__name__: schema for schema in (SearchCatalog, InspectProducts)}
+class FindRelated(BaseModel):
+    """Find pieces related to one catalog product: 'complement' (bought together by real
+    shoppers), 'similar' (closest product photos) or 'alternative' (same category, higher
+    price)."""
+
+    model_config = ConfigDict(extra="forbid")
+    product_id: PositiveInt
+    relation: Literal["complement", "similar", "alternative"]
+
+
+class PersonalPicks(BaseModel):
+    """Recommend pieces from the linked shopper's purchase history. Only works when the
+    shopper has linked a shopping history; explain the evidence for each pick."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class AskShopper(BaseModel):
+    """Ask the shopper one short clarifying question with 2-4 quick-reply options. Use it
+    only when the request is too ambiguous to search well (e.g. no audience or occasion for
+    a broad request); this ends your turn."""
+
+    model_config = ConfigDict(extra="forbid")
+    question: str = Field(min_length=3, max_length=200, pattern=r"\S")
+    options: list[str] = Field(min_length=2, max_length=4)
+
+    @model_validator(mode="after")
+    def _clean_options(self) -> "AskShopper":
+        options = list(dict.fromkeys(o.strip()[:60] for o in self.options if o.strip()))
+        if len(options) < 2:
+            raise ValueError("Give at least two distinct options")
+        self.options = options
+        return self
+
+
+class SaveToShortlist(BaseModel):
+    """Propose saving catalog products to the shopper's shortlist. The shopper must approve
+    it before anything is saved; this ends your turn. Only propose when they ask to save,
+    keep or shortlist pieces."""
+
+    model_config = ConfigDict(extra="forbid")
+    product_ids: list[PositiveInt] = Field(min_length=1, max_length=5)
+    note: str = Field(default="", max_length=200)
+
+
+class RememberPreferences(BaseModel):
+    """Propose remembering shopping preferences for later searches in this session. The
+    shopper must approve it first; this ends your turn. Only propose preferences the shopper
+    stated as lasting ('I always shop menswear', 'my budget is €50')."""
+
+    model_config = ConfigDict(extra="forbid")
+    sections: list[str] = Field(default_factory=list, max_length=3)
+    colours: list[str] = Field(default_factory=list, max_length=5)
+    max_price: float | None = Field(default=None, gt=0, le=10_000)
+
+    @model_validator(mode="after")
+    def _not_empty(self) -> "RememberPreferences":
+        if not (self.sections or self.colours or self.max_price is not None):
+            raise ValueError("Propose at least one preference")
+        return self
+
+
+TOOLS: dict[str, type[BaseModel]] = {
+    schema.__name__: schema
+    for schema in (
+        SearchCatalog,
+        InspectProducts,
+        FindRelated,
+        PersonalPicks,
+        AskShopper,
+        SaveToShortlist,
+        RememberPreferences,
+    )
+}
+
+POLICIES: dict[str, Policy] = {
+    "SearchCatalog": Policy.READ,
+    "InspectProducts": Policy.READ,
+    "FindRelated": Policy.READ,
+    "PersonalPicks": Policy.READ,
+    "AskShopper": Policy.ASK,
+    "SaveToShortlist": Policy.APPROVE,
+    "RememberPreferences": Policy.APPROVE,
+}

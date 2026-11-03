@@ -3,6 +3,7 @@
 Run with: uv run streamlit run src/clothes_recommender/ui.py
 """
 
+import json
 import math
 import re
 from pathlib import Path
@@ -53,6 +54,8 @@ def call_api(method: str, path: str, missing_ok: bool = False, **kwargs) -> dict
             detail = response.text
         (st.info if missing_ok and response.status_code == 404 else st.error)(detail)
         return None
+    if response.status_code == 204 or not response.content:
+        return {}
     return response.json()
 
 
@@ -287,6 +290,26 @@ def product_details(product_id: int) -> None:
             st.caption(
                 "H&M research catalog, 2020. Prices are approximate; current stock is unknown."
             )
+            with st.container(horizontal=True):
+                saved = any(p["product_id"] == product_id for p in shortlist())
+                st.button(
+                    "Saved" if saved else "Save to shortlist",
+                    icon=":material/favorite:" if saved else ":material/favorite_border:",
+                    key=f"detail_save_{product_id}",
+                    disabled=saved,
+                    on_click=add_to_shortlist,
+                    args=(product,),
+                )
+                if st.button(
+                    "Ask Curio what goes with it",
+                    icon=":material/chat_bubble:",
+                    key=f"detail_ask_{product_id}",
+                ):
+                    # Dialogs rerun on their own; a full rerun closes this one and opens chat.
+                    queue_message(
+                        f"What goes with the {product['name']} (product {product_id})?", True
+                    )
+                    st.rerun()
     related = st.radio(
         "Explore this piece",
         ["similar", "complement"],
@@ -880,40 +903,397 @@ def discovery_page() -> None:
         image_search_tab()
 
 
-def agent_home() -> None:
-    st.title("Find your next favorite.")
-    st.caption(
-        "Tell Curio your style, occasion or budget. Explore options and compare the details."
+# --- Agent conversation -------------------------------------------------------------------
+
+MAX_SHORTLIST = 20
+STEP_LABELS = {
+    "Understand request": "Plan",
+    "SearchCatalog": "Search catalog",
+    "InspectProducts": "Inspect products",
+    "FindRelated": "Find related pieces",
+    "PersonalPicks": "Personal picks",
+    "AskShopper": "Question for you",
+    "SaveToShortlist": "Shortlist proposal",
+    "RememberPreferences": "Memory proposal",
+    "Draft answer": "Draft answer",
+    "Grounding check": "Grounding check",
+    "Self-correction": "Self-correction",
+    "Tool budget": "Tool budget",
+    "Time budget": "Time budget",
+}
+STEP_ICONS = {
+    "ok": ":material/check_circle:",
+    "error": ":material/error:",
+    "blocked": ":material/block:",
+    "pending": ":material/hourglass_top:",
+    "skipped": ":material/do_not_disturb_on:",
+}
+GROUNDING_BADGES = {
+    "verified": ("Prices verified against the catalog", "green", ":material/verified:"),
+    "repaired": ("Self-corrected to match the catalog", "orange", ":material/auto_fix_high:"),
+    "fallback": ("Unverified answer replaced with catalog facts", "red", ":material/shield:"),
+}
+_MARKDOWN_SPECIAL = re.compile(r"([\\`*_{}\[\]<>#|~$])")
+
+
+def plain(text: str) -> str:
+    """Show model or catalog text literally inside Streamlit markdown."""
+    return _MARKDOWN_SPECIAL.sub(r"\\\1", text)
+
+
+def step_line(step: dict) -> str:
+    label = STEP_LABELS.get(step["name"], step["name"])
+    seconds = step.get("duration_ms", 0) / 1000
+    timing = f" · {seconds:.1f}s" if seconds >= 0.1 else ""
+    icon = STEP_ICONS.get(step.get("status", "ok"), "")
+    return f"{icon} **{label}** · {plain(step['summary'])}{timing}"
+
+
+def show_trace(steps: list[dict]) -> None:
+    if not steps:
+        return
+    seconds = sum(step.get("duration_ms", 0) for step in steps) / 1000
+    actions = sum(step["kind"] in ("tool", "approval") for step in steps)
+    label = (
+        f"How Curio worked · {actions} {'action' if actions == 1 else 'actions'} · {seconds:.1f}s"
     )
-    st.button("New conversation", type="tertiary", key="chat_reset_home", on_click=reset_chat)
-    with st.container(key="agent_conversation"):
-        chat_conversation("home")
+    with st.expander(label, icon=":material/account_tree:"):
+        for step in steps:
+            st.markdown(step_line(step))
 
 
-def show_chat_turn(turn: dict, index: int, context: str) -> None:
+def shortlist() -> list[dict]:
+    return st.session_state.setdefault("shortlist", [])
+
+
+def add_to_shortlist(product: dict, announce: bool = True) -> None:
+    items = shortlist()
+    if any(item["product_id"] == product["product_id"] for item in items):
+        return
+    if len(items) >= MAX_SHORTLIST:
+        st.toast(f"Your shortlist holds up to {MAX_SHORTLIST} pieces.", icon=":material/info:")
+        return
+    items.append(product)
+    if announce:
+        st.toast(f"Saved {product['name']} to your shortlist.", icon=":material/favorite:")
+
+
+def remove_from_shortlist(product_id: int) -> None:
+    st.session_state["shortlist"] = [p for p in shortlist() if p["product_id"] != product_id]
+
+
+def preferences() -> dict:
+    return st.session_state.setdefault("preferences", {})
+
+
+def forget_preference(field: str, value: object) -> None:
+    memory = preferences()
+    if field == "max_price":
+        memory.pop("max_price", None)
+    else:
+        memory[field] = [item for item in memory.get(field, []) if item != value]
+
+
+def auto_approve() -> list[str]:
+    policy = st.session_state.get("approval_policy", {})
+    return [
+        tool
+        for tool, setting in (
+            ("SaveToShortlist", "ask_shortlist"),
+            ("RememberPreferences", "ask_memory"),
+        )
+        if not policy.get(setting, True)
+    ]
+
+
+def queue_message(text: str, open_popup: bool = False) -> None:
+    st.session_state["chat_queued"] = text
+    if open_popup:
+        st.session_state["assistant_popup"] = True
+
+
+def queue_decision(index: int, approved: bool, context: str) -> None:
+    turn = st.session_state["chat_history"][index]
+    action = turn["pending_action"]
+    edits = None
+    if approved:
+        args = action["args"]
+        kept = {
+            field: [
+                value
+                for value in args.get(field, [])
+                if st.session_state.get(f"approve_{context}_{index}_{field}_{value}", True)
+            ]
+            for field in ("product_ids", "sections", "colours")
+            if field in args
+        }
+        if "max_price" in args and not st.session_state.get(
+            f"approve_{context}_{index}_max_price_{args['max_price']}", True
+        ):
+            kept["max_price"] = None
+        edits = {field: value for field, value in kept.items() if value != args.get(field)} or None
+    st.session_state["chat_decision"] = {"index": index, "approved": approved, "edits": edits}
+
+
+def send_feedback(index: int, context: str) -> None:
+    history = st.session_state.get("chat_history", [])
+    value = st.session_state.get(f"feedback_{context}_{index}")
+    if value is None or index >= len(history):
+        return
+    turn = history[index]
+    question = next((t["content"] for t in reversed(history[:index]) if t["role"] == "user"), "")
+    call_api(
+        "POST",
+        "/chat/feedback",
+        json={
+            "rating": "up" if value == 1 else "down",
+            "message": question[:2000],
+            "answer": turn["content"][:4000],
+            "product_ids": [p["product_id"] for p in turn.get("products", [])][:5],
+            "tools": [s["name"] for s in turn.get("steps", []) if s["kind"] == "tool"][:12],
+        },
+    )
+    st.toast("Thanks for the feedback.", icon=":material/thumb_up:")
+
+
+def show_chat_products(products: list[dict], index: int, context: str) -> None:
+    saved = {item["product_id"] for item in shortlist()}
+    compact = context == "popup"
+    columns = None if compact else st.columns(min(5, max(3, len(products))))
+    for position, product in enumerate(products):
+        pid = product["product_id"]
+        slot = st.container() if compact else columns[position % len(columns)]
+        with (
+            slot,
+            st.container(
+                key=f"chat_product_{context}_{index}_{pid}",
+                horizontal=compact,
+                vertical_alignment="center" if compact else "top",
+            ),
+        ):
+            if (photo := product_photo(pid)) is not None:
+                st.image(photo, width=56 if compact else "stretch")
+            with st.container(gap=None):
+                st.text(product["name"])
+                st.caption(f"€{product['price']:.2f} · {product['colour']}")
+            with st.container(horizontal=True, gap="small"):
+                if st.button("View", key=f"chat_view_{context}_{index}_{pid}"):
+                    product_details(pid)
+                st.button(
+                    "Saved" if pid in saved else "Save",
+                    key=f"chat_save_{context}_{index}_{pid}",
+                    icon=":material/favorite:" if pid in saved else ":material/favorite_border:",
+                    type="tertiary",
+                    disabled=pid in saved,
+                    on_click=add_to_shortlist,
+                    args=(product,),
+                )
+
+
+def approval_card(turn: dict, index: int, context: str, active: bool) -> None:
+    action = turn["pending_action"]
+    args = action["args"]
+    with st.container(key=f"approval_{context}_{index}", border=True):
+        st.markdown(":material/how_to_reg: **Needs your approval**")
+        st.caption(plain(action.get("summary", "")))
+        if not active:
+            st.caption(turn.get("resolution", "No longer pending."))
+            return
+        names = {p["product_id"]: p for p in action.get("products", [])}
+        for field in ("product_ids", "sections", "colours"):
+            for value in args.get(field, []):
+                if field == "product_ids" and value not in names:
+                    continue
+                label = (
+                    f"{names[value]['name']} · €{names[value]['price']:.2f}"
+                    if field == "product_ids"
+                    else str(value)
+                )
+                st.checkbox(label, value=True, key=f"approve_{context}_{index}_{field}_{value}")
+        if args.get("max_price") is not None:
+            st.checkbox(
+                f"Budget up to €{args['max_price']:g}",
+                value=True,
+                key=f"approve_{context}_{index}_max_price_{args['max_price']}",
+            )
+        with st.container(horizontal=True):
+            st.button(
+                "Approve",
+                type="primary",
+                icon=":material/check:",
+                key=f"approve_{context}_{index}",
+                on_click=queue_decision,
+                args=(index, True, context),
+            )
+            st.button(
+                "Decline",
+                icon=":material/close:",
+                key=f"decline_{context}_{index}",
+                on_click=queue_decision,
+                args=(index, False, context),
+            )
+        st.caption("Uncheck anything you don't want before approving.")
+
+
+def show_chat_turn(turn: dict, index: int, context: str, latest: bool = False) -> None:
     with st.chat_message(turn["role"]):
+        if turn["role"] == "assistant":
+            show_trace(turn.get("steps", []))
         st.markdown(turn["content"])
-        for product in turn.get("products", []):
-            with st.container(
-                key=f"chat_product_{context}_{index}_{product['product_id']}",
-                horizontal=True,
-                vertical_alignment="center",
-            ):
-                if (photo := product_photo(product["product_id"])) is not None:
-                    st.image(photo, width=56)
-                with st.container(gap=None):
-                    st.text(product["name"])
-                    st.caption(f"€{product['price']:.2f} · {product['colour']}")
-                if st.button("View", key=f"chat_view_{context}_{index}_{product['product_id']}"):
-                    product_details(product["product_id"])
+        grounding = (turn.get("grounding") or {}).get("status")
+        if grounding in GROUNDING_BADGES:
+            label, color, icon = GROUNDING_BADGES[grounding]
+            st.badge(label, color=color, icon=icon)
+        if turn.get("products"):
+            show_chat_products(turn["products"], index, context)
+        if turn.get("pending_action"):
+            approval_card(turn, index, context, active=latest and not turn.get("resolution"))
+        if latest and (clarification := turn.get("clarification")):
+            with st.container(horizontal=True, key=f"chat_options_{context}_{index}"):
+                for number, option in enumerate(clarification["options"]):
+                    st.button(
+                        option,
+                        key=f"chat_option_{context}_{index}_{number}",
+                        on_click=queue_message,
+                        args=(option,),
+                    )
+        if latest and turn.get("suggestions"):
+            with st.container(horizontal=True, key=f"chat_suggestions_{context}_{index}"):
+                for number, suggestion in enumerate(turn["suggestions"]):
+                    st.button(
+                        suggestion,
+                        key=f"chat_suggestion_{context}_{index}_{number}",
+                        type="tertiary",
+                        icon=":material/arrow_forward:",
+                        on_click=queue_message,
+                        args=(suggestion,),
+                    )
+        if turn["role"] == "assistant" and turn.get("steps") and turn.get("status") == "complete":
+            st.feedback(
+                "thumbs",
+                key=f"feedback_{context}_{index}",
+                on_change=send_feedback,
+                args=(index, context),
+            )
 
 
 def reset_chat() -> None:
     st.session_state["chat_history"] = []
+    for key in ("chat_queued", "chat_decision"):
+        st.session_state.pop(key, None)
 
 
 def close_assistant() -> None:
     st.session_state["assistant_popup"] = False
+
+
+def chat_payload(history: list[dict]) -> dict:
+    """Recent turns plus client-held session state; unset state is left out."""
+    past_turns = []
+    for turn in history[-10:]:
+        item = {"role": turn["role"], "content": turn["content"][:4000]}
+        if turn.get("products"):
+            item["product_ids"] = [p["product_id"] for p in turn["products"][:5]]
+        past_turns.append(item)
+    payload: dict = {"history": past_turns}
+    memory = {key: value for key, value in preferences().items() if value}
+    if memory:
+        payload["preferences"] = memory
+    if st.session_state.get("chat_shopper"):
+        payload["shopper_id"] = st.session_state["chat_shopper"]
+    if shortlist():
+        payload["shortlist"] = [p["product_id"] for p in shortlist()]
+    if policy := auto_approve():
+        payload["auto_approve"] = policy
+    return payload
+
+
+def stream_chat(payload: dict, on_step) -> dict | None:
+    """POST /chat/stream and report each agent step; return the final reply."""
+    try:
+        with api_client().stream("POST", "/chat/stream", json=payload) as response:
+            if response.is_error:
+                response.read()
+                try:
+                    detail = response.json().get("detail", response.text)
+                except ValueError:
+                    detail = response.text
+                st.error(detail)
+                return None
+            for line in response.iter_lines():
+                if not line.strip():
+                    continue
+                event = json.loads(line)
+                kind = event.get("type")
+                if kind == "step":
+                    on_step(event["step"])
+                elif kind == "reply":
+                    return event["reply"]
+                elif kind == "error":
+                    st.error(event.get("detail", "The assistant failed. Please try again."))
+                    return None
+                else:  # a plain, non-streamed reply
+                    return event
+    except (httpx.HTTPError, json.JSONDecodeError):
+        st.error("The assistant is unavailable. Please try again.")
+    return None
+
+
+def apply_effects(reply: dict) -> None:
+    by_id = {p["product_id"]: p for p in reply.get("products", [])}
+    for effect in reply.get("applied", []):
+        if effect["kind"] == "shortlist":
+            for pid in effect.get("product_ids", []):
+                product = by_id.get(pid) or call_api("GET", f"/products/{pid}")
+                if product:
+                    add_to_shortlist(product, announce=False)
+            count = len(effect.get("product_ids", []))
+            st.toast(
+                f"Saved {count} {'piece' if count == 1 else 'pieces'} to your shortlist.",
+                icon=":material/favorite:",
+            )
+        elif effect["kind"] == "preferences" and effect.get("preferences"):
+            memory = preferences()
+            for field in ("sections", "colours"):
+                values = [*memory.get(field, []), *effect["preferences"].get(field, [])]
+                memory[field] = list(dict.fromkeys(values))
+            if effect["preferences"].get("max_price") is not None:
+                memory["max_price"] = effect["preferences"]["max_price"]
+            st.toast("Curio will remember that for this session.", icon=":material/memory:")
+
+
+def run_turn(payload: dict, history: list[dict], context: str, user_turn: dict | None) -> None:
+    progress = st.empty()
+    with progress.container(), st.chat_message("assistant"):
+        live = st.status("Curio is planning…", expanded=context != "popup")
+
+        def on_step(step: dict) -> None:
+            live.markdown(step_line(step))
+            live.update(label=f"{STEP_LABELS.get(step['name'], step['name'])}…")
+
+        reply = stream_chat(payload, on_step)
+        if reply is None:
+            live.update(label="Stopped", state="error", expanded=False)
+            st.caption("Please send your message again to retry.")
+            return
+    # The finished turn below repeats these steps in its collapsed trace.
+    progress.empty()
+    apply_effects(reply)
+    assistant_turn = {
+        "role": "assistant",
+        "content": reply["text"],
+        "products": reply.get("products", []),
+        "steps": reply.get("steps", []),
+        "status": reply.get("status", "complete"),
+        "grounding": reply.get("grounding"),
+        "clarification": reply.get("clarification"),
+        "pending_action": reply.get("pending_action"),
+        "suggestions": reply.get("suggestions", []),
+    }
+    if user_turn is not None:
+        history.append(user_turn)
+    history.append(assistant_turn)
+    show_chat_turn(assistant_turn, len(history) - 1, context, latest=True)
 
 
 def chat_conversation(context: str) -> None:
@@ -927,48 +1307,183 @@ def chat_conversation(context: str) -> None:
         )
         return
     history: list[dict] = st.session_state.setdefault("chat_history", [])
+    queued = st.session_state.pop("chat_queued", None)
+    decision = st.session_state.pop("chat_decision", None)
+    idle = not history and not queued and decision is None
     transcript = st.container(
-        height=240 if context == "home" and not history else 360,
+        height=240 if context == "home" and idle else (360 if context == "popup" else 640),
         border=False,
         autoscroll=True,
         key=f"chat_log_{context}",
     )
+    # Rendered below the transcript; its value is read now and the transcript filled after.
+    message = (
+        st.chat_input(
+            "Describe a piece or ask a follow-up…", key=f"chat_input_{context}", max_chars=2000
+        )
+        or queued
+    )
     with transcript:
-        if not history:
+        if not history and not message:
             with st.chat_message("assistant"):
                 st.markdown(
                     "Tell me what you're looking for, including a colour, occasion or budget. "
                     "Try **white sneakers under €40**."
                 )
+        payload = None
+        if decision is not None and decision["index"] < len(history):
+            turn = history[decision["index"]]
+            action = turn.get("pending_action")
+            if action and not turn.get("resolution"):
+                payload = chat_payload(history)
+                payload["decision"] = {
+                    "action": action,
+                    "approved": decision["approved"],
+                    "edited_args": decision["edits"],
+                }
+                turn["resolution"] = "Approved." if decision["approved"] else "Declined."
+        busy = bool(message) or payload is not None
         for index, turn in enumerate(history):
-            show_chat_turn(turn, index, context)
+            show_chat_turn(turn, index, context, latest=index == len(history) - 1 and not busy)
+        if payload is not None:
+            approved = payload["decision"]["approved"]
+            user_turn = {"role": "user", "content": "Approved" if approved else "Declined"}
+            show_chat_turn(user_turn, len(history), context)
+            run_turn(payload, history, context, user_turn)
+        elif message:
+            user_turn = {"role": "user", "content": message}
+            show_chat_turn(user_turn, len(history), context)
+            payload = {"message": message, **chat_payload(history)}
+            run_turn(payload, history, context, user_turn)
 
-    message = st.chat_input(
-        "Describe a piece or ask a follow-up…", key=f"chat_input_{context}", max_chars=2000
-    )
-    if not message:
+
+@st.dialog("Compare pieces", width="large")
+def compare_dialog(product_ids: list[int]) -> None:
+    products = [p for p in shortlist() if p["product_id"] in product_ids][:4]
+    if len(products) < 2:
+        st.info("Save at least two pieces to compare them.")
         return
-    user_turn = {"role": "user", "content": message}
-    with transcript:
-        show_chat_turn(user_turn, len(history), context)
-        with st.spinner("Finding pieces for you…"):
-            past_turns = []
-            for turn in history[-10:]:
-                item = {"role": turn["role"], "content": turn["content"][:4000]}
-                if turn.get("products"):
-                    item["product_ids"] = [p["product_id"] for p in turn["products"][:5]]
-                past_turns.append(item)
-            reply = call_api("POST", "/chat", json={"message": message, "history": past_turns})
-        if reply is None:
-            st.caption("Please send your message again to retry.")
-            return
-        assistant_turn = {
-            "role": "assistant",
-            "content": reply["text"],
-            "products": reply["products"],
-        }
-        show_chat_turn(assistant_turn, len(history) + 1, context)
-    history.extend([user_turn, assistant_turn])
+    cheapest = min(p["price"] for p in products)
+    for column, product in zip(st.columns(len(products)), products, strict=True):
+        with column, st.container(key=f"compare_{product['product_id']}"):
+            if (photo := product_photo(product["product_id"])) is not None:
+                st.image(photo, width="stretch")
+            st.text(product["name"])
+            st.markdown(f"**€{product['price']:.2f}**")
+            if product["price"] == cheapest:
+                st.badge("Lowest price", color="green")
+            st.caption(
+                " · ".join(
+                    plain(str(product[key]))
+                    for key in ("product_type", "colour", "section")
+                    if product.get(key)
+                )
+            )
+            if product.get("description"):
+                st.caption(plain(product["description"]))
+    st.caption("Prices are approximate; current stock is unknown.")
+
+
+def session_panel() -> None:
+    """Client-held agent state: personalization link, approval policy, memory and shortlist."""
+    with st.container(key="agent_session", border=True):
+        st.subheader("Your session", anchor=False)
+        examples = (call_api("GET", "/demo/customers") or [])[:10]
+        labels = {e["user_id"]: e["label"] for e in examples}
+        options = [None, *labels]
+        saved = st.session_state.get("chat_shopper")
+        shopper = st.selectbox(
+            "Personalize with a shopping history",
+            options,
+            index=options.index(saved) if saved in options else 0,
+            format_func=lambda uid: "Not linked" if uid is None else f"{labels[uid]} (#{uid})",
+            key="session_shopper_select",
+        )
+        st.session_state["chat_shopper"] = shopper
+        st.caption("Linked histories unlock “Picks from my shopping history”.")
+
+        st.markdown("**Approvals**")
+        policy = st.session_state.setdefault("approval_policy", {})
+        policy["ask_shortlist"] = st.toggle(
+            "Ask before saving to my shortlist",
+            value=policy.get("ask_shortlist", True),
+            key="session_ask_shortlist",
+        )
+        policy["ask_memory"] = st.toggle(
+            "Ask before remembering preferences",
+            value=policy.get("ask_memory", True),
+            key="session_ask_memory",
+        )
+
+        st.markdown("**Memory**")
+        memory = preferences()
+        remembered = [
+            *(("sections", value) for value in memory.get("sections", [])),
+            *(("colours", value) for value in memory.get("colours", [])),
+        ]
+        if memory.get("max_price") is not None:
+            remembered.append(("max_price", memory["max_price"]))
+        if not remembered:
+            st.caption("Nothing yet. Say “I always shop menswear” and Curio will ask to remember.")
+        with st.container(horizontal=True, key="session_memory"):
+            for field, value in remembered:
+                st.button(
+                    f"Under €{value:g}" if field == "max_price" else str(value),
+                    key=f"forget_{field}_{value}",
+                    icon=":material/close:",
+                    help="Forget this preference",
+                    on_click=forget_preference,
+                    args=(field, value),
+                )
+
+        items = shortlist()
+        st.markdown(f"**Shortlist · {len(items)}**")
+        if not items:
+            st.caption("Save pieces from answers, or ask Curio to shortlist them.")
+        for product in items:
+            with st.container(
+                key=f"shortlist_{product['product_id']}",
+                horizontal=True,
+                vertical_alignment="center",
+            ):
+                if (photo := product_photo(product["product_id"])) is not None:
+                    st.image(photo, width=40)
+                with st.container(gap=None, width="stretch"):
+                    st.text(product["name"])
+                    st.caption(f"€{product['price']:.2f}")
+                st.button(
+                    ":material/close:",
+                    key=f"shortlist_remove_{product['product_id']}",
+                    help=f"Remove {product['name']}",
+                    type="tertiary",
+                    on_click=remove_from_shortlist,
+                    args=(product["product_id"],),
+                )
+        if len(items) >= 2:
+            with st.container(horizontal=True):
+                if st.button("Compare", icon=":material/compare:", key="shortlist_compare"):
+                    compare_dialog([p["product_id"] for p in items])
+                st.button(
+                    "Ask Curio",
+                    icon=":material/chat_bubble:",
+                    key="shortlist_ask",
+                    on_click=queue_message,
+                    args=("Compare the pieces in my shortlist and tell me which to pick.",),
+                )
+
+
+def agent_home() -> None:
+    st.title("Find your next favorite.")
+    st.caption(
+        "Tell Curio your style, occasion or budget. It searches, compares and asks before "
+        "changing anything you own."
+    )
+    st.button("New conversation", type="tertiary", key="chat_reset_home", on_click=reset_chat)
+    conversation, session = st.columns([0.68, 0.32], gap="large")
+    with conversation, st.container(key="agent_conversation"):
+        chat_conversation("home")
+    with session:
+        session_panel()
 
 
 def chat_tab() -> None:
@@ -1022,7 +1537,7 @@ def main() -> None:
         position="top",
     )
     page.run()
-    if page.title != "Ask Curio":
+    if page.title not in ("Ask Curio", "Assistant"):
         assistant_popup()
     with st.container(key="catalog_note"):
         indexed = f"{health['indexed_products']:,}"

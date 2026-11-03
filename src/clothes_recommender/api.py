@@ -6,18 +6,20 @@ Run with: uv run uvicorn clothes_recommender.api:create_app --factory
 import io
 import json
 import logging
-from collections.abc import AsyncIterator, Sequence
+from collections import Counter, deque
+from collections.abc import AsyncIterator, Iterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import date
 from importlib.metadata import version
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
-from clothes_recommender.chat.assistant import AssistantReply, ChatTurn
+from clothes_recommender.chat.guardrails import InvalidActionError
+from clothes_recommender.chat.schemas import AssistantReply, ChatRequest, TurnContext
 from clothes_recommender.config import get_settings
 from clothes_recommender.demo import DemoCustomer
 from clothes_recommender.domain import Product, ProductFilter, ScoredProduct, User
@@ -31,7 +33,7 @@ MAX_TOP_K = 50
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 # Bounds decode memory: a small compressed file can still expand to gigabytes of pixels.
 MAX_IMAGE_PIXELS = 25_000_000
-MAX_CHAT_HISTORY = 50
+MAX_FEEDBACK_RECORDS = 500
 
 TopK = Annotated[int, Query(ge=1, le=MAX_TOP_K)]
 
@@ -67,9 +69,21 @@ class UserProfile(BaseModel):
     purchases: list[PurchasedProduct]
 
 
-class ChatRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=2000)
-    history: list[ChatTurn] = Field(default=[], max_length=MAX_CHAT_HISTORY)
+class ChatFeedback(BaseModel):
+    """A shopper's rating of one assistant answer, for offline review of agent quality."""
+
+    rating: Literal["up", "down"]
+    message: str = Field(max_length=2000)
+    answer: str = Field(max_length=4000)
+    product_ids: list[int] = Field(default_factory=list, max_length=5)
+    tools: list[str] = Field(default_factory=list, max_length=12)
+    comment: str = Field(default="", max_length=500)
+
+
+class FeedbackSummary(BaseModel):
+    up: int
+    down: int
+    recent_down: list[ChatFeedback]
 
 
 class Health(BaseModel):
@@ -303,29 +317,86 @@ def create_app(services: Services | None = None) -> FastAPI:
             )
         return json.loads(path.read_text())
 
-    @app.post("/chat")
-    def chat(request: ChatRequest, services: ServicesDep) -> AssistantReply:
+    def assistant_for(services: Services):
         if services.assistant is None:
             raise HTTPException(
                 status_code=503,
                 detail="Chat is disabled: set LLM_MODEL (and LLM_API_KEY / LLM_BASE_URL) in .env.",
             )
+        return services.assistant
+
+    @app.post("/chat")
+    def chat(request: ChatRequest, services: ServicesDep) -> AssistantReply:
+        """One agent turn. Send `decision` instead of a message to answer a pending proposal."""
+        assistant = assistant_for(services)
+        context = TurnContext.model_validate(request.model_dump(include=_CONTEXT_FIELDS))
         try:
-            return services.assistant.reply(request.message, request.history)
-        except IndexNotBuiltError:
-            raise
+            if request.decision is not None:
+                return assistant.resume(request.decision, request.history, context)
+            return assistant.reply(request.message, request.history, context)
         except Exception as error:
-            if getattr(error, "status_code", None) == 429:
-                logger.warning("Shopping assistant provider is rate limited")
-                raise HTTPException(
-                    status_code=429,
-                    detail="The assistant is busy. Please try again shortly.",
-                ) from error
-            # Provider SDKs raise their own exception types (auth, rate limit, network). Log the
-            # details server-side only: upstream messages can contain URLs or request ids.
-            logger.exception("Shopping assistant failed")
-            raise HTTPException(
-                status_code=502, detail="LLM provider request failed; see server logs."
-            ) from error
+            raise _chat_error(error) from error
+
+    @app.post("/chat/stream")
+    def chat_stream(request: ChatRequest, services: ServicesDep) -> StreamingResponse:
+        """The same turn as /chat, as NDJSON: one `step` event per agent step, then `reply`."""
+        assistant = assistant_for(services)
+        context = TurnContext.model_validate(request.model_dump(include=_CONTEXT_FIELDS))
+        events = assistant.stream(
+            request.message, request.history, context, decision=request.decision
+        )
+
+        def lines() -> Iterator[str]:
+            try:
+                for event in events:
+                    yield event.model_dump_json() + "\n"
+            except Exception as error:
+                failure = _chat_error(error)
+                yield (
+                    json.dumps(
+                        {"type": "error", "status": failure.status_code, "detail": failure.detail}
+                    )
+                    + "\n"
+                )
+
+        return StreamingResponse(lines(), media_type="application/x-ndjson")
+
+    feedback: deque[ChatFeedback] = deque(maxlen=MAX_FEEDBACK_RECORDS)
+
+    @app.post("/chat/feedback", status_code=204)
+    def chat_feedback(rating: ChatFeedback) -> None:
+        feedback.append(rating)
+        logger.info("chat feedback %s tools=%s", rating.rating, ",".join(rating.tools))
+
+    @app.get("/chat/feedback")
+    def chat_feedback_summary() -> FeedbackSummary:
+        counts = Counter(item.rating for item in feedback)
+        return FeedbackSummary(
+            up=counts["up"],
+            down=counts["down"],
+            recent_down=[item for item in feedback if item.rating == "down"][-10:],
+        )
 
     return app
+
+
+_CONTEXT_FIELDS = set(TurnContext.model_fields)
+
+
+def _chat_error(error: Exception) -> HTTPException:
+    """Map agent failures to safe HTTP errors; provider details stay in server logs."""
+    if isinstance(error, HTTPException):
+        return error
+    if isinstance(error, InvalidActionError):
+        return HTTPException(status_code=409, detail=str(error))
+    if isinstance(error, IndexNotBuiltError):
+        return HTTPException(status_code=503, detail=str(error))
+    if getattr(error, "status_code", None) == 429:
+        logger.warning("Shopping assistant provider is rate limited")
+        return HTTPException(
+            status_code=429, detail="The assistant is busy. Please try again shortly."
+        )
+    # Provider SDKs raise their own exception types (auth, rate limit, network). Log the
+    # details server-side only: upstream messages can contain URLs or request ids.
+    logger.error("Shopping assistant failed", exc_info=error)
+    return HTTPException(status_code=502, detail="LLM provider request failed; see server logs.")

@@ -11,8 +11,12 @@ assistant that searches the catalog and compares items.
 ## Ask Curio
 
 Describe what you want, set a budget, then refine your search or compare products.
-The agent uses validated, read-only catalog tools and keeps context across follow-ups.
+The agent searches the catalog, finds pieces bought together or alike, and ranks picks
+from a linked shopping history. Each answer shows the steps it took, and prices are
+checked against the catalog before you see them. It asks a quick question when a
+request is vague, and asks before saving to your shortlist or remembering preferences.
 It is available from the conversation home and a floating panel on browsing pages.
+[How the agent works](docs/agent-architecture.md).
 
 ![Curio floating shopping assistant](docs/screenshots/curio-assistant.jpg)
 
