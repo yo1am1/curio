@@ -39,14 +39,16 @@ PantryMatch, CocktailPreferences, CocktailQuery, AlcoholFilter).
 
 ```python
 class CocktailCatalog:
-    def __init__(self, frame: pd.DataFrame) -> None: ...   # columns as in the table above
+    def __init__(self, frame: pd.DataFrame) -> None: ...  # columns as in the table above
     @classmethod
     def from_parquet(cls, path: Path) -> "CocktailCatalog": ...
     def __len__(self) -> int: ...
     def __iter__(self) -> Iterator[Cocktail]: ...
     def get(self, drink_id: int) -> Cocktail | None: ...
-    def get_many(self, drink_ids: Iterable[int]) -> list[Cocktail]: ...  # order kept, unknown skipped
-    def ingredients(self) -> list[str]: ...   # sorted distinct ingredient names (catalog spelling)
+    def get_many(
+        self, drink_ids: Iterable[int]
+    ) -> list[Cocktail]: ...  # order kept, unknown skipped
+    def ingredients(self) -> list[str]: ...  # sorted distinct ingredient names (catalog spelling)
     def categories(self) -> list[str]: ...
     def canonical_ingredient(self, name: str) -> str | None: ...  # case/space-insensitive lookup
 ```
@@ -56,17 +58,30 @@ class CocktailCatalog:
 ```python
 class CocktailRecommender:
     def __init__(self, catalog: CocktailCatalog) -> None: ...
-    def search(self, query: CocktailQuery) -> list[CocktailHit]: ...
+    def search(self, query: CocktailQuery) -> list[CocktailHit]:
+        ...
         # TF-IDF cosine over name, category, glass and ingredient names (+ name boost);
         # `ingredients` must all be in the recipe; `exclude_ingredients` must all be absent;
         # alcohol: non_alcoholic keeps Cocktail.alcohol_free, alcoholic keeps the rest.
         # Empty query with filters ranks by filter match then name. reasons e.g.
         # "Contains lime, mint", "Alcohol-free".
-    def similar(self, drink_id: int, top_k: int = 5, alcohol: AlcoholFilter = "any") -> list[CocktailHit]: ...
+
+    def similar(
+        self, drink_id: int, top_k: int = 5, alcohol: AlcoholFilter = "any"
+    ) -> list[CocktailHit]:
+        ...
         # IDF-weighted ingredient overlap (cosine); excludes the drink itself;
         # reasons "Shares rum, lime juice". Unknown id -> [].
-    def pantry(self, ingredients: Sequence[str], *, alcohol: AlcoholFilter = "any",
-               max_missing: int = 2, top_k: int = 10) -> list[PantryMatch]: ...
+
+    def pantry(
+        self,
+        ingredients: Sequence[str],
+        *,
+        alcohol: AlcoholFilter = "any",
+        max_missing: int = 2,
+        top_k: int = 10,
+    ) -> list[PantryMatch]:
+        ...
         # Ingredient matching is case-insensitive and treats "Lime" as covering "Lime juice"
         # only via an explicit small alias table (document it). Rank: fewest missing, then
         # coverage, then name. Empty pantry -> [].

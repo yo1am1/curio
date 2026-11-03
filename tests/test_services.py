@@ -35,6 +35,7 @@ def construction(monkeypatch, tmp_path, sample_catalog):
         images_dir=tmp_path / "images",
         query_photos_dir=tmp_path / "query_photos",
         evaluation_path=tmp_path / "evaluation.json",
+        cocktails_path=tmp_path / "cocktails.parquet",
     )
     encoder = Mock(dimension=2)
     encoder.encode_texts.return_value = np.array([[1.0, 0.0]], dtype=np.float32)
@@ -131,3 +132,55 @@ def test_service_loads_versioned_ranker(construction, version, width):
     services = service_module.build_services(construction.settings)
     assert services.learned is not None
     assert services.learned.recommend(1)
+
+
+def test_prepared_cocktails_enable_the_cocktail_domain(construction):
+    from tests.conftest import cocktail_frame
+
+    cocktail_frame().to_parquet(construction.settings.cocktails_path)
+
+    services = service_module.build_services(construction.settings)
+
+    assert len(services.cocktail_catalog) == 8
+    assert services.cocktail_recommender.similar(1, top_k=1)
+    assert services.cocktail_assistant is None  # no LLM configured
+
+
+def test_missing_cocktails_disable_only_that_domain(construction, caplog):
+    services = service_module.build_services(construction.settings)
+
+    assert services.cocktail_catalog is None and services.cocktail_recommender is None
+    assert "scripts.prepare_cocktails" in caplog.text
+    with TestClient(create_app(services)) as client:
+        assert client.get("/cocktails/categories").status_code == 503
+        assert client.get("/health").json()["cocktails_enabled"] is False
+
+
+def test_broken_cocktail_file_does_not_break_fashion(construction, caplog):
+    construction.settings.cocktails_path.write_bytes(b"not a parquet file")
+
+    services = service_module.build_services(construction.settings)
+
+    assert services.cocktail_catalog is None
+    assert "the cocktail domain is disabled" in caplog.text
+    assert services.catalog is not None
+    construction.close.assert_not_called()
+
+
+def test_llm_builds_both_assistants_with_one_model_and_signer(construction, monkeypatch):
+    from clothes_recommender.chat.cocktail_agent import CocktailAssistant
+    from tests.chat.conftest import FakeToolCallingChatModel
+    from tests.conftest import cocktail_frame
+
+    cocktail_frame().to_parquet(construction.settings.cocktails_path)
+    model = FakeToolCallingChatModel(messages=iter([]))
+    build_model = Mock(return_value=model)
+    monkeypatch.setattr(service_module, "build_chat_model", build_model)
+    construction.settings.llm_configured = True
+    construction.settings.agent_signing_key = None
+
+    services = service_module.build_services(construction.settings)
+
+    build_model.assert_called_once_with(construction.settings)
+    assert isinstance(services.cocktail_assistant, CocktailAssistant)
+    assert services.cocktail_assistant._signer is services.assistant._signer

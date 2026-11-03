@@ -80,6 +80,11 @@ class Settings(BaseSettings):
         return self.data_dir / "evaluation.json"
 
     @property
+    def cocktails_path(self) -> Path:
+        """Recipes built by `scripts.prepare_cocktails`; the cocktail domain needs this file."""
+        return self.data_dir / "cocktails.parquet"
+
+    @property
     def llm_configured(self) -> bool:
         return self.llm_model is not None
 

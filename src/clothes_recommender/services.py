@@ -9,9 +9,12 @@ import pandas as pd
 
 from clothes_recommender.catalog import CustomerData, ProductCatalog, load_shopper_purchases
 from clothes_recommender.chat.assistant import ShoppingAssistant
+from clothes_recommender.chat.cocktail_agent import CocktailAssistant
 from clothes_recommender.chat.guardrails import ActionSigner
 from clothes_recommender.chat.llm import build_chat_model
 from clothes_recommender.chat.navigator import RecommenderNavigator
+from clothes_recommender.cocktails.catalog import CocktailCatalog
+from clothes_recommender.cocktails.recommend import CocktailRecommender
 from clothes_recommender.config import Settings
 from clothes_recommender.demo import DemoCustomer, select_demo_customers
 from clothes_recommender.embeddings import ClipEncoder
@@ -44,6 +47,10 @@ class Services:
     query_photos_dir: Path | None = None
     evaluation_path: Path | None = None
     learned: LearnedRecommender | None = None
+    # The cocktail domain is optional: None until data/cocktails.parquet is prepared.
+    cocktail_catalog: CocktailCatalog | None = None
+    cocktail_recommender: CocktailRecommender | None = None
+    cocktail_assistant: CocktailAssistant | None = None
 
     @cached_property
     def demo_customers(self) -> list[DemoCustomer]:
@@ -87,19 +94,25 @@ def build_services(settings: Settings) -> Services:
                 feature_version=model.feature_version,
             )
         graph = GraphRecommender(customers, catalog, popularity, links)
-        assistant = None
+        cocktails = _load_cocktails(settings.cocktails_path)
+        assistant = cocktail_assistant = None
         if settings.llm_configured:
             key = settings.agent_signing_key
+            chat_model = build_chat_model(settings)
+            # One signer for both domains; proposals are bound to their tool's domain.
+            signer = ActionSigner(key.get_secret_value().encode() if key else None)
             assistant = ShoppingAssistant(
-                build_chat_model(settings),
+                chat_model,
                 search,
                 catalog,
                 # The validated ranker when present; collaborative filtering otherwise.
                 navigator=RecommenderNavigator(graph, search, learned or collaborative),
-                signer=ActionSigner(key.get_secret_value().encode() if key else None),
+                signer=signer,
             )
+            if cocktails is not None:
+                cocktail_assistant = CocktailAssistant(chat_model, *cocktails, signer=signer)
         else:
-            logger.warning("LLM_MODEL is not set: the shopping assistant is disabled.")
+            logger.warning("LLM_MODEL is not set: the shopping assistants are disabled.")
         return Services(
             catalog=catalog,
             customers=customers,
@@ -114,7 +127,27 @@ def build_services(settings: Settings) -> Services:
             assistant=assistant,
             query_photos_dir=settings.query_photos_dir,
             evaluation_path=settings.evaluation_path,
+            cocktail_catalog=cocktails[0] if cocktails else None,
+            cocktail_recommender=cocktails[1] if cocktails else None,
+            cocktail_assistant=cocktail_assistant,
         )
     except BaseException:
         store.close()
         raise
+
+
+def _load_cocktails(path: Path) -> tuple[CocktailCatalog, CocktailRecommender] | None:
+    """The optional cocktail domain; a missing or broken file never stops fashion serving."""
+    if not path.exists():
+        logger.warning(
+            "No %s: the cocktail domain is disabled. Run `uv run python -m "
+            "scripts.prepare_cocktails` to enable it.",
+            path,
+        )
+        return None
+    try:
+        catalog = CocktailCatalog.from_parquet(path)
+        return catalog, CocktailRecommender(catalog)
+    except Exception:
+        logger.exception("Could not load %s: the cocktail domain is disabled.", path)
+        return None

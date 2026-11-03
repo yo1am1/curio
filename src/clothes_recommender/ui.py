@@ -6,6 +6,8 @@ Run with: uv run streamlit run src/clothes_recommender/ui.py
 import json
 import math
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
@@ -307,7 +309,9 @@ def product_details(product_id: int) -> None:
                 ):
                     # Dialogs rerun on their own; a full rerun closes this one and opens chat.
                     queue_message(
-                        f"What goes with the {product['name']} (product {product_id})?", True
+                        f"What goes with the {product['name']} (product {product_id})?",
+                        True,
+                        domain=FASHION,
                     )
                     st.rerun()
     related = st.radio(
@@ -903,18 +907,147 @@ def discovery_page() -> None:
         image_search_tab()
 
 
+# --- Domains -------------------------------------------------------------------------------
+
+FASHION = "fashion"
+COCKTAILS = "cocktails"
+DOMAIN_LABELS = {
+    FASHION: ":material/checkroom: Fashion",
+    COCKTAILS: ":material/local_bar: Cocktails",
+}
+# Client-held state per domain; the fashion keys predate the cocktail domain and stay as they are.
+STATE_KEYS = {
+    FASHION: {
+        "history": "chat_history",
+        "shortlist": "shortlist",
+        "memory": "preferences",
+        "queued": "chat_queued",
+        "decision": "chat_decision",
+    },
+    COCKTAILS: {
+        "history": "chat_history_cocktails",
+        "shortlist": "cocktail_shortlist",
+        "memory": "cocktail_preferences",
+        "queued": "chat_queued_cocktails",
+        "decision": "chat_decision_cocktails",
+    },
+}
+# Pages that belong to one domain; a deep link to one of them selects that domain.
+PAGE_DOMAINS = {
+    "fashion": FASHION,
+    "discover": FASHION,
+    "connections": FASHION,
+    "quality": FASHION,
+    "cocktails": COCKTAILS,
+}
+COCKTAILS_UNAVAILABLE = (
+    "Cocktail recipes are not prepared on this server yet (run scripts.prepare_cocktails)."
+)
+RECIPE_CREDIT = "Recipe data: TheCocktailDB · Please drink responsibly."
+
+
+@dataclass(frozen=True)
+class DomainCopy:
+    title: str
+    intro: str
+    placeholder: str
+    welcome: str
+    starters: tuple[str, ...]
+    unavailable: str
+    popup_caption: str
+    popup_note: str
+    memory_hint: str
+    shortlist_hint: str
+    compare_prompt: str
+    ask_memory: str
+
+
+DOMAIN_COPY = {
+    FASHION: DomainCopy(
+        title="Find your next favorite.",
+        intro=(
+            "Tell Curio your style, occasion or budget. It searches, compares and asks before "
+            "changing anything you own."
+        ),
+        placeholder="Describe a piece or ask a follow-up…",
+        welcome=(
+            "Tell me what you're looking for, including a colour, occasion or budget. "
+            "Try **white sneakers under €40**."
+        ),
+        starters=("White sneakers under €40", "A linen shirt for summer", "Warm knitwear"),
+        unavailable=(
+            "The assistant is currently unavailable. "
+            "You can still discover pieces by description or photo."
+        ),
+        popup_caption="Find pieces. Refine by colour, style or budget.",
+        popup_note="H&M research catalog · Prices are approximate. Current stock is unknown.",
+        memory_hint="Nothing yet. Say “I always shop menswear” and Curio will ask to remember.",
+        shortlist_hint="Save pieces from answers, or ask Curio to shortlist them.",
+        compare_prompt="Compare the pieces in my shortlist and tell me which to pick.",
+        ask_memory="Ask before remembering preferences",
+    ),
+    COCKTAILS: DomainCopy(
+        title="Mix something new tonight.",
+        intro=(
+            "Tell Curio a flavour, a mood or what's in your cupboard. It finds recipes, "
+            "explains them and asks before changing anything you keep."
+        ),
+        placeholder="Describe a drink or ask a follow-up…",
+        welcome=(
+            "Tell me a flavour, an ingredient you have, or whether you'd like it alcohol-free. "
+            "Try **something fresh with lime and mint**."
+        ),
+        starters=(
+            "Something fresh with lime and mint",
+            "Alcohol-free drinks",
+            "What can I make with gin and tonic?",
+        ),
+        unavailable=(
+            "The cocktail assistant is currently unavailable. "
+            "You can still search recipes on the Cocktails page."
+        ),
+        popup_caption="Find drinks. Refine by ingredient, glass or alcohol.",
+        popup_note=RECIPE_CREDIT,
+        memory_hint="Nothing yet. Say “I don't drink alcohol” and Curio will ask to remember.",
+        shortlist_hint="Save drinks from answers, or ask Curio to shortlist them.",
+        compare_prompt="Compare the drinks in my shortlist and tell me which to make.",
+        ask_memory="Ask before remembering tastes",
+    ),
+}
+
+
+def current_domain() -> str:
+    domain = st.session_state.get("domain", FASHION)
+    return domain if domain in STATE_KEYS else FASHION
+
+
+def state_key(name: str, domain: str | None = None) -> str:
+    return STATE_KEYS[domain or current_domain()][name]
+
+
+def chat_history(domain: str | None = None) -> list[dict]:
+    return st.session_state.setdefault(state_key("history", domain), [])
+
+
 # --- Agent conversation -------------------------------------------------------------------
 
 MAX_SHORTLIST = 20
+MAX_TASTES = 10
 STEP_LABELS = {
     "Understand request": "Plan",
     "SearchCatalog": "Search catalog",
     "InspectProducts": "Inspect products",
     "FindRelated": "Find related pieces",
     "PersonalPicks": "Personal picks",
+    "SearchCocktails": "Search recipes",
+    "InspectCocktails": "Inspect recipes",
+    "SimilarCocktails": "Find similar drinks",
+    "WhatCanIMake": "Check your ingredients",
     "AskShopper": "Question for you",
     "SaveToShortlist": "Shortlist proposal",
     "RememberPreferences": "Memory proposal",
+    "SaveCocktails": "Shortlist proposal",
+    "RememberTastes": "Memory proposal",
     "Draft answer": "Draft answer",
     "Grounding check": "Grounding check",
     "Self-correction": "Self-correction",
@@ -929,10 +1062,31 @@ STEP_ICONS = {
     "skipped": ":material/do_not_disturb_on:",
 }
 GROUNDING_BADGES = {
-    "verified": ("Prices verified against the catalog", "green", ":material/verified:"),
-    "repaired": ("Self-corrected to match the catalog", "orange", ":material/auto_fix_high:"),
-    "fallback": ("Unverified answer replaced with catalog facts", "red", ":material/shield:"),
+    FASHION: {
+        "verified": ("Prices verified against the catalog", "green", ":material/verified:"),
+        "repaired": ("Self-corrected to match the catalog", "orange", ":material/auto_fix_high:"),
+        "fallback": ("Unverified answer replaced with catalog facts", "red", ":material/shield:"),
+    },
+    COCKTAILS: {
+        "verified": ("Checked against the recipes", "green", ":material/verified:"),
+        "repaired": ("Self-corrected to match the recipes", "orange", ":material/auto_fix_high:"),
+        "fallback": ("Unverified answer replaced with recipe facts", "red", ":material/shield:"),
+    },
 }
+# Approval tools by policy setting, per domain.
+APPROVAL_TOOLS = {
+    FASHION: {"ask_shortlist": "SaveToShortlist", "ask_memory": "RememberPreferences"},
+    COCKTAILS: {"ask_shortlist": "SaveCocktails", "ask_memory": "RememberTastes"},
+}
+# Proposal arguments the shopper may narrow: list values can be dropped one by one.
+APPROVAL_LIST_FIELDS = (
+    "product_ids",
+    "sections",
+    "colours",
+    "drink_ids",
+    "liked_ingredients",
+    "avoided_ingredients",
+)
 _MARKDOWN_SPECIAL = re.compile(r"([\\`*_{}\[\]<>#|~$])")
 
 
@@ -994,50 +1148,102 @@ def forget_preference(field: str, value: object) -> None:
         memory[field] = [item for item in memory.get(field, []) if item != value]
 
 
-def auto_approve() -> list[str]:
+def cocktail_shortlist() -> list[dict]:
+    return st.session_state.setdefault("cocktail_shortlist", [])
+
+
+def add_cocktail(cocktail: dict, announce: bool = True) -> None:
+    items = cocktail_shortlist()
+    if any(item["drink_id"] == cocktail["drink_id"] for item in items):
+        return
+    if len(items) >= MAX_SHORTLIST:
+        st.toast(f"Your shortlist holds up to {MAX_SHORTLIST} drinks.", icon=":material/info:")
+        return
+    items.append(cocktail)
+    if announce:
+        st.toast(f"Saved {cocktail['name']} to your shortlist.", icon=":material/favorite:")
+
+
+def remove_cocktail(drink_id: int) -> None:
+    st.session_state["cocktail_shortlist"] = [
+        c for c in cocktail_shortlist() if c["drink_id"] != drink_id
+    ]
+
+
+def cocktail_memory() -> dict:
+    return st.session_state.setdefault("cocktail_preferences", {})
+
+
+def forget_taste(field: str, value: object) -> None:
+    memory = cocktail_memory()
+    if field == "alcohol_free":
+        memory["alcohol_free"] = False
+    else:
+        memory[field] = [item for item in memory.get(field, []) if item != value]
+
+
+def remember_tastes(tastes: dict) -> None:
+    memory = cocktail_memory()
+    if tastes.get("alcohol_free"):
+        memory["alcohol_free"] = True
+    for field in ("liked_ingredients", "avoided_ingredients"):
+        values = [*memory.get(field, []), *tastes.get(field, [])]
+        memory[field] = list(dict.fromkeys(values))[:MAX_TASTES]
+
+
+def auto_approve(domain: str | None = None) -> list[str]:
     policy = st.session_state.get("approval_policy", {})
     return [
         tool
-        for tool, setting in (
-            ("SaveToShortlist", "ask_shortlist"),
-            ("RememberPreferences", "ask_memory"),
-        )
+        for setting, tool in APPROVAL_TOOLS[domain or current_domain()].items()
         if not policy.get(setting, True)
     ]
 
 
-def queue_message(text: str, open_popup: bool = False) -> None:
-    st.session_state["chat_queued"] = text
+def queue_message(text: str, open_popup: bool = False, domain: str | None = None) -> None:
+    st.session_state[state_key("queued", domain)] = text
     if open_popup:
         st.session_state["assistant_popup"] = True
 
 
 def queue_decision(index: int, approved: bool, context: str) -> None:
-    turn = st.session_state["chat_history"][index]
+    turn = chat_history()[index]
     action = turn["pending_action"]
     edits = None
     if approved:
         args = action["args"]
-        kept = {
-            field: [
-                value
-                for value in args.get(field, [])
-                if st.session_state.get(f"approve_{context}_{index}_{field}_{value}", True)
-            ]
-            for field in ("product_ids", "sections", "colours")
+
+        def kept(field: str, value: object) -> bool:
+            return st.session_state.get(f"approve_{context}_{index}_{field}_{value}", True)
+
+        narrowed: dict = {
+            field: [value for value in args.get(field, []) if kept(field, value)]
+            for field in APPROVAL_LIST_FIELDS
             if field in args
         }
-        if "max_price" in args and not st.session_state.get(
-            f"approve_{context}_{index}_max_price_{args['max_price']}", True
-        ):
-            kept["max_price"] = None
-        edits = {field: value for field, value in kept.items() if value != args.get(field)} or None
-    st.session_state["chat_decision"] = {"index": index, "approved": approved, "edits": edits}
+        if "max_price" in args and not kept("max_price", args["max_price"]):
+            narrowed["max_price"] = None
+        if args.get("alcohol_free") and not kept("alcohol_free", True):
+            narrowed["alcohol_free"] = False
+        edits = {
+            field: value for field, value in narrowed.items() if value != args.get(field)
+        } or None
+    st.session_state[state_key("decision")] = {
+        "index": index,
+        "approved": approved,
+        "edits": edits,
+    }
+
+
+def feedback_key(context: str, index: int) -> str:
+    # Per-domain keys stop a rating on one domain's answer from carrying over to the other's.
+    prefix = "feedback" if current_domain() == FASHION else "feedback_cocktails"
+    return f"{prefix}_{context}_{index}"
 
 
 def send_feedback(index: int, context: str) -> None:
-    history = st.session_state.get("chat_history", [])
-    value = st.session_state.get(f"feedback_{context}_{index}")
+    history = chat_history()
+    value = st.session_state.get(feedback_key(context, index))
     if value is None or index >= len(history):
         return
     turn = history[index]
@@ -1090,32 +1296,79 @@ def show_chat_products(products: list[dict], index: int, context: str) -> None:
                 )
 
 
+def show_chat_cocktails(cocktails: list[dict], index: int, context: str) -> None:
+    saved = {item["drink_id"] for item in cocktail_shortlist()}
+    compact = context == "popup"
+    columns = None if compact else st.columns(min(5, max(3, len(cocktails))))
+    for position, cocktail in enumerate(cocktails):
+        did = cocktail["drink_id"]
+        slot = st.container() if compact else columns[position % len(columns)]
+        with (
+            slot,
+            st.container(
+                key=f"chat_cocktail_{context}_{index}_{did}",
+                horizontal=compact,
+                vertical_alignment="center" if compact else "top",
+            ),
+        ):
+            cocktail_image(cocktail, width=56 if compact else "stretch")
+            with st.container(gap=None):
+                st.text(cocktail["name"])
+                st.caption(f"{alcohol_label(cocktail)} · {cocktail['glass']}")
+            with st.container(horizontal=True, gap="small"):
+                if st.button("View", key=f"chat_drink_view_{context}_{index}_{did}"):
+                    cocktail_details(did)
+                st.button(
+                    "Saved" if did in saved else "Save",
+                    key=f"chat_drink_save_{context}_{index}_{did}",
+                    icon=":material/favorite:" if did in saved else ":material/favorite_border:",
+                    type="tertiary",
+                    disabled=did in saved,
+                    on_click=add_cocktail,
+                    args=(cocktail,),
+                )
+
+
+def approval_options(action: dict) -> list[tuple[str, object, str]]:
+    """Checkbox rows (field, value, label) for every value the shopper may drop."""
+    args = action["args"]
+    products = {p["product_id"]: p for p in action.get("products") or []}
+    cocktails = {c["drink_id"]: c for c in action.get("cocktails") or []}
+    options: list[tuple[str, object, str]] = []
+    for field in APPROVAL_LIST_FIELDS:
+        for value in args.get(field) or []:
+            if field == "product_ids":
+                if value not in products:
+                    continue
+                label = f"{products[value]['name']} · €{products[value]['price']:.2f}"
+            elif field == "drink_ids":
+                if value not in cocktails:
+                    continue
+                label = f"{cocktails[value]['name']} · {alcohol_label(cocktails[value])}"
+            elif field == "liked_ingredients":
+                label = f"Likes {value}"
+            elif field == "avoided_ingredients":
+                label = f"Avoids {value}"
+            else:
+                label = str(value)
+            options.append((field, value, label))
+    if args.get("max_price") is not None:
+        options.append(("max_price", args["max_price"], f"Budget up to €{args['max_price']:g}"))
+    if args.get("alcohol_free"):
+        options.append(("alcohol_free", True, "Alcohol-free drinks only"))
+    return options
+
+
 def approval_card(turn: dict, index: int, context: str, active: bool) -> None:
     action = turn["pending_action"]
-    args = action["args"]
     with st.container(key=f"approval_{context}_{index}", border=True):
         st.markdown(":material/how_to_reg: **Needs your approval**")
         st.caption(plain(action.get("summary", "")))
         if not active:
             st.caption(turn.get("resolution", "No longer pending."))
             return
-        names = {p["product_id"]: p for p in action.get("products", [])}
-        for field in ("product_ids", "sections", "colours"):
-            for value in args.get(field, []):
-                if field == "product_ids" and value not in names:
-                    continue
-                label = (
-                    f"{names[value]['name']} · €{names[value]['price']:.2f}"
-                    if field == "product_ids"
-                    else str(value)
-                )
-                st.checkbox(label, value=True, key=f"approve_{context}_{index}_{field}_{value}")
-        if args.get("max_price") is not None:
-            st.checkbox(
-                f"Budget up to €{args['max_price']:g}",
-                value=True,
-                key=f"approve_{context}_{index}_max_price_{args['max_price']}",
-            )
+        for field, value, label in approval_options(action):
+            st.checkbox(label, value=True, key=f"approve_{context}_{index}_{field}_{value}")
         with st.container(horizontal=True):
             st.button(
                 "Approve",
@@ -1141,11 +1394,14 @@ def show_chat_turn(turn: dict, index: int, context: str, latest: bool = False) -
             show_trace(turn.get("steps", []))
         st.markdown(turn["content"])
         grounding = (turn.get("grounding") or {}).get("status")
-        if grounding in GROUNDING_BADGES:
-            label, color, icon = GROUNDING_BADGES[grounding]
+        badges = GROUNDING_BADGES[current_domain()]
+        if grounding in badges:
+            label, color, icon = badges[grounding]
             st.badge(label, color=color, icon=icon)
         if turn.get("products"):
             show_chat_products(turn["products"], index, context)
+        if turn.get("cocktails"):
+            show_chat_cocktails(turn["cocktails"], index, context)
         if turn.get("pending_action"):
             approval_card(turn, index, context, active=latest and not turn.get("resolution"))
         if latest and (clarification := turn.get("clarification")):
@@ -1171,38 +1427,58 @@ def show_chat_turn(turn: dict, index: int, context: str, latest: bool = False) -
         if turn["role"] == "assistant" and turn.get("steps") and turn.get("status") == "complete":
             st.feedback(
                 "thumbs",
-                key=f"feedback_{context}_{index}",
+                key=feedback_key(context, index),
                 on_change=send_feedback,
                 args=(index, context),
             )
 
 
 def reset_chat() -> None:
-    st.session_state["chat_history"] = []
-    for key in ("chat_queued", "chat_decision"):
-        st.session_state.pop(key, None)
+    st.session_state[state_key("history")] = []
+    for name in ("queued", "decision"):
+        st.session_state.pop(state_key(name), None)
 
 
 def close_assistant() -> None:
     st.session_state["assistant_popup"] = False
 
 
-def chat_payload(history: list[dict]) -> dict:
-    """Recent turns plus client-held session state; unset state is left out."""
-    past_turns = []
-    for turn in history[-10:]:
-        item = {"role": turn["role"], "content": turn["content"][:4000]}
-        if turn.get("products"):
-            item["product_ids"] = [p["product_id"] for p in turn["products"][:5]]
-        past_turns.append(item)
-    payload: dict = {"history": past_turns}
+def history_item(turn: dict) -> dict:
+    item = {"role": turn["role"], "content": turn["content"][:4000]}
+    if turn.get("products"):
+        item["product_ids"] = [p["product_id"] for p in turn["products"][:5]]
+    if turn.get("cocktails"):
+        item["drink_ids"] = [c["drink_id"] for c in turn["cocktails"][:5]]
+    return item
+
+
+def fashion_context() -> dict:
+    context: dict = {}
     memory = {key: value for key, value in preferences().items() if value}
     if memory:
-        payload["preferences"] = memory
+        context["preferences"] = memory
     if st.session_state.get("chat_shopper"):
-        payload["shopper_id"] = st.session_state["chat_shopper"]
+        context["shopper_id"] = st.session_state["chat_shopper"]
     if shortlist():
-        payload["shortlist"] = [p["product_id"] for p in shortlist()]
+        context["shortlist"] = [p["product_id"] for p in shortlist()]
+    return context
+
+
+def cocktail_context() -> dict:
+    context: dict = {"domain": COCKTAILS}
+    memory = {key: value for key, value in cocktail_memory().items() if value}
+    if memory:
+        context["cocktail_preferences"] = memory
+    if cocktail_shortlist():
+        context["cocktail_shortlist"] = [c["drink_id"] for c in cocktail_shortlist()]
+    return context
+
+
+def chat_payload(history: list[dict]) -> dict:
+    """Recent turns plus client-held session state; unset state and the default domain are
+    left out, so fashion requests look exactly as they did before cocktails existed."""
+    payload: dict = {"history": [history_item(turn) for turn in history[-10:]]}
+    payload |= cocktail_context() if current_domain() == COCKTAILS else fashion_context()
     if policy := auto_approve():
         payload["auto_approve"] = policy
     return payload
@@ -1239,26 +1515,39 @@ def stream_chat(payload: dict, on_step) -> dict | None:
     return None
 
 
+def saved_count(count: int, noun: str) -> str:
+    return f"Saved {count} {noun if count == 1 else noun + 's'} to your shortlist."
+
+
 def apply_effects(reply: dict) -> None:
-    by_id = {p["product_id"]: p for p in reply.get("products", [])}
+    products = {p["product_id"]: p for p in reply.get("products", [])}
+    cocktails = {c["drink_id"]: c for c in reply.get("cocktails", [])}
     for effect in reply.get("applied", []):
-        if effect["kind"] == "shortlist":
+        kind = effect["kind"]
+        if kind == "shortlist":
             for pid in effect.get("product_ids", []):
-                product = by_id.get(pid) or call_api("GET", f"/products/{pid}")
+                product = products.get(pid) or call_api("GET", f"/products/{pid}")
                 if product:
                     add_to_shortlist(product, announce=False)
             count = len(effect.get("product_ids", []))
-            st.toast(
-                f"Saved {count} {'piece' if count == 1 else 'pieces'} to your shortlist.",
-                icon=":material/favorite:",
-            )
-        elif effect["kind"] == "preferences" and effect.get("preferences"):
+            st.toast(saved_count(count, "piece"), icon=":material/favorite:")
+        elif kind == "cocktail_shortlist":
+            for did in effect.get("drink_ids", []):
+                cocktail = cocktails.get(did) or call_api("GET", f"/cocktails/{did}")
+                if cocktail:
+                    add_cocktail(cocktail, announce=False)
+            count = len(effect.get("drink_ids", []))
+            st.toast(saved_count(count, "drink"), icon=":material/favorite:")
+        elif kind == "preferences" and effect.get("preferences"):
             memory = preferences()
             for field in ("sections", "colours"):
                 values = [*memory.get(field, []), *effect["preferences"].get(field, [])]
                 memory[field] = list(dict.fromkeys(values))
             if effect["preferences"].get("max_price") is not None:
                 memory["max_price"] = effect["preferences"]["max_price"]
+            st.toast("Curio will remember that for this session.", icon=":material/memory:")
+        elif kind == "cocktail_preferences" and effect.get("cocktail_preferences"):
+            remember_tastes(effect["cocktail_preferences"])
             st.toast("Curio will remember that for this session.", icon=":material/memory:")
 
 
@@ -1283,6 +1572,7 @@ def run_turn(payload: dict, history: list[dict], context: str, user_turn: dict |
         "role": "assistant",
         "content": reply["text"],
         "products": reply.get("products", []),
+        "cocktails": reply.get("cocktails", []),
         "steps": reply.get("steps", []),
         "status": reply.get("status", "complete"),
         "grounding": reply.get("grounding"),
@@ -1296,19 +1586,39 @@ def run_turn(payload: dict, history: list[dict], context: str, user_turn: dict |
     show_chat_turn(assistant_turn, len(history) - 1, context, latest=True)
 
 
+def chat_available(domain: str, health: dict) -> bool:
+    if domain == FASHION:
+        return bool(health.get("chat_enabled"))
+    if not health.get("cocktails_enabled"):
+        return False
+    domains = call_api("GET", "/domains") or []
+    return any(item.get("id") == COCKTAILS and item.get("chat_enabled") for item in domains)
+
+
+def welcome(copy: DomainCopy, context: str) -> None:
+    with st.chat_message("assistant"):
+        st.markdown(copy.welcome)
+        with st.container(horizontal=True, key=f"chat_starters_{context}"):
+            for number, starter in enumerate(copy.starters):
+                st.button(
+                    starter,
+                    key=f"chat_starter_{context}_{number}",
+                    on_click=queue_message,
+                    args=(starter,),
+                )
+
+
 def chat_conversation(context: str) -> None:
+    copy = DOMAIN_COPY[current_domain()]
     health = call_api("GET", "/health")
     if health is None:
         return
-    if not health.get("chat_enabled"):
-        st.info(
-            "The assistant is currently unavailable. "
-            "You can still discover pieces by description or photo."
-        )
+    if not chat_available(current_domain(), health):
+        st.info(copy.unavailable)
         return
-    history: list[dict] = st.session_state.setdefault("chat_history", [])
-    queued = st.session_state.pop("chat_queued", None)
-    decision = st.session_state.pop("chat_decision", None)
+    history = chat_history()
+    queued = st.session_state.pop(state_key("queued"), None)
+    decision = st.session_state.pop(state_key("decision"), None)
     idle = not history and not queued and decision is None
     transcript = st.container(
         height=240 if context == "home" and idle else (360 if context == "popup" else 640),
@@ -1317,19 +1627,10 @@ def chat_conversation(context: str) -> None:
         key=f"chat_log_{context}",
     )
     # Rendered below the transcript; its value is read now and the transcript filled after.
-    message = (
-        st.chat_input(
-            "Describe a piece or ask a follow-up…", key=f"chat_input_{context}", max_chars=2000
-        )
-        or queued
-    )
+    message = st.chat_input(copy.placeholder, key=f"chat_input_{context}", max_chars=2000) or queued
     with transcript:
         if not history and not message:
-            with st.chat_message("assistant"):
-                st.markdown(
-                    "Tell me what you're looking for, including a colour, occasion or budget. "
-                    "Try **white sneakers under €40**."
-                )
+            welcome(copy, context)
         payload = None
         if decision is not None and decision["index"] < len(history):
             turn = history[decision["index"]]
@@ -1384,8 +1685,24 @@ def compare_dialog(product_ids: list[int]) -> None:
     st.caption("Prices are approximate; current stock is unknown.")
 
 
-def session_panel() -> None:
+def approval_toggles() -> None:
+    st.markdown("**Approvals**")
+    policy = st.session_state.setdefault("approval_policy", {})
+    policy["ask_shortlist"] = st.toggle(
+        "Ask before saving to my shortlist",
+        value=policy.get("ask_shortlist", True),
+        key="session_ask_shortlist",
+    )
+    policy["ask_memory"] = st.toggle(
+        DOMAIN_COPY[current_domain()].ask_memory,
+        value=policy.get("ask_memory", True),
+        key="session_ask_memory",
+    )
+
+
+def fashion_session_panel() -> None:
     """Client-held agent state: personalization link, approval policy, memory and shortlist."""
+    copy = DOMAIN_COPY[FASHION]
     with st.container(key="agent_session", border=True):
         st.subheader("Your session", anchor=False)
         examples = (call_api("GET", "/demo/customers") or [])[:10]
@@ -1401,19 +1718,7 @@ def session_panel() -> None:
         )
         st.session_state["chat_shopper"] = shopper
         st.caption("Linked histories unlock “Picks from my shopping history”.")
-
-        st.markdown("**Approvals**")
-        policy = st.session_state.setdefault("approval_policy", {})
-        policy["ask_shortlist"] = st.toggle(
-            "Ask before saving to my shortlist",
-            value=policy.get("ask_shortlist", True),
-            key="session_ask_shortlist",
-        )
-        policy["ask_memory"] = st.toggle(
-            "Ask before remembering preferences",
-            value=policy.get("ask_memory", True),
-            key="session_ask_memory",
-        )
+        approval_toggles()
 
         st.markdown("**Memory**")
         memory = preferences()
@@ -1424,7 +1729,7 @@ def session_panel() -> None:
         if memory.get("max_price") is not None:
             remembered.append(("max_price", memory["max_price"]))
         if not remembered:
-            st.caption("Nothing yet. Say “I always shop menswear” and Curio will ask to remember.")
+            st.caption(copy.memory_hint)
         with st.container(horizontal=True, key="session_memory"):
             for field, value in remembered:
                 st.button(
@@ -1439,7 +1744,7 @@ def session_panel() -> None:
         items = shortlist()
         st.markdown(f"**Shortlist · {len(items)}**")
         if not items:
-            st.caption("Save pieces from answers, or ask Curio to shortlist them.")
+            st.caption(copy.shortlist_hint)
         for product in items:
             with st.container(
                 key=f"shortlist_{product['product_id']}",
@@ -1468,16 +1773,92 @@ def session_panel() -> None:
                     icon=":material/chat_bubble:",
                     key="shortlist_ask",
                     on_click=queue_message,
-                    args=("Compare the pieces in my shortlist and tell me which to pick.",),
+                    args=(copy.compare_prompt,),
                 )
 
 
+def taste_chips(memory: dict) -> list[tuple[str, object, str]]:
+    """Remembered cocktail tastes as (field, value, label) rows."""
+    chips: list[tuple[str, object, str]] = []
+    if memory.get("alcohol_free"):
+        chips.append(("alcohol_free", True, "Alcohol-free"))
+    chips += [("liked_ingredients", v, f"Likes {v}") for v in memory.get("liked_ingredients", [])]
+    chips += [
+        ("avoided_ingredients", v, f"Avoids {v}") for v in memory.get("avoided_ingredients", [])
+    ]
+    return chips
+
+
+def cocktail_session_panel() -> None:
+    copy = DOMAIN_COPY[COCKTAILS]
+    with st.container(key="agent_session", border=True):
+        st.subheader("Your session", anchor=False)
+        approval_toggles()
+
+        st.markdown("**Memory**")
+        chips = taste_chips(cocktail_memory())
+        if not chips:
+            st.caption(copy.memory_hint)
+        with st.container(horizontal=True, key="session_memory"):
+            for field, value, label in chips:
+                st.button(
+                    label,
+                    key=f"forget_cocktail_{field}_{value}",
+                    icon=":material/close:",
+                    help="Forget this taste",
+                    on_click=forget_taste,
+                    args=(field, value),
+                )
+        st.caption("Avoided ingredients filter listed recipe ingredients only, not allergens.")
+
+        items = cocktail_shortlist()
+        st.markdown(f"**Shortlist · {len(items)}**")
+        if not items:
+            st.caption(copy.shortlist_hint)
+        for cocktail in items:
+            with st.container(
+                key=f"cocktail_shortlist_{cocktail['drink_id']}",
+                horizontal=True,
+                vertical_alignment="center",
+            ):
+                cocktail_image(cocktail, width=40)
+                with st.container(gap=None, width="stretch"):
+                    st.text(cocktail["name"])
+                    st.caption(alcohol_label(cocktail))
+                st.button(
+                    ":material/close:",
+                    key=f"cocktail_shortlist_remove_{cocktail['drink_id']}",
+                    help=f"Remove {cocktail['name']}",
+                    type="tertiary",
+                    on_click=remove_cocktail,
+                    args=(cocktail["drink_id"],),
+                )
+        if len(items) >= 2:
+            with st.container(horizontal=True):
+                if st.button(
+                    "Compare", icon=":material/compare:", key="cocktail_shortlist_compare"
+                ):
+                    compare_cocktails_dialog([c["drink_id"] for c in items])
+                st.button(
+                    "Ask Curio",
+                    icon=":material/chat_bubble:",
+                    key="cocktail_shortlist_ask",
+                    on_click=queue_message,
+                    args=(copy.compare_prompt,),
+                )
+
+
+def session_panel() -> None:
+    if current_domain() == COCKTAILS:
+        cocktail_session_panel()
+    else:
+        fashion_session_panel()
+
+
 def agent_home() -> None:
-    st.title("Find your next favorite.")
-    st.caption(
-        "Tell Curio your style, occasion or budget. It searches, compares and asks before "
-        "changing anything you own."
-    )
+    copy = DOMAIN_COPY[current_domain()]
+    st.title(copy.title)
+    st.caption(copy.intro)
     st.button("New conversation", type="tertiary", key="chat_reset_home", on_click=reset_chat)
     conversation, session = st.columns([0.68, 0.32], gap="large")
     with conversation, st.container(key="agent_conversation"):
@@ -1504,45 +1885,471 @@ def assistant_popup() -> None:
         )
     if not popup.open:
         return
+    copy = DOMAIN_COPY[current_domain()]
     with popup, st.container(key="assistant_panel"):
         with st.container(horizontal=True, vertical_alignment="center"):
             st.subheader("Curio", width="stretch", anchor=False)
             st.button("New chat", key="chat_reset_popup", type="tertiary", on_click=reset_chat)
             st.button("Close", key="chat_close", type="tertiary", on_click=close_assistant)
-        st.caption("Find pieces. Refine by colour, style or budget.")
+        st.caption(copy.popup_caption)
         chat_conversation("popup")
-        st.caption("H&M research catalog · Prices are approximate. Current stock is unknown.")
+        st.caption(copy.popup_note)
+
+
+# --- Cocktails -----------------------------------------------------------------------------
+
+ALCOHOL_FILTERS = {"any": "Any", "alcoholic": "Alcoholic", "non_alcoholic": "Alcohol-free"}
+# Catalog `alcoholic` values -> (label, badge colour).
+ALCOHOL_STATUS = {
+    "Alcoholic": ("Alcoholic", "orange"),
+    "Non alcoholic": ("Alcohol-free", "green"),
+    "Optional alcohol": ("Optional alcohol", "blue"),
+}
+COCKTAIL_EXAMPLES = ["Margarita", "Something with rum and lime", "Creamy coffee"]
+PANTRY_TOP_K = 9
+SEARCH_TOP_K = 12
+
+
+def alcohol_label(cocktail: dict) -> str:
+    return ALCOHOL_STATUS.get(cocktail["alcoholic"], (cocktail["alcoholic"], "gray"))[0]
+
+
+def alcohol_badge(cocktail: dict) -> None:
+    label, color = ALCOHOL_STATUS.get(cocktail["alcoholic"], (cocktail["alcoholic"], "gray"))
+    st.badge(label, color=color, icon=":material/local_bar:")
+
+
+def cocktail_image(cocktail: dict, width: int | str = "stretch", *, key: str = "") -> None:
+    """The browser loads recipe photos straight from TheCocktailDB; only https is shown.
+
+    Full-width slots without a photo get a `missing_photo_<key>` placeholder.
+    """
+    url = cocktail.get("image_url")
+    if url and url.startswith("https://"):
+        st.image(url, width=width)
+    elif key:
+        with st.container(key=f"missing_photo_{key}"):
+            st.caption("No photo available.", text_alignment="center")
+
+
+def ingredient_lines(ingredients: list[dict]) -> str:
+    """A markdown bullet list of measures and names, kept literal."""
+    lines = []
+    for item in ingredients:
+        measure = (item.get("measure") or "").strip()
+        text = f"{measure} {item['name']}" if measure else item["name"]
+        lines.append(f"- {plain(text)}")
+    return "\n".join(lines)
+
+
+def show_cocktails(
+    cocktails: list[dict],
+    *,
+    context: str,
+    annotate: Callable[[int], None] | None = None,
+) -> None:
+    saved = {item["drink_id"] for item in cocktail_shortlist()}
+    for start in range(0, len(cocktails), GRID_COLUMNS):
+        columns = st.columns(GRID_COLUMNS)
+        for offset, cocktail in enumerate(cocktails[start : start + GRID_COLUMNS]):
+            i = start + offset
+            did = cocktail["drink_id"]
+            with (
+                columns[offset],
+                st.container(key=f"cocktail_card_{context}_{did}_{i}", height="stretch"),
+            ):
+                cocktail_image(cocktail, key=f"{context}_drink_{did}_{i}")
+                with st.container(key=f"cocktail_info_{context}_{did}_{i}", gap=None):
+                    st.text(cocktail["name"])
+                    st.caption(f"{cocktail['category']} · {cocktail['glass']}")
+                with st.container(
+                    horizontal=True,
+                    vertical_alignment="center",
+                    horizontal_alignment="distribute",
+                ):
+                    alcohol_badge(cocktail)
+                    st.button(
+                        "Saved" if did in saved else "Save",
+                        key=f"cocktail_save_{context}_{did}_{i}",
+                        icon=":material/favorite:"
+                        if did in saved
+                        else ":material/favorite_border:",
+                        type="tertiary",
+                        disabled=did in saved,
+                        on_click=add_cocktail,
+                        args=(cocktail,),
+                    )
+                if annotate is not None:
+                    annotate(i)
+                st.space("stretch")
+                if st.button(
+                    f"View {cocktail['name']}",
+                    key=f"cocktail_view_{context}_{did}_{i}",
+                    width="stretch",
+                ):
+                    cocktail_details(did)
+
+
+def show_cocktail_hits(hits: list[dict] | None, *, context: str) -> None:
+    if not hits:
+        if hits is not None:
+            st.info("No matching drinks. Try fewer ingredients or another category.")
+        return
+
+    def reason(i: int) -> None:
+        if hits[i].get("reasons"):
+            st.caption(plain(hits[i]["reasons"][0]))
+
+    show_cocktails([hit["cocktail"] for hit in hits], context=context, annotate=reason)
+
+
+def ingredient_chips(names: list[str], color: str, icon: str) -> str:
+    safe = (re.sub(r"[\[\]]", "", name) for name in names)
+    return " ".join(f":{color}-badge[{icon} {name}]" for name in safe)
+
+
+def show_pantry_matches(matches: list[dict] | None) -> None:
+    if not matches:
+        if matches is not None:
+            st.info("No recipes match yet. Allow more missing ingredients or add what you have.")
+        return
+
+    def coverage(i: int) -> None:
+        match = matches[i]
+        have, missing = match["have"], match["missing"]
+        st.progress(
+            match["coverage"],
+            text=f"You have {len(have)} of {len(have) + len(missing)} ingredients",
+        )
+        st.markdown(ingredient_chips(have, "green", ":material/check:"))
+        if missing:
+            st.markdown(ingredient_chips(missing, "gray", ":material/add:"))
+        else:
+            st.caption("You can make this now.")
+
+    show_cocktails([m["cocktail"] for m in matches], context="pantry", annotate=coverage)
+
+
+def use_cocktail_example(query: str) -> None:
+    st.session_state["cocktail_query"] = query
+
+
+def cocktail_search_panel(ingredients: list[str]) -> None:
+    categories = call_api("GET", "/cocktails/categories") or []
+    with st.container(key="cocktail_search_panel", border=True):
+        st.subheader("Find a recipe")
+        with st.form("cocktail_search", border=False):
+            query = st.text_input(
+                "Describe a drink",
+                key="cocktail_query",
+                placeholder="e.g. fresh and minty, with lime",
+                max_chars=200,
+            )
+            left, middle, right = st.columns([0.42, 0.33, 0.25], vertical_alignment="bottom")
+            with left:
+                required = st.multiselect(
+                    "Must include",
+                    ingredients,
+                    key="cocktail_ingredients",
+                    max_selections=10,
+                    placeholder="Any ingredients",
+                )
+            with middle:
+                alcohol = st.segmented_control(
+                    "Alcohol",
+                    list(ALCOHOL_FILTERS),
+                    format_func=ALCOHOL_FILTERS.get,
+                    default="any",
+                    required=True,
+                    key="cocktail_alcohol",
+                )
+            with right:
+                category = st.selectbox(
+                    "Category",
+                    [None, *categories],
+                    format_func=lambda c: c or "All",
+                    key="cocktail_category",
+                )
+            st.form_submit_button(
+                "Find drinks", type="primary", key="cocktail_search_submit", width="stretch"
+            )
+            st.caption("Or try an example")
+            with st.container(key="cocktail_example", horizontal=True):
+                for index, example in enumerate(COCKTAIL_EXAMPLES):
+                    st.form_submit_button(
+                        example,
+                        key=f"cocktail_example_{index}",
+                        on_click=use_cocktail_example,
+                        args=(example,),
+                    )
+    alcohol = alcohol or "any"
+    if not (query.strip() or required or alcohol != "any" or category):
+        return
+    body = {
+        "query": query.strip(),
+        "ingredients": required,
+        "alcohol": alcohol,
+        "category": category,
+        "top_k": SEARCH_TOP_K,
+    }
+    with st.container(key="cocktail_search_results"):
+        st.subheader("Matching drinks")
+        with st.spinner("Searching recipes…"):
+            show_cocktail_hits(call_api("POST", "/cocktails/search", json=body), context="search")
+
+
+def pantry_panel(ingredients: list[str]) -> None:
+    with st.container(key="pantry_panel", border=True):
+        st.subheader("What can I make?")
+        st.caption("Pick what you have. Curio finds drinks you can make now or almost.")
+        pantry = st.multiselect(
+            "Ingredients you have",
+            ingredients,
+            key="pantry_ingredients",
+            max_selections=15,
+            placeholder="e.g. Gin, Lime, Tonic water",
+        )
+        left, right = st.columns(2, vertical_alignment="bottom")
+        with left:
+            max_missing = st.slider(
+                "Missing ingredients allowed", 0, 3, 2, key="pantry_max_missing"
+            )
+        with right:
+            alcohol = st.segmented_control(
+                "Alcohol",
+                list(ALCOHOL_FILTERS),
+                format_func=ALCOHOL_FILTERS.get,
+                default="any",
+                required=True,
+                key="pantry_alcohol",
+            )
+    if not pantry:
+        st.caption("Add at least one ingredient to see what you can make.")
+        return
+    body = {
+        "ingredients": pantry,
+        "alcohol": alcohol or "any",
+        "max_missing": max_missing,
+        "top_k": PANTRY_TOP_K,
+    }
+    with st.container(key="pantry_results"):
+        st.subheader("Drinks you can make")
+        with st.spinner("Checking recipes…"):
+            show_pantry_matches(call_api("POST", "/cocktails/pantry", json=body))
+
+
+def cocktails_page() -> None:
+    st.title("Cocktails")
+    count = st.session_state.get("service_health", {}).get("cocktail_count")
+    st.caption(
+        f"Search {count:,} recipes by flavour or ingredient, or start from what you have."
+        if count
+        else "Search recipes by flavour or ingredient, or start from what you have."
+    )
+    mode = st.segmented_control(
+        "Find drinks by",
+        ["search", "pantry"],
+        format_func={"search": "Search recipes", "pantry": "What can I make?"}.get,
+        default="search",
+        required=True,
+        key="cocktail_mode",
+        label_visibility="collapsed",
+    )
+    ingredients = call_api("GET", "/cocktails/ingredients")
+    if ingredients is not None:
+        (pantry_panel if mode == "pantry" else cocktail_search_panel)(ingredients)
+    # The app footer credits TheCocktailDB on every cocktail-domain page.
+
+
+@st.dialog("Recipe", width="large")
+def cocktail_details(drink_id: int) -> None:
+    cocktail = call_api("GET", f"/cocktails/{drink_id}")
+    if cocktail is None:
+        return
+    saved = any(c["drink_id"] == drink_id for c in cocktail_shortlist())
+    with st.container(key="cocktail_detail_body"):
+        left, right = st.columns([0.4, 0.6], gap="large")
+        with left:
+            cocktail_image(cocktail, key=f"detail_drink_{drink_id}")
+        with right:
+            st.subheader(cocktail["name"], anchor=False)
+            alcohol_badge(cocktail)
+            st.caption(f"{cocktail['category']} · {cocktail['glass']}")
+            st.markdown("**Ingredients**")
+            st.markdown(ingredient_lines(cocktail["ingredients"]))
+            st.markdown("**Method**")
+            st.text(cocktail["instructions"] or "No instructions are listed.")
+            with st.container(horizontal=True):
+                st.button(
+                    "Saved" if saved else "Save to shortlist",
+                    icon=":material/favorite:" if saved else ":material/favorite_border:",
+                    key=f"cocktail_detail_save_{drink_id}",
+                    disabled=saved,
+                    on_click=add_cocktail,
+                    args=(cocktail,),
+                )
+                if st.button(
+                    "Ask Curio about it",
+                    icon=":material/chat_bubble:",
+                    key=f"cocktail_detail_ask_{drink_id}",
+                ):
+                    # Dialogs rerun on their own; a full rerun closes this one and opens chat.
+                    queue_message(
+                        f"Tell me about the {cocktail['name']} (drink {drink_id}).",
+                        True,
+                        domain=COCKTAILS,
+                    )
+                    st.rerun()
+            st.caption(RECIPE_CREDIT)
+    st.markdown("**Similar drinks**")
+    hits = call_api(
+        "GET",
+        f"/cocktails/{drink_id}/similar",
+        params={"top_k": 5, "alcohol": "any"},
+        missing_ok=True,
+    )
+    if hits:
+        # Similar-drink buttons cannot open a second native dialog inside this one.
+        for hit in hits:
+            item = hit["cocktail"]
+            reason = f" · {hit['reasons'][0]}" if hit.get("reasons") else ""
+            st.text(f"{item['name']} · {alcohol_label(item)}{reason}")
+    elif hits is not None:
+        st.info("No similar drinks are available yet.")
+
+
+@st.dialog("Compare drinks", width="large")
+def compare_cocktails_dialog(drink_ids: list[int]) -> None:
+    cocktails = [c for c in cocktail_shortlist() if c["drink_id"] in drink_ids][:4]
+    if len(cocktails) < 2:
+        st.info("Save at least two drinks to compare them.")
+        return
+    names = [{i["name"].casefold() for i in c["ingredients"]} for c in cocktails]
+    shared = sorted(set.intersection(*names))
+    if shared:
+        st.caption(f"In every recipe: {plain(', '.join(shared))}")
+    for column, cocktail in zip(st.columns(len(cocktails)), cocktails, strict=True):
+        with column, st.container(key=f"compare_cocktail_{cocktail['drink_id']}"):
+            cocktail_image(cocktail, key=f"compare_drink_{cocktail['drink_id']}")
+            st.text(cocktail["name"])
+            alcohol_badge(cocktail)
+            st.caption(f"{plain(cocktail['category'])} · {plain(cocktail['glass'])}")
+            st.markdown(ingredient_lines(cocktail["ingredients"]))
+    st.caption(RECIPE_CREDIT)
+
+
+# --- App shell -----------------------------------------------------------------------------
+
+
+def switch_domain() -> None:
+    st.session_state["domain"] = st.session_state["domain_switch"]
+    st.session_state["domain_switched"] = True
+
+
+def active_domain(health: dict) -> str:
+    """The selected domain, falling back to fashion when cocktails are not served."""
+    if current_domain() == COCKTAILS and not health.get("cocktails_enabled"):
+        st.session_state["domain"] = FASHION
+    return current_domain()
+
+
+def domain_switch(cocktails_enabled: bool) -> None:
+    # The widget mirrors `domain`, which deep links and tests may set directly.
+    st.session_state["domain_switch"] = current_domain()
+    st.segmented_control(
+        "Catalog",
+        list(DOMAIN_LABELS),
+        format_func=DOMAIN_LABELS.get,
+        required=True,
+        key="domain_switch",
+        on_change=switch_domain,
+        disabled=not cocktails_enabled,
+        label_visibility="collapsed",
+    )
+    if not cocktails_enabled:
+        st.caption("Cocktails are not available", help=COCKTAILS_UNAVAILABLE)
+
+
+def domain_pages(domain: str, cocktails_enabled: bool) -> list:
+    """Every page stays routable; only the active domain's pages are shown in the menu."""
+
+    def shown(owner: str) -> str:
+        return "visible" if owner == domain else "hidden"
+
+    pages = [
+        st.Page(agent_home, title="Ask Curio", default=True),
+        st.Page(
+            recommendations_tab, title="Fashion", url_path="fashion", visibility=shown(FASHION)
+        ),
+        st.Page(discovery_page, title="Discover", url_path="discover", visibility=shown(FASHION)),
+        st.Page(
+            knowledge_graph_tab,
+            title="Product connections",
+            url_path="connections",
+            visibility=shown(FASHION),
+        ),
+    ]
+    if cocktails_enabled:
+        pages.append(
+            st.Page(
+                cocktails_page,
+                title="Cocktails",
+                url_path="cocktails",
+                visibility=shown(COCKTAILS),
+            )
+        )
+    return [
+        *pages,
+        st.Page(evaluation_tab, title="Model quality", url_path="quality", visibility="hidden"),
+        st.Page(chat_tab, title="Assistant", url_path="assistant", visibility="hidden"),
+    ]
+
+
+def catalog_note(health: dict) -> str:
+    if current_domain() == COCKTAILS:
+        count = health.get("cocktail_count")
+        recipes = f"{count:,} recipes · " if count else ""
+        return f"Recipe data: TheCocktailDB · {recipes}Please drink responsibly."
+    indexed = f"{health['indexed_products']:,}"
+    total = f" of {health['catalog_products']:,}" if health.get("catalog_products") else ""
+    return f"H&M 2020 research catalog · Photo search: {indexed}{total} pieces"
 
 
 def main() -> None:
     st.set_page_config(page_title="Curio · Agentic recommendations", page_icon="C", layout="wide")
     st.html("<style>" + Path(__file__).with_name("ui.css").read_text() + "</style>")
     health = call_api("GET", "/health")
-    st.html('<div class="curio-brand">Curio<span>AGENTIC RECOMMENDATIONS</span></div>')
+    header = st.container(
+        key="curio_header",
+        horizontal=True,
+        vertical_alignment="center",
+        horizontal_alignment="distribute",
+    )
+    header.html('<div class="curio-brand">Curio<span>AGENTIC RECOMMENDATIONS</span></div>')
     if health is None:
         st.info("Curio cannot connect right now. Please try again shortly.")
         if st.button("Retry connection"):
             st.rerun()
         return
     st.session_state["service_health"] = health
-    page = st.navigation(
-        [
-            st.Page(agent_home, title="Ask Curio", default=True),
-            st.Page(recommendations_tab, title="Fashion", url_path="fashion"),
-            st.Page(discovery_page, title="Discover", url_path="discover"),
-            st.Page(knowledge_graph_tab, title="Product connections", url_path="connections"),
-            st.Page(evaluation_tab, title="Model quality", url_path="quality", visibility="hidden"),
-            st.Page(chat_tab, title="Assistant", url_path="assistant", visibility="hidden"),
-        ],
-        position="top",
-    )
+    cocktails_enabled = bool(health.get("cocktails_enabled"))
+    domain = active_domain(health)
+    pages = domain_pages(domain, cocktails_enabled)
+    page = st.navigation(pages, position="top")
+    owner = PAGE_DOMAINS.get(page.url_path)
+    switched = st.session_state.pop("domain_switched", False)
+    if owner is not None and owner != domain:
+        if switched:  # the shopper changed domain on another domain's page: go home
+            st.switch_page(pages[0])
+        st.session_state["domain"] = owner  # a deep link selects its page's domain
+        st.rerun()
+    with header:
+        domain_switch(cocktails_enabled)
     page.run()
     if page.title not in ("Ask Curio", "Assistant"):
         assistant_popup()
     with st.container(key="catalog_note"):
-        indexed = f"{health['indexed_products']:,}"
-        total = f" of {health['catalog_products']:,}" if health.get("catalog_products") else ""
-        st.caption(f"H&M 2020 research catalog · Photo search: {indexed}{total} pieces")
+        st.caption(catalog_note(health))
 
 
 if __name__ == "__main__":

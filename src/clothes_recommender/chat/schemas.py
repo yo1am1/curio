@@ -2,18 +2,29 @@
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, PositiveInt, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    PositiveInt,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
 
 from clothes_recommender.chat.intent import SearchIntent
+from clothes_recommender.cocktails.domain import Cocktail, CocktailPreferences
 from clothes_recommender.domain import Product
 
-ApprovalTool = Literal["SaveToShortlist", "RememberPreferences"]
+Domain = Literal["fashion", "cocktails"]
+ApprovalTool = Literal["SaveToShortlist", "RememberPreferences", "SaveCocktails", "RememberTastes"]
 
 
 class ChatTurn(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field(max_length=4000)
     product_ids: list[PositiveInt] = Field(default_factory=list, max_length=5)
+    # Cocktail cards shown with an assistant turn, so follow-ups can refer to them.
+    drink_ids: list[PositiveInt] = Field(default_factory=list, max_length=5)
 
 
 class ShopperPreferences(BaseModel):
@@ -58,6 +69,7 @@ class PendingAction(BaseModel):
     signature: str
     summary: str = ""
     products: list[Product] = Field(default_factory=list)
+    cocktails: list[Cocktail] = Field(default_factory=list, max_length=5)
 
 
 class ActionDecision(BaseModel):
@@ -67,12 +79,33 @@ class ActionDecision(BaseModel):
     edited_args: dict[str, Any] | None = None
 
 
-class AppliedEffect(BaseModel):
-    """A state change the client should now apply to its shortlist or memory."""
+_FASHION_EFFECT_FIELDS = ("product_ids", "preferences")
+_COCKTAIL_EFFECT_FIELDS = ("drink_ids", "cocktail_preferences")
 
-    kind: Literal["shortlist", "preferences"]
+
+class AppliedEffect(BaseModel):
+    """A state change the client should now apply to its shortlist or memory.
+
+    Each kind is serialized with its own domain's fields only, so fashion effects keep the
+    exact wire format they had before the cocktail domain existed.
+    """
+
+    kind: Literal["shortlist", "preferences", "cocktail_shortlist", "cocktail_preferences"]
     product_ids: list[int] = Field(default_factory=list)
     preferences: ShopperPreferences | None = None
+    drink_ids: list[int] = Field(default_factory=list)
+    cocktail_preferences: CocktailPreferences | None = None
+
+    # No return annotation: pydantic then keeps the field-by-field JSON schema for responses.
+    @model_serializer(mode="wrap")
+    def _domain_fields(self, handler: SerializerFunctionWrapHandler):
+        data = handler(self)
+        other = (
+            _FASHION_EFFECT_FIELDS if self.kind.startswith("cocktail_") else _COCKTAIL_EFFECT_FIELDS
+        )
+        for name in other:
+            data.pop(name, None)
+        return data
 
 
 class GroundingReport(BaseModel):
@@ -87,6 +120,8 @@ class AssistantReply(BaseModel):
     text: str
     products: list[Product]
     intent: SearchIntent
+    domain: Domain = "fashion"
+    cocktails: list[Cocktail] = Field(default_factory=list)
     status: Literal["complete", "needs_input", "needs_approval"] = "complete"
     steps: list[AgentStep] = Field(default_factory=list)
     clarification: Clarification | None = None
@@ -103,10 +138,13 @@ class TurnContext(BaseModel):
     shopper_id: PositiveInt | None = None
     shortlist: list[PositiveInt] = Field(default_factory=list, max_length=20)
     # Human-in-the-loop policy: approval tools listed here run without asking.
-    auto_approve: list[ApprovalTool] = Field(default_factory=list, max_length=2)
+    auto_approve: list[ApprovalTool] = Field(default_factory=list, max_length=4)
+    cocktail_preferences: CocktailPreferences = Field(default_factory=CocktailPreferences)
+    cocktail_shortlist: list[PositiveInt] = Field(default_factory=list, max_length=20)
 
 
 class ChatRequest(TurnContext):
+    domain: Domain = "fashion"
     message: str = Field(default="", max_length=2000)
     history: list[ChatTurn] = Field(default=[], max_length=50)
     decision: ActionDecision | None = None

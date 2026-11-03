@@ -15,6 +15,7 @@ from clothes_recommender.chat.schemas import (
     GroundingReport,
     PendingAction,
 )
+from clothes_recommender.cocktails.domain import Cocktail
 from clothes_recommender.domain import Product
 
 # "€24.99", "€ 24", "24.99 €", "24 EUR", "24.99 euros"
@@ -72,6 +73,136 @@ def check_grounding(
 def amounts_in(text: str) -> list[float]:
     """Numbers the shopper typed, which the answer may repeat (budgets, sizes)."""
     return [_amount(raw) for raw in _NUMBER.findall(text)]
+
+
+# Cocktail answers cite drinks as "[id 12]" (the prompt's format) or "drink #12".
+_DRINK_ID = re.compile(r"\[id (\d+)\]|\b(?:drink|recipe|cocktail) #(\d+)\b", re.IGNORECASE)
+_VULGAR_FRACTIONS = {"½": " 1/2", "¼": " 1/4", "¾": " 3/4", "⅓": " 1/3", "⅔": " 2/3", "⅛": " 1/8"}
+_UNITS = {
+    "oz": "oz",
+    "ounce": "oz",
+    "ounces": "oz",
+    "ml": "ml",
+    "cl": "cl",
+    "tsp": "tsp",
+    "teaspoon": "tsp",
+    "teaspoons": "tsp",
+    "tbsp": "tbsp",
+    "tblsp": "tbsp",
+    "tablespoon": "tbsp",
+    "tablespoons": "tbsp",
+    "cup": "cup",
+    "cups": "cup",
+    "shot": "shot",
+    "shots": "shot",
+    "part": "part",
+    "parts": "part",
+    "dash": "dash",
+    "dashes": "dash",
+    "jigger": "jigger",
+    "jiggers": "jigger",
+    "slice": "slice",
+    "slices": "slice",
+    "wedge": "wedge",
+    "wedges": "wedge",
+    "leaf": "leaf",
+    "leaves": "leaf",
+    "sprig": "sprig",
+    "sprigs": "sprig",
+    "drop": "drop",
+    "drops": "drop",
+}
+# "2 oz", "1 1/2 oz", "1/2 tsp", "1.5 cl", "8 leaves" (after vulgar fractions are spelled out).
+_MEASURE = re.compile(
+    r"(?<![\w/.,])(\d+(?:[.,]\d+)?(?:\s+\d+/\d+)?|\d+/\d+)\s*("
+    + "|".join(sorted(_UNITS, key=len, reverse=True))
+    + r")\b",
+    re.IGNORECASE,
+)
+_MEASURE_TOLERANCE = 0.001
+
+type Measure = tuple[float, str]
+
+
+def _quantity(text: str) -> float:
+    total = 0.0
+    for part in text.replace(",", ".").split():
+        numerator, _, denominator = part.partition("/")
+        total += float(numerator) / float(denominator) if denominator else float(numerator)
+    return total
+
+
+def measures_in(text: str) -> list[tuple[str, Measure]]:
+    """Ingredient amounts in `text` as (as written, (quantity, normalised unit))."""
+    for symbol, spelled in _VULGAR_FRACTIONS.items():
+        text = text.replace(symbol, spelled)
+    found = []
+    for match in _MEASURE.finditer(text):
+        denominators = [part.partition("/")[2] for part in match.group(1).split()]
+        if "0" in denominators:
+            continue
+        found.append((match.group(0), (_quantity(match.group(1)), _UNITS[match.group(2).lower()])))
+    return found
+
+
+class CocktailGroundingCheck:
+    """Checks that drinks, IDs and amounts in a cocktail answer come from tool evidence.
+
+    Catalog drink names are matched case-sensitively in their catalog spelling, so ordinary
+    words ("a perfect afternoon drink") do not count as the drink "Afternoon". Names that are
+    also ingredient names ("Limeade") are never treated as drink mentions.
+    """
+
+    def __init__(self, drink_names: Iterable[str], ingredient_names: Iterable[str]) -> None:
+        ingredients = {name.casefold() for name in ingredient_names}
+        names = sorted(
+            {name for name in drink_names if name.strip() and name.casefold() not in ingredients},
+            key=lambda name: (-len(name), name),
+        )
+        self._names = (
+            re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, names)) + r")(?!\w)")
+            if names
+            else None
+        )
+
+    def check(self, text: str, evidence: Sequence[Cocktail], typed: str = "") -> GroundingReport:
+        """`typed` is what the shopper wrote: drinks and amounts they named may be repeated."""
+        issues: list[str] = []
+        checked = 0
+        known_ids = {c.drink_id for c in evidence}
+        for match in _DRINK_ID.finditer(text):
+            drink_id = int(next(group for group in match.groups() if group))
+            checked += 1
+            if drink_id not in known_ids:
+                issues.append(f"drink {drink_id} was not returned by any tool")
+        evidence_names = [c.name for c in evidence]
+        for name in dict.fromkeys(self._names.findall(text) if self._names else []):
+            checked += 1
+            if not _name_allowed(name, evidence_names, typed):
+                issues.append(f"{name} was not returned by any tool")
+        allowed = [
+            m for c in evidence for i in c.ingredients for _, m in measures_in(i.measure or "")
+        ]
+        allowed += [m for _, m in measures_in(typed)]
+        for raw, measure in measures_in(text):
+            checked += 1
+            if not any(_same_measure(measure, other) for other in allowed):
+                issues.append(f"{raw} does not match any amount in the evidence recipes")
+        if not checked:
+            return GroundingReport(status="not_applicable")
+        return GroundingReport(
+            status="fallback" if issues else "verified", checked=checked, issues=issues
+        )
+
+
+def _name_allowed(name: str, evidence_names: Sequence[str], typed: str) -> bool:
+    """A drink returned by a tool, part of one ("Mojito" in "Virgin Mojito"), or typed."""
+    pattern = re.compile(r"(?<!\w)" + re.escape(name) + r"(?!\w)", re.IGNORECASE)
+    return any(pattern.search(other) for other in [*evidence_names, typed])
+
+
+def _same_measure(a: Measure, b: Measure) -> bool:
+    return a[1] == b[1] and abs(a[0] - b[0]) <= _MEASURE_TOLERANCE
 
 
 class InvalidActionError(ValueError):
@@ -132,6 +263,11 @@ def narrow_args(decision: ActionDecision) -> dict[str, Any]:
             if not isinstance(value, list) or not set(value) <= set(original):
                 raise InvalidActionError(f"Edited {field} must be a subset of the proposal.")
             narrowed[field] = [item for item in original if item in value]
+        elif isinstance(original, bool):
+            # A proposed flag (e.g. alcohol_free) may be switched off, never on.
+            if value is not False and value is not original:
+                raise InvalidActionError(f"Edited {field} may only be kept or switched off.")
+            narrowed[field] = value
         elif value not in (None, original):
             raise InvalidActionError(f"Edited {field} may only be kept or cleared.")
         else:

@@ -18,8 +18,18 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
+from clothes_recommender.chat.engine import AgentEngine
 from clothes_recommender.chat.guardrails import InvalidActionError
-from clothes_recommender.chat.schemas import AssistantReply, ChatRequest, TurnContext
+from clothes_recommender.chat.schemas import AssistantReply, ChatRequest, Domain, TurnContext
+from clothes_recommender.cocktails.catalog import CocktailCatalog
+from clothes_recommender.cocktails.domain import (
+    AlcoholFilter,
+    Cocktail,
+    CocktailHit,
+    CocktailQuery,
+    PantryMatch,
+)
+from clothes_recommender.cocktails.recommend import CocktailRecommender
 from clothes_recommender.config import get_settings
 from clothes_recommender.demo import DemoCustomer
 from clothes_recommender.domain import Product, ProductFilter, ScoredProduct, User
@@ -34,6 +44,8 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 # Bounds decode memory: a small compressed file can still expand to gigabytes of pixels.
 MAX_IMAGE_PIXELS = 25_000_000
 MAX_FEEDBACK_RECORDS = 500
+COCKTAILS_MISSING = "Cocktail recipes are not prepared: run scripts.prepare_cocktails."
+CHAT_DISABLED = "Chat is disabled: set LLM_MODEL (and LLM_API_KEY / LLM_BASE_URL) in .env."
 
 TopK = Annotated[int, Query(ge=1, le=MAX_TOP_K)]
 
@@ -92,6 +104,25 @@ class Health(BaseModel):
     catalog_products: int
     chat_enabled: bool
     ranking_enabled: bool
+    cocktails_enabled: bool
+    cocktail_count: int
+
+
+class DomainInfo(BaseModel):
+    id: Domain
+    label: str
+    enabled: bool
+    chat_enabled: bool
+
+
+IngredientName = Annotated[str, Field(min_length=1, max_length=60)]
+
+
+class PantryRequest(BaseModel):
+    ingredients: list[IngredientName] = Field(max_length=30)
+    alcohol: AlcoholFilter = "any"
+    max_missing: int = Field(default=2, ge=0, le=3)
+    top_k: int = Field(default=10, ge=1, le=MAX_TOP_K)
 
 
 def get_services(request: Request) -> Services:
@@ -99,6 +130,15 @@ def get_services(request: Request) -> Services:
 
 
 ServicesDep = Annotated[Services, Depends(get_services)]
+
+
+def get_cocktails(services: ServicesDep) -> tuple[CocktailCatalog, CocktailRecommender]:
+    if services.cocktail_catalog is None or services.cocktail_recommender is None:
+        raise HTTPException(status_code=503, detail=COCKTAILS_MISSING)
+    return services.cocktail_catalog, services.cocktail_recommender
+
+
+CocktailsDep = Annotated[tuple[CocktailCatalog, CocktailRecommender], Depends(get_cocktails)]
 
 
 def _to_hits(services: Services, scored: Sequence[ScoredProduct]) -> list[ProductHit]:
@@ -164,7 +204,62 @@ def create_app(services: Services | None = None) -> FastAPI:
             catalog_products=len(services.catalog),
             chat_enabled=services.assistant is not None,
             ranking_enabled=services.learned is not None,
+            cocktails_enabled=services.cocktail_catalog is not None,
+            cocktail_count=len(services.cocktail_catalog or ()),
         )
+
+    @app.get("/domains")
+    def domains(services: ServicesDep) -> list[DomainInfo]:
+        return [
+            DomainInfo(
+                id="fashion",
+                label="Fashion",
+                enabled=True,
+                chat_enabled=services.assistant is not None,
+            ),
+            DomainInfo(
+                id="cocktails",
+                label="Cocktails",
+                enabled=services.cocktail_catalog is not None,
+                chat_enabled=services.cocktail_assistant is not None,
+            ),
+        ]
+
+    # Static /cocktails/* paths are registered before /cocktails/{drink_id}.
+    @app.get("/cocktails/ingredients")
+    def cocktail_ingredients(cocktails: CocktailsDep) -> list[str]:
+        return cocktails[0].ingredients()
+
+    @app.get("/cocktails/categories")
+    def cocktail_categories(cocktails: CocktailsDep) -> list[str]:
+        return cocktails[0].categories()
+
+    @app.post("/cocktails/search")
+    def search_cocktails(query: CocktailQuery, cocktails: CocktailsDep) -> list[CocktailHit]:
+        return cocktails[1].search(query)
+
+    @app.post("/cocktails/pantry")
+    def cocktail_pantry(request: PantryRequest, cocktails: CocktailsDep) -> list[PantryMatch]:
+        return cocktails[1].pantry(
+            request.ingredients,
+            alcohol=request.alcohol,
+            max_missing=request.max_missing,
+            top_k=request.top_k,
+        )
+
+    @app.get("/cocktails/{drink_id}")
+    def get_cocktail(drink_id: int, cocktails: CocktailsDep) -> Cocktail:
+        cocktail = cocktails[0].get(drink_id)
+        if cocktail is None:
+            raise HTTPException(status_code=404, detail=f"Drink {drink_id} not found.")
+        return cocktail
+
+    @app.get("/cocktails/{drink_id}/similar")
+    def similar_cocktails(
+        drink_id: int, cocktails: CocktailsDep, top_k: TopK = 5, alcohol: AlcoholFilter = "any"
+    ) -> list[CocktailHit]:
+        get_cocktail(drink_id, cocktails)
+        return cocktails[1].similar(drink_id, top_k=top_k, alcohol=alcohol)
 
     @app.get("/products/{product_id}")
     def get_product(product_id: int, services: ServicesDep) -> Product:
@@ -317,18 +412,22 @@ def create_app(services: Services | None = None) -> FastAPI:
             )
         return json.loads(path.read_text())
 
-    def assistant_for(services: Services):
-        if services.assistant is None:
-            raise HTTPException(
-                status_code=503,
-                detail="Chat is disabled: set LLM_MODEL (and LLM_API_KEY / LLM_BASE_URL) in .env.",
-            )
-        return services.assistant
+    def assistant_for(services: Services, domain: Domain) -> AgentEngine:
+        if domain == "cocktails":
+            if services.cocktail_catalog is None:
+                raise HTTPException(status_code=503, detail=COCKTAILS_MISSING)
+            assistant = services.cocktail_assistant
+        else:
+            assistant = services.assistant
+        if assistant is None:
+            raise HTTPException(status_code=503, detail=CHAT_DISABLED)
+        return assistant
 
     @app.post("/chat")
     def chat(request: ChatRequest, services: ServicesDep) -> AssistantReply:
-        """One agent turn. Send `decision` instead of a message to answer a pending proposal."""
-        assistant = assistant_for(services)
+        """One agent turn in the requested domain. Send `decision` instead of a message to
+        answer a pending proposal."""
+        assistant = assistant_for(services, request.domain)
         context = TurnContext.model_validate(request.model_dump(include=_CONTEXT_FIELDS))
         try:
             if request.decision is not None:
@@ -340,7 +439,7 @@ def create_app(services: Services | None = None) -> FastAPI:
     @app.post("/chat/stream")
     def chat_stream(request: ChatRequest, services: ServicesDep) -> StreamingResponse:
         """The same turn as /chat, as NDJSON: one `step` event per agent step, then `reply`."""
-        assistant = assistant_for(services)
+        assistant = assistant_for(services, request.domain)
         context = TurnContext.model_validate(request.model_dump(include=_CONTEXT_FIELDS))
         events = assistant.stream(
             request.message, request.history, context, decision=request.decision
