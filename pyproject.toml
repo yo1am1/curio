@@ -54,8 +54,11 @@ torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-ra -m 'not integration'"
-markers = ["integration: needs downloaded models or network"]
+addopts = "-ra -m 'not integration and not e2e'"
+markers = [
+    "integration: needs downloaded models or network",
+    "e2e: browser end-to-end run over prepared data (uv run pytest -m e2e tests/e2e)",
+]
 
 [tool.ruff]
 line-length = 100
