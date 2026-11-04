@@ -1,0 +1,27 @@
+name: Release
+
+# Publishes a tagged GitHub release for the pyproject.toml version when main changes and that
+# version has no release yet. Notes come from the matching CHANGELOG.md section.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the release if this version is new
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)
+          tag="v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then echo "$tag already released"; exit 0; fi
+          awk -v v="$version" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on {print}' \
+            CHANGELOG.md > notes.md
+          gh release create "$tag" --target "$GITHUB_SHA" --title "Curio $version" --notes-file notes.md
