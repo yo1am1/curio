@@ -88,7 +88,13 @@ class Script:
         user = self._last_user(messages)
         low = user.lower()
         if last["role"] == "tool":
-            return {"content": self._list(PRODUCT_LINE.findall(_text(last["content"])), "tool")}
+            result = _text(last["content"])
+            hinted = re.search(r"Try relation '(\w+)'", result)
+            target = re.findall(r'"product_id": ?(\d+)', json.dumps(messages[-2].get("tool_calls")))
+            if hinted and target:
+                args = {"product_id": int(target[0]), "relation": hinted.group(1)}
+                return {"tool_calls": [_tool_call("FindRelated", args)]}
+            return {"content": self._list(PRODUCT_LINE.findall(result), "tool")}
         if low.startswith("verification failed"):
             return {
                 "content": self._list(self._products(messages), "Here are the verified options:")

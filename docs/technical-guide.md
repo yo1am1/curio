@@ -449,6 +449,7 @@ The development workflow and remaining validation are recorded in
 ```bash
 uv run pytest                        # fast, offline unit tests (fake encoder, in-memory Qdrant, fake LLM)
 uv run pytest -m integration        # tests that download the real CLIP model
+uv run pytest -m e2e tests/e2e      # browser end-to-end run over prepared data (below)
 uv run ruff check . && uv run ruff format --check .
 
 # Development captures of every page (API + UI running; uses the local Google Chrome)
@@ -460,6 +461,29 @@ and checks layout invariants on the way. It does not overwrite the README images
 the curated `docs/screenshots/curio-*.jpg` files, cropped from captures of the same pages.
 The cocktail README images show the real recipe catalog; the fashion images show the
 prepared H&M sample.
+
+### End-to-end tests
+
+`tests/e2e` starts the real API (real catalog, CLIP index, recommenders and ranker), the
+real Streamlit UI and Chromium, then clicks through every page in both domains: the feed
+and its strategies, description and photo search, the product dialog hand-off to the
+assistant, product connections, model quality, the agent trace, self-correction,
+approve / narrow / decline, clarifying questions, memory, personal picks, the cocktail
+chat, recipe search, "What can I make?" and phone layouts. API scenarios check CLIP
+retrieval quality, image search finding the photographed product, every strategy's
+evidence, signed approvals (including cross-domain replay) and the cocktail endpoints.
+
+The chat model is `tests/e2e/llm_stub.py`, a scripted OpenAI-compatible server: the app
+reaches it through `LLM_PROVIDER=openai` and `LLM_BASE_URL`, so the real provider path runs
+over HTTP while replies stay deterministic and need no key. It does not measure the
+quality of a real model's answers.
+
+Prepare the data as in the quick start (`prepare_data`, `fetch_photos`, `build_index`,
+`fetch_query_photos`, `train_ranker`, `evaluate`, `prepare_cocktails`), stop any API that
+holds the embedded Qdrant index, then run `uv run pytest -m e2e tests/e2e`. Screenshots of
+each step go to `e2e-artifacts/` (override with `E2E_ARTIFACTS`); `E2E_DATA_DIR`,
+`E2E_QDRANT_PATH` and `E2E_CHROMIUM` point at other data or browsers. The default
+`uv run pytest` run excludes these tests.
 
 CI (`.github/workflows/ci.yml`) runs `uv sync --locked`, Ruff, `scripts.prepare_cocktails`
 (so the probes on the real recipe catalog run instead of skipping), the offline test suite

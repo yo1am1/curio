@@ -48,8 +48,18 @@ Curio now covers two domains, fashion and cocktails, with one agent engine.
 - Docker: a one-off `prepare-cocktails` compose service (profile `tools`) and the
   `anthropic` extra in the image.
 - README screenshots of the cocktail search and pantry pages, and this changelog.
+- An opt-in browser end-to-end suite (`uv run pytest -m e2e tests/e2e`) over the real API,
+  UI, data and CLIP index, with a scripted OpenAI-compatible LLM server and a screenshot
+  for every step.
 
 ### Fixed
+
+From the end-to-end run on the real H&M sample:
+
+- An empty "related pieces" result no longer clears the cards on screen, and tells the
+  agent to try another relation (about a fifth of products have no bought-together evidence).
+- On phones the floating assistant is a compact icon button, and pages leave room to scroll
+  their last controls clear of it.
 
 Fixes from the v1.0 release audit:
 

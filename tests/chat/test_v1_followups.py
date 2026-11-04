@@ -7,6 +7,7 @@ from clothes_recommender.chat.cocktail_agent import CocktailToolkit
 from clothes_recommender.chat.engine import _merged
 from clothes_recommender.chat.schemas import CocktailPreferences, ShopperPreferences, TurnContext
 from clothes_recommender.cocktails.recommend import CocktailRecommender
+from clothes_recommender.domain import ScoredProduct
 
 NO_SEARCH = {"query": "", "wants_products": False}
 
@@ -47,3 +48,31 @@ def test_full_memory_keeps_the_newest_values_like_the_ui():
         ShopperPreferences(sections=["Ladieswear", "Divided"]),
     )
     assert merged.sections == ["Sport", "Ladieswear", "Divided"]
+
+
+def test_empty_related_result_keeps_cards_and_hints_the_next_relation(
+    chat_model_replying, search, catalog
+):
+    from langchain_core.messages import ToolMessage
+    from langchain_core.runnables import RunnableLambda
+
+    class NoComplements:
+        def related(self, product_id, relation, top_k):
+            return []
+
+    search.results = [ScoredProduct(1, 0.9)]
+    model = chat_model_replying(
+        {"query": "jeans"},
+        action("FindRelated", {"product_id": 1, "relation": "complement"}, "rel"),
+        "No bought-together evidence; here are the jeans again.",
+    )
+    assistant = ShoppingAssistant(model, search, catalog, navigator=NoComplements())
+    seen = []
+    agent = assistant._agent
+    assistant._agent = RunnableLambda(lambda m: seen.append(list(m)) or agent.invoke(m))
+    reply = assistant.reply("What goes with these jeans?", [])
+    tool_result = seen[-1][-1]
+    assert isinstance(tool_result, ToolMessage)
+    assert "Try relation 'similar'" in tool_result.content
+    assert [p.product_id for p in reply.products] == [1]
+    assert reply.steps[2].status == "skipped"

@@ -175,6 +175,9 @@ class FashionToolkit:
             )
         elif isinstance(action, FindRelated):
             step = self._related(turn, action)
+            if step.status == "skipped":
+                # Keep the cards already shown and tell the model what else it can try.
+                return step.summary + " " + _RELATED_HINTS[action.relation], step
         elif isinstance(action, PersonalPicks):
             step = self._personal(turn)
         else:  # pragma: no cover - POLICIES and TOOLS are defined together
@@ -188,15 +191,23 @@ class FashionToolkit:
         if self._navigator is None:
             raise ToolError("Related products are unavailable right now.")
         found = self._navigator.related(action.product_id, action.relation, self._top_k)
-        turn.show(
-            self._catalog.get_many(e.product_id for e in found),
-            {e.product_id: list(e.reasons) for e in found},
-        )
         label = {
             "complement": "pieces bought with",
             "similar": "look-alikes of",
             "alternative": "higher-priced alternatives to",
         }[action.relation]
+        if not found:
+            return AgentStep(
+                kind="tool",
+                name="FindRelated",
+                summary=f"Found no {label} {product.name}.",
+                status="skipped",
+                detail={"product_id": action.product_id, "relation": action.relation},
+            )
+        turn.show(
+            self._catalog.get_many(e.product_id for e in found),
+            {e.product_id: list(e.reasons) for e in found},
+        )
         return AgentStep(
             kind="tool",
             name="FindRelated",
@@ -381,6 +392,17 @@ def _known(values: Iterable[str], vocabulary: dict[str, str]) -> list[str]:
             canonical for value in values if (canonical := vocabulary.get(value.strip().lower()))
         )
     )
+
+
+_RELATED_HINTS = {
+    "complement": "No shopper bought it together with pieces from another product group. "
+    "Try relation 'similar' for look-alikes or 'alternative' for upgrades, and say that "
+    "there is no bought-together evidence.",
+    "similar": "It has no photo in the image index. Try relation 'complement' or a "
+    "SearchCatalog query describing it.",
+    "alternative": "No higher-priced piece shares its specific category, type and section. "
+    "Try relation 'similar'.",
+}
 
 
 def _with_preferences(
