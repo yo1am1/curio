@@ -54,7 +54,12 @@ from clothes_recommender.cocktails.domain import (
     CocktailQuery,
     PantryMatch,
 )
-from clothes_recommender.cocktails.recommend import PANTRY_ALIASES, CocktailRecommender, tokens
+from clothes_recommender.cocktails.recommend import (
+    PANTRY_ALIASES,
+    CocktailRecommender,
+    terms,
+    tokens,
+)
 
 __all__ = ["CocktailAssistant", "CocktailToolkit"]
 
@@ -138,7 +143,7 @@ class CocktailToolkit:
             detail=tastes.model_dump(exclude_defaults=True) | {"from_memory": from_memory},
         )
 
-    def refresh(self, turn: Turn[Cocktail]) -> None:
+    def refresh(self, turn: Turn[Cocktail], approved: AppliedEffect | None = None) -> None:
         """Nothing to do: every cocktail tool reads remembered tastes from `turn.context`."""
 
     def prompt(
@@ -365,7 +370,8 @@ class CocktailToolkit:
         for value in values:
             canonical = self._catalog.canonical_ingredient(value)
             if canonical is None and any(i.matches(value) for i in self._ingredients):
-                canonical = value.strip()
+                # Plain words only, so client-held tastes can't carry punctuation into prompts.
+                canonical = " ".join(terms(ingredient_key(value)))
             if canonical:
                 known.append(canonical)
         return list(dict.fromkeys(known))
@@ -413,7 +419,8 @@ class _IngredientWords:
     def __init__(self, name: str) -> None:
         self.name = name
         self.key = ingredient_key(name)
-        self.words = frozenset(tokens(self.key))
+        # Normalised words, as in search filters: "Eggs" ~ "egg", "Whisky" ~ "whiskey".
+        self.words = frozenset(terms(self.key))
 
     def matches(self, term: str) -> bool:
         key = ingredient_key(term)
@@ -421,7 +428,7 @@ class _IngredientWords:
             return False
         if key == self.key or self.key in PANTRY_ALIASES.get(key, ()):
             return True
-        words = set(tokens(key))
+        words = set(terms(key))
         return bool(words) and words <= self.words
 
 

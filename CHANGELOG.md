@@ -59,7 +59,9 @@ Fixes from the v1.0 release audit:
   malformed edited decisions and non-ASCII signatures return 409 instead of 502;
   measures such as "1/00 oz" no longer fail a turn; cocktail grounding no longer reads
   "Martini" in "Martini Glass" as a drink; pantry words map to catalog spelling
-  ("tonic" → "Tonic Water").
+  ("tonic" → "Tonic Water"); avoided ingredients in agent tools use the same plural and
+  spelling normalisation as search; a just-approved value replaces the remembered one
+  within the turn; when memory is full the server and UI both keep the newest values.
 - Cocktail search: plurals and spelling variants ("limes", "whisky"), flavour words,
   alcohol-free phrases in the query, bounded ingredient terms (HTTP 422 for blank or
   over-long items), and similar drinks by ingredient family.

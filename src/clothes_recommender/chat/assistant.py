@@ -136,8 +136,12 @@ class FashionToolkit:
             turn.show(self._find_products(intent))
             yield _search_step(intent, turn.items)
 
-    def refresh(self, turn: Turn[Product]) -> None:
+    def refresh(self, turn: Turn[Product], approved: AppliedEffect | None = None) -> None:
         turn.intent, _ = _with_preferences(turn.intent, turn.context.preferences)
+        if approved is not None and approved.preferences is not None:
+            # Just-approved values are the shopper's latest word, so they replace earlier ones.
+            stated = approved.preferences.model_dump(exclude_defaults=True)
+            turn.intent = turn.intent.model_copy(update=stated)
 
     def prompt(
         self, turn: Turn[Product], message: str, history: Sequence[BaseMessage]

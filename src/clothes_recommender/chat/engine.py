@@ -116,9 +116,9 @@ class Toolkit[T](Protocol):
         """Planning steps before the tool loop; each yielded step is timed separately."""
         ...
 
-    def refresh(self, turn: Turn[T]) -> None:
+    def refresh(self, turn: Turn[T], approved: AppliedEffect | None = None) -> None:
         """Re-apply `turn.context`'s remembered preferences to the turn's filters, after a
-        resume or an approved preferences change."""
+        resume or an approved preferences change; `approved` values replace earlier ones."""
         ...
 
     def prompt(
@@ -537,7 +537,7 @@ class AgentEngine[T]:
         """Record an applied effect and let later tool calls in this turn use it."""
         turn.applied.append(effect)
         turn.context = _with_effect(turn.context, effect)
-        self._toolkit.refresh(turn)
+        self._toolkit.refresh(turn, effect)
 
     def _validate(self, name: str, args: object) -> BaseModel | None:
         schema = self._toolkit.tools.get(name)
@@ -624,13 +624,20 @@ def _merged[M: BaseModel](current: M, approved: M) -> M:
                 (m.max_length for m in type(current).model_fields[name].metadata if _bounded(m)),
                 None,
             )
-            value = _union(data[name], value, limit)
+            value = _newest(data[name], value, limit)
         data[name] = value
     return type(current).model_validate(data)
 
 
 def _bounded(constraint: object) -> bool:
     return getattr(constraint, "max_length", None) is not None
+
+
+def _newest[V](current: Sequence[V], added: Iterable[V], limit: int | None) -> list[V]:
+    """Approved values win when memory is full, matching the UI: re-approved values move last."""
+    added = list(dict.fromkeys(added))
+    merged = [value for value in current if value not in added] + added
+    return merged[-limit:] if limit else merged
 
 
 def _union[V](current: Sequence[V], added: Iterable[V], limit: int | None) -> list[V]:
