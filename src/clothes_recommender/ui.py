@@ -1706,7 +1706,10 @@ def chat_conversation(context: str) -> None:
     history = chat_history()
     queued = st.session_state.pop(state_key("queued"), None)
     decision = st.session_state.pop(state_key("decision"), None)
-    idle = not history and not queued and decision is None
+    # The chat input is rendered below the transcript, but its submitted value is already in
+    # session state, so a first message gets the full-height transcript too.
+    typed = st.session_state.get(f"chat_input_{context}")
+    idle = not history and not queued and not typed and decision is None
     transcript = st.container(
         height=240 if context == "home" and idle else (360 if context == "popup" else 640),
         border=False,

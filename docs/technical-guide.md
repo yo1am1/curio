@@ -457,10 +457,11 @@ uv run python -m scripts.take_screenshots --example 5 --skip-chat --out data/scr
 ```
 
 `take_screenshots` writes development captures (`mvp-*`, `text-search`, `cocktails-*`, ...)
-and checks layout invariants on the way. It does not overwrite the README images: those are
-the curated `docs/screenshots/curio-*.jpg` files, cropped from captures of the same pages.
-The cocktail README images show the real recipe catalog; the fashion images show the
-prepared H&M sample.
+and checks layout invariants on the way. The curated README images
+(`docs/screenshots/curio-*.jpg`) come from `scripts.capture_readme`, which drives the
+running stack through the same flows; its docstring lists the commands. The current images
+use the H&M sample prepared from the Hugging Face mirror (3,586 photographed products) and
+the real recipe catalog; chat replies come from the scripted stub, as the README says.
 
 ### End-to-end tests
 

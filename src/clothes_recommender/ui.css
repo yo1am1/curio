@@ -240,3 +240,10 @@ h1, h2, h3 { text-wrap: balance; }
         clip-path: inset(50%); white-space: nowrap;
     }
 }
+/* Chat answer cards: two-line names keep View / Save aligned across a row. */
+.st-key-agent_conversation :is([class*="st-key-chat_product_home_"], [class*="st-key-chat_cocktail_home_"]) [data-testid="stText"] {
+    min-height: 3em; line-height: 1.5;
+}
+.st-key-agent_conversation :is([class*="st-key-chat_product_home_"], [class*="st-key-chat_cocktail_home_"]) [data-testid="stText"] > span {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}

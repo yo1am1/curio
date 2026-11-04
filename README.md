@@ -13,7 +13,7 @@ has two domains, switched in the header:
 Both domains share one agent: it plans, calls policy-gated catalog tools, asks before
 changing your shortlist or memory, and checks its answer against what the tools returned.
 
-![Curio fashion recommendations](docs/screenshots/curio-fashion.jpg)
+![Personalized fashion picks with the evidence behind each one](docs/screenshots/curio-fashion.jpg)
 
 ## Ask Curio
 
@@ -27,7 +27,24 @@ before saving to your shortlist or remembering preferences. It is available from
 conversation home and a floating panel on browsing pages.
 [How the agent works](docs/agent-architecture.md).
 
-![Curio floating shopping assistant](docs/screenshots/curio-assistant.jpg)
+![Curio answering "Black trousers under €30" with verified prices and product cards](docs/screenshots/curio-agent.jpg)
+
+Saving to the shortlist or remembering a preference is only proposed. You approve it,
+untick what you don't want, or decline. Approved memory, such as a budget, applies to
+later searches, and the step trace shows where it came from.
+
+![Approval card for saving two pieces, with one unticked](docs/screenshots/curio-approval.jpg)
+
+![A remembered €40 budget applied to the next search, shown in the step trace](docs/screenshots/curio-memory.jpg)
+
+The same agent works for cocktails. Here a remembered alcohol-free preference filters
+every search.
+
+![Cocktail answer filtered by a remembered alcohol-free preference](docs/screenshots/curio-cocktail-agent.jpg)
+
+In these chat screenshots the replies come from the scripted test model in
+`tests/e2e/llm_stub.py`, used because no LLM was configured. The catalog, tool results,
+step trace, price checks and approvals are the real system.
 
 ## Fashion
 
@@ -46,7 +63,7 @@ Open a product to inspect its details and the evidence behind its recommendation
 
 ![Product connections](docs/screenshots/curio-connections.jpg)
 
-![Product details and related pieces](docs/screenshots/curio-product-detail.jpg)
+![Product details with pieces bought together](docs/screenshots/curio-product-detail.jpg)
 
 ### On your phone
 
@@ -80,7 +97,8 @@ Cocktails use an in-memory TF-IDF and ingredient-overlap recommender; no model o
 network call is needed to serve them.
 
 The fashion screenshots use 5,000 historical customers and a partial photo index
-covering 3,537 of 14,300 catalog products. Prices are approximate historical values;
+covering 3,586 of 14,300 catalog products, prepared from the public Hugging Face mirror
+of the H&M data. Recommendations for unphotographed products show a placeholder. Prices are approximate historical values;
 there is no live stock or checkout.
 
 On the 819-customer holdout, MAP@12 was 0.0302 versus 0.0248 for buy-again;

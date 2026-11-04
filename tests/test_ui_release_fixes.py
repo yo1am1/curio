@@ -367,3 +367,43 @@ def test_cocktail_effect_toast_counts_only_added_drinks(api):
 
 def test_optional_alcohol_is_labelled_alcohol_optional():
     assert ui.alcohol_label(SHIRLEY) == "Alcohol optional"
+
+
+def test_first_typed_message_gets_the_full_height_transcript(monkeypatch):
+    import json
+
+    import httpx
+    from streamlit.testing.v1 import AppTest
+
+    from clothes_recommender import ui
+
+    reply = {"text": "Try these.", "products": [], "status": "complete", "steps": []}
+
+    def handle(request):
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok", "chat_enabled": True})
+        if request.url.path == "/demo/customers":
+            return httpx.Response(200, json=[])
+        return httpx.Response(200, text=json.dumps({"type": "reply", "reply": reply}) + "\n")
+
+    client = httpx.Client(base_url="http://offline.test", transport=httpx.MockTransport(handle))
+    monkeypatch.setattr(ui, "api_client", lambda: client)
+
+    def transcript_height(app) -> int:
+        found = []
+
+        def walk(node):
+            proto = getattr(node, "proto", None)
+            if proto is not None and "chat_log_home" in getattr(proto, "id", ""):
+                found.append(proto.height_config.pixel_height)
+            for child in getattr(node, "children", {}).values():
+                walk(child)
+
+        walk(app.main)
+        return found[0]
+
+    app = AppTest.from_string("from clothes_recommender import ui; ui.agent_home()").run()
+    assert transcript_height(app) == 240  # compact welcome
+    app.chat_input[0].set_value("Black trousers").run()
+    assert not app.exception
+    assert transcript_height(app) == 640  # the first answer is not squeezed
