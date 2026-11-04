@@ -24,6 +24,17 @@ services:
     ports: ["8501:8501"]
     depends_on: [api]
 
+  # One-off job: downloads the pinned recipe CSV and writes data/cocktails.parquet.
+  # The API mounts data read-only, so this service mounts it writable instead:
+  #   docker compose run --rm --user "$(id -u):$(id -g)" prepare-cocktails
+  #   docker compose restart api
+  prepare-cocktails:
+    image: curio:local
+    profiles: [tools]   # not started by `docker compose up`
+    command: ["python", "-m", "scripts.prepare_cocktails"]
+    volumes:
+      - ./data:/app/data
+
 volumes:
   qdrant-data:
   hf-cache:

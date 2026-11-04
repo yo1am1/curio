@@ -86,7 +86,11 @@ class CocktailToolkit:
         self._top_k = top_k
         self._categories = {c.casefold(): c for c in catalog.categories()}
         self._ingredients = [_IngredientWords(name) for name in catalog.ingredients()]
-        self._grounding = CocktailGroundingCheck((c.name for c in catalog), catalog.ingredients())
+        self._grounding = CocktailGroundingCheck(
+            (c.name for c in catalog),
+            catalog.ingredients(),
+            glass_names={c.glass for c in catalog},
+        )
 
     def key(self, item: Cocktail) -> int:
         return item.drink_id
@@ -133,6 +137,9 @@ class CocktailToolkit:
             summary=summary,
             detail=tastes.model_dump(exclude_defaults=True) | {"from_memory": from_memory},
         )
+
+    def refresh(self, turn: Turn[Cocktail]) -> None:
+        """Nothing to do: every cocktail tool reads remembered tastes from `turn.context`."""
 
     def prompt(
         self, turn: Turn[Cocktail], message: str, history: Sequence[BaseMessage]
@@ -223,8 +230,9 @@ class CocktailToolkit:
         self, turn: Turn[Cocktail], action: WhatCanIMake, tastes: CocktailPreferences
     ) -> AgentStep:
         alcohol, from_memory = _alcohol(action.alcohol, tastes)
+        ingredients = self._pantry_terms(action.ingredients)
         matches = self._recommender.pantry(
-            action.ingredients,
+            ingredients,
             alcohol=alcohol,
             max_missing=action.max_missing,
             top_k=MAX_CANDIDATES,
@@ -240,7 +248,7 @@ class CocktailToolkit:
             ),
             status="ok" if matches else "skipped",
             detail={
-                "ingredients": action.ingredients,
+                "ingredients": ingredients,
                 "alcohol": alcohol,
                 "max_missing": action.max_missing,
                 "from_memory": from_memory,
@@ -362,6 +370,20 @@ class CocktailToolkit:
                 known.append(canonical)
         return list(dict.fromkeys(known))
 
+    def _pantry_terms(self, values: Iterable[str]) -> list[str]:
+        """Pantry items in catalog spelling, since the pantry matcher is strict: the exact
+        ingredient, else the only ingredient containing all of the item's words ("tonic" ->
+        "Tonic water"). Alias keys and ambiguous or unknown words are passed through."""
+        terms = []
+        for value in values:
+            term = self._catalog.canonical_ingredient(value)
+            if term is None and ingredient_key(value) not in PANTRY_ALIASES:
+                words = set(tokens(ingredient_key(value)))
+                found = [i.name for i in self._ingredients if words and words <= i.words]
+                term = found[0] if len(found) == 1 else None
+            terms.append(term or value.strip())
+        return list(dict.fromkeys(terms))
+
     def _avoided(self, cocktail: Cocktail, tastes: CocktailPreferences) -> bool:
         if not tastes.avoided_ingredients:
             return False
@@ -389,6 +411,7 @@ class _IngredientWords:
     search filters: equal names, an alias that covers it, or all of the term's words."""
 
     def __init__(self, name: str) -> None:
+        self.name = name
         self.key = ingredient_key(name)
         self.words = frozenset(tokens(self.key))
 

@@ -1,17 +1,19 @@
 # Curio documentation
 
-[Product overview and screenshots](../README.md).
+[Product overview and screenshots](../README.md) · [Changelog](../CHANGELOG.md).
 
 ## Running and understanding the app
 
-- [Technical guide](technical-guide.md): data preparation, local setup, Docker, architecture, API and tests.
-- [Agent architecture](agent-architecture.md): tool policies, human-in-the-loop approvals, grounding checks and the review behind them.
+- [Technical guide](technical-guide.md): data preparation for both domains, local setup, Docker, architecture, API and tests.
+- [Agent architecture](agent-architecture.md): the shared agent engine, the fashion and cocktail toolkits, tool policies, human-in-the-loop approvals, grounding checks and the review behind them.
+- [Multi-domain contract](multidomain-contract.md): the cocktail data layout, Python interfaces, agent tools, API and UI rules shared by both domains.
 - [Recommendation audit](recommendation-audit.md): repeat-aware ranking, baselines, chronological evaluation and uncertainty.
 - [Research direction](recommendation-research.md): retrieval bottlenecks, dataset comparisons and proposed experiments.
 
-The technical guide describes the fashion release. README screenshots show the
-current Curio UI; historical development records retain earlier captures. The app
-uses historical research data, approximate prices and a partial photo index.
+The technical guide describes version 1.0: fashion and cocktails. README screenshots
+show the current Curio UI; historical development records retain earlier captures.
+Fashion uses historical research data, approximate prices and a partial photo index.
+Cocktails use 425 recipes from TheCocktailDB, whose data terms are TheCocktailDB's own.
 No hosted demo is available yet.
 
 ## Experiment records

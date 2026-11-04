@@ -1,8 +1,28 @@
 # Curio agent: architecture and review
 
-This page describes how the shopping agent plans, acts, verifies and hands control
-back to the shopper. It also records the review of the recommendation system and
-the earlier assistant that led to this design.
+This page describes how Curio's agent plans, acts, verifies and hands control back to
+the shopper, in both the fashion and the cocktail domain. It also records the review of
+the recommendation system and the earlier assistant that led to this design.
+
+## One engine, two toolkits
+
+The loop lives once, in `chat/engine.py` (`AgentEngine`). Each domain plugs in a
+`Toolkit`: its tool schemas and policies, planning, how READ tools run, how APPROVE
+effects are validated, the grounding check, the deterministic fallback and the reply
+fields.
+
+| | Fashion (`ShoppingAssistant`) | Cocktails (`CocktailAssistant`) |
+|---|---|---|
+| Toolkit | `chat/assistant.py`, `chat/tools.py` | `chat/cocktail_agent.py`, `chat/cocktail_tools.py` |
+| Planning | Structured `SearchIntent` from the LLM, then an initial catalog search | The message is the query; no extra model call before the tool loop |
+| Grounding | Euro amounts and product IDs | Drink IDs, catalog drink names and recipe amounts |
+| Reply items | `products` | `cocktails` |
+
+The engine owns everything shared: the tool-call and time budgets, policy enforcement,
+signed proposals and resume, clarifying questions, merging approved effects into the
+turn, the self-correction step, the streamed trace and the error mapping. `POST /chat`
+picks the assistant by `ChatRequest.domain` (default `fashion`). Both assistants use the
+same LLM configuration.
 
 ## One turn
 
@@ -11,13 +31,13 @@ flowchart TD
     M[Shopper message] --> P[Plan: structured intent + approved memory]
     P --> S[Initial catalog search]
     S --> L{Tool loop<br/>max 5 calls, 90 s}
-    L -- READ --> R[SearchCatalog · InspectProducts<br/>FindRelated · PersonalPicks]
+    L -- READ --> R[Domain READ tools<br/>fashion: SearchCatalog · InspectProducts · FindRelated · PersonalPicks<br/>cocktails: SearchCocktails · InspectCocktails · SimilarCocktails · WhatCanIMake]
     R --> L
     L -- ASK --> Q[AskShopper: question + quick replies]
     L -- APPROVE --> A{Auto-approve<br/>allowed?}
     A -- no --> H[Signed proposal: approve, narrow or decline]
     A -- yes --> X[Apply effect] --> L
-    L -- answer --> V[Grounding check: prices and IDs]
+    L -- answer --> V[Grounding check: domain evidence]
     V -- unverified --> C[One self-correction] --> V2{Verified?}
     V2 -- no --> F[Deterministic catalog facts]
     V -- verified --> D[Reply + trace + suggestions]
@@ -36,6 +56,8 @@ Each tool is a strict pydantic schema (`extra="forbid"`, bounded lists and lengt
 Invalid calls return a tool error to the model; nothing runs. The policy, not the
 model, decides what a valid call may do.
 
+### Fashion
+
 | Tool | Policy | Backed by |
 |---|---|---|
 | SearchCatalog | read | CLIP text search; keeps budget, audience, type and colour filters |
@@ -50,6 +72,30 @@ model, decides what a valid call may do.
 `RecommenderNavigator`. The agent sees ranked IDs plus the same evidence the browsing
 pages show ("3 shoppers who bought … also bought this"), so explanations stay grounded.
 
+### Cocktails
+
+| Tool | Policy | Backed by |
+|---|---|---|
+| SearchCocktails | read | `CocktailRecommender.search`: query, required ingredients, alcohol, category |
+| InspectCocktails | read | Full recipes (ingredients with amounts, glass, method) for up to five drink IDs |
+| SimilarCocktails | read | Ingredient-family overlap with one drink |
+| WhatCanIMake | read | Pantry matching for 1–15 ingredients, up to three missing |
+| AskShopper | ask | Shared with fashion |
+| SaveCocktails | approve | 1–5 validated drink IDs for the cocktail shortlist |
+| RememberTastes | approve | Alcohol-free, liked and avoided ingredients, mapped to catalog spelling |
+
+Remembered tastes fill missing filters on every search: an alcohol-free taste sets
+`non_alcoholic`, and avoided ingredients become exclusions. WhatCanIMake maps each pantry
+word to catalog spelling first ("tonic" becomes "Tonic Water"); ambiguous or unknown words
+pass through unchanged.
+
+Safety rules are in the cocktail system prompt and in the toolkit: the agent labels alcohol
+status, offers alcohol-free drinks to anyone underage, pregnant or driving, does not
+encourage excessive drinking, and never claims allergen safety or health effects.
+Ingredient filters only cover listed recipe ingredients. The deterministic fallback adds
+"Please drink responsibly." when a listed drink contains alcohol, and the cocktail pages
+show the same line.
+
 ## Human in the loop
 
 The API is stateless. The shortlist, remembered preferences, linked shopping history
@@ -58,13 +104,16 @@ and approval policy live on the client and are sent with each request (`TurnCont
 1. When the agent calls an approval tool, the server validates the arguments against
    the catalog and returns `status="needs_approval"` with a `pending_action`.
 2. The proposal is HMAC-SHA256 signed over its ID, tool, arguments, originating
-   request and issue time. It expires after 30 minutes.
+   request, the proposing turn's search filters (`intent`) and issue time. It expires
+   after 30 minutes. On resume the engine rebuilds the turn from those filters.
 3. The client answers with `decision: {action, approved, edited_args}`. Edits may only
    remove values (a subset of product IDs, dropped preferences). A forged, modified,
    widened or expired proposal is rejected with HTTP 409.
-4. On approval the server returns an `applied` effect for the client to store, and the
-   agent continues the turn to confirm. A resumed turn cannot pause for another
-   proposal or question.
+4. On approval the server returns an `applied` effect for the client to store, merges it
+   into the turn's context the way the UI does, and the agent continues the turn to
+   confirm. Later searches in that turn use the approved change. An effect that touches
+   no items (remembering preferences) leaves the shown cards in place. A resumed turn
+   cannot pause for another proposal or question.
 
 Shoppers can opt into auto-approval per tool in the session panel. Auto-approved
 actions still run through the same validation and appear in the trace.
@@ -73,6 +122,8 @@ actions still run through the same validation and appear in the trace.
 so pending proposals expire on restart. Set it when running several API workers.
 
 ## Grounding guardrail
+
+### Fashion
 
 After drafting, every euro amount and product ID in the answer is checked against
 products returned by tools this turn, products referenced in history and the shortlist.
@@ -87,10 +138,28 @@ catalog facts. The UI shows a verified, self-corrected or fallback badge.
 The check covers prices and IDs only. It does not verify colours, materials or other
 descriptive claims.
 
+### Cocktails
+
+`CocktailGroundingCheck` checks three things against drinks returned by tools this turn,
+drinks in history and the cocktail shortlist:
+
+- Drink IDs must have been returned.
+- Catalog drink names, matched case-sensitively in catalog spelling, must have been
+  returned or typed by the shopper. A name inside a longer glass or ingredient name
+  ("Martini" in "Martini Glass") does not count, and names that are also ingredient names
+  ("Limeade") are ignored.
+- Ingredient amounts ("1 1/2 oz") must match an amount in an evidence recipe or one the
+  shopper typed. Malformed measures with a zero denominator are skipped.
+
+The same self-correction and fallback apply. Descriptive claims (taste, strength) are not
+verified.
+
 ## Budgets and failure handling
 
 - At most five tool calls per turn, then a grounded fallback.
-- A 90-second wall-clock budget, checked before every model call.
+- A 90-second wall-clock budget, checked before every model call, including the
+  self-correction call. When it is spent the trace shows a "Time budget" step and the
+  answer falls back to catalog facts.
 - Provider failures map to safe HTTP errors (429 retry, 502 otherwise). On the
   streaming endpoint they arrive as an `error` event; provider details stay in server logs.
 
@@ -140,8 +209,12 @@ actions. Gaps addressed here:
 
 ## Limits
 
-- The shortlist and memory last for the browser session only.
-- The grounding check verifies prices and IDs, not descriptive claims.
+- The shortlist and memory last for the browser session only, kept per domain.
+- The grounding check verifies prices, IDs, drink names and amounts, not descriptive claims.
+- Cocktail ingredient filters and avoided ingredients are not allergen guarantees.
+- Pantry words are mapped to catalog spelling only when the match is unique; "whiskey,
+  lemon, sugar" does not yet find Whiskey Sour, whose recipe lists "Blended whiskey" and
+  "Powdered sugar".
 - Feedback stays in memory and resets when the API restarts.
 - The live behaviour of a real LLM with the new tools has not been evaluated at scale;
   unit and UI tests use scripted models.

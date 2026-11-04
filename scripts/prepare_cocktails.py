@@ -1,19 +1,22 @@
 """Build data/cocktails.parquet from the cocktail_advisor recipe CSV (TheCocktailDB data).
 
 Usage:
-    uv run python -m scripts.prepare_cocktails [--source PATH_OR_URL] [--data-dir data]
+    uv run python -m scripts.prepare_cocktails [--source PATH_OR_URL] [--sha256 HEX]
+        [--data-dir data]
 
 The source is `final_cocktails.csv` from https://github.com/yo1am1/cocktail_advisor (425
-recipes). Its list columns are Python literals and are parsed with `ast.literal_eval`, never
-`eval`. Malformed rows are skipped with a warning, image links other than https on
-www.thecocktaildb.com are dropped, recipes repeated with the same name and ingredients are kept
-once, and each ingredient name gets one spelling ("Lime Juice"/"Lime juice"). The output layout
-is documented in docs/multidomain-contract.md.
+recipes), pinned to one commit and checked against `DEFAULT_SHA256`, so drink ids stay stable.
+Another `--source` is not checked unless `--sha256` is given. Its list columns are Python
+literals and are parsed with `ast.literal_eval`, never `eval`. Malformed rows are skipped with a
+warning, image links other than https on www.thecocktaildb.com are dropped, recipes repeated
+with the same name and ingredients are kept once, and each ingredient name gets one spelling
+("Lime Juice"/"Lime juice"). The output layout is documented in docs/multidomain-contract.md.
 """
 
 import argparse
 import ast
 import csv
+import hashlib
 import io
 import json
 import logging
@@ -36,10 +39,13 @@ from clothes_recommender.cocktails.catalog import (
 )
 from clothes_recommender.config import get_settings
 
+SOURCE_COMMIT = "92e05ae48b3f2af9f62ca5fdcd23b7b7c2f3fba6"
 DEFAULT_SOURCE = (
-    "https://raw.githubusercontent.com/yo1am1/cocktail_advisor/main/"
+    f"https://raw.githubusercontent.com/yo1am1/cocktail_advisor/{SOURCE_COMMIT}/"
     "data/cocktails/final_cocktails.csv"
 )
+# SHA-256 of final_cocktails.csv at SOURCE_COMMIT.
+DEFAULT_SHA256 = "fac8041d2ac5450632113dfc516a5e52e90646f85b07f8edafbf2f8798aa3394"
 OUTPUT_NAME = "cocktails.parquet"
 REQUIRED_FIELDS = (
     "id",
@@ -86,7 +92,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--source",
         default=DEFAULT_SOURCE,
-        help="final_cocktails.csv as a local path or an https URL (default: GitHub raw file).",
+        help="final_cocktails.csv as a local path or an https URL (default: the GitHub raw "
+        "file at a pinned commit).",
+    )
+    parser.add_argument(
+        "--sha256",
+        help="Expected SHA-256 of the source file (default: checked only for the pinned source).",
     )
     parser.add_argument(
         "--data-dir", type=Path, help="Output directory; defaults to configured data_dir."
@@ -94,8 +105,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def read_source(source: str, timeout: float = 30.0) -> str:
-    """CSV text from a local path or an https URL (env proxies are respected)."""
+def read_source(source: str, timeout: float = 30.0, sha256: str | None = None) -> str:
+    """CSV text from a local path or an https URL (env proxies are respected), checked against
+    `sha256` when given."""
+    data = _read_bytes(source, timeout)
+    if sha256 is not None:
+        actual = hashlib.sha256(data).hexdigest()
+        if actual != sha256.strip().lower():
+            raise ValueError(f"SHA-256 mismatch for {source}: expected {sha256}, got {actual}")
+    return data.decode("utf-8-sig")
+
+
+def _read_bytes(source: str, timeout: float) -> bytes:
     if source.startswith("https://"):
         with httpx.stream(
             "GET", source, timeout=httpx.Timeout(timeout, connect=10), follow_redirects=True
@@ -106,13 +127,13 @@ def read_source(source: str, timeout: float = 30.0) -> str:
                 body += chunk
                 if len(body) > MAX_SOURCE_BYTES:
                     raise ValueError(f"{source} is larger than {MAX_SOURCE_BYTES} bytes")
-        return body.decode("utf-8-sig")
+        return bytes(body)
     if "://" in source:
         raise ValueError(f"Only local paths and https URLs are supported, got {source!r}")
     path = Path(source)
     if path.stat().st_size > MAX_SOURCE_BYTES:
         raise ValueError(f"{path} is larger than {MAX_SOURCE_BYTES} bytes")
-    return path.read_text(encoding="utf-8-sig")
+    return path.read_bytes()
 
 
 def _literal_list(value: str, column: str) -> list:
@@ -263,8 +284,11 @@ def write_parquet(frame: pd.DataFrame, path: Path) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def prepare(source: str, data_dir: Path) -> PrepareReport:
-    text = read_source(source)
+def prepare(source: str, data_dir: Path, sha256: str | None = None) -> PrepareReport:
+    """`sha256` defaults to `DEFAULT_SHA256` for the pinned source and to no check otherwise."""
+    if sha256 is None and source == DEFAULT_SOURCE:
+        sha256 = DEFAULT_SHA256
+    text = read_source(source, sha256=sha256)
     reader = csv.DictReader(io.StringIO(text, newline=""))
     missing = [column for column in REQUIRED_FIELDS if column not in (reader.fieldnames or [])]
     if missing:
@@ -284,7 +308,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = parse_args(argv)
     try:
-        prepare(args.source, args.data_dir or get_settings().data_dir)
+        prepare(args.source, args.data_dir or get_settings().data_dir, args.sha256)
     except (OSError, ValueError, httpx.HTTPError) as error:
         logger.error("Could not prepare cocktails: %s", error)
         sys.exit(1)

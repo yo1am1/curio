@@ -120,7 +120,7 @@ def show_products(
                 ),
             ):
                 if (photo := product_photo(product["product_id"])) is not None:
-                    st.image(photo, width="stretch")
+                    st.image(photo, caption=product["name"], width="stretch")
                 else:
                     with st.container(key=f"missing_photo_{context}_{product['product_id']}_{i}"):
                         st.caption("No photo available.", text_alignment="center")
@@ -160,13 +160,19 @@ def show_hits(hits: list[dict] | None, *, context: str = "results") -> None:
         st.info("No matching products.")
 
 
+NO_CUSTOMER_SELECTED = (
+    "No shopping history is selected. Open Shopping history to see why or to choose one."
+)
+
+
 def customer_selector(label: str, key: str) -> dict | None:
     """Start with a few explained examples; fetch the full ID list only on request."""
     examples = call_api("GET", "/demo/customers") or []
     examples_by_id = {example["user_id"]: example for example in examples[:10]}
     saved_mode = f"saved_{key}_browse_all"
     selected = st.session_state.get("selected_customer")
-    default_all = st.session_state.get(saved_mode, False) or (
+    # Without example customers, browsing all is the only way in.
+    default_all = st.session_state.get(saved_mode, not examples_by_id) or (
         selected is not None and selected not in examples_by_id
     )
     browse_all = st.toggle("Browse all customers", value=default_all, key=f"{key}_browse_all")
@@ -204,10 +210,8 @@ def recommendations_tab() -> None:
     toolbar = right.container(key="feed_controls", horizontal=True, horizontal_alignment="right")
     with toolbar.popover("Shopping history"):
         example = customer_selector("User", "recommendation_user")
-        if example is None:
-            return
-        user_id = example["user_id"]
-        profile = call_api("GET", f"/users/{user_id}")
+        user_id = example["user_id"] if example else None
+        profile = call_api("GET", f"/users/{user_id}") if example else None
         if profile:
             purchases = profile["purchases"]
             st.caption(f"Shopping history #{user_id}")
@@ -226,6 +230,9 @@ def recommendations_tab() -> None:
                         hide_index=True,
                         width="stretch",
                     )
+    if example is None:
+        st.info(NO_CUSTOMER_SELECTED)
+        return
     strategies = ["repeat", "collaborative", "content", "graph"]
     if st.session_state.get("service_health", {}).get("ranking_enabled"):
         strategies.insert(0, "learned")
@@ -279,7 +286,7 @@ def product_details(product_id: int) -> None:
         left, right = st.columns([0.45, 0.55], gap="large")
         with left:
             if (photo := product_photo(product_id)) is not None:
-                st.image(photo, width="stretch")
+                st.image(photo, caption=product["name"], width="stretch")
             else:
                 st.info("A photo is not available for this item.")
         with right:
@@ -494,6 +501,7 @@ def knowledge_graph_tab() -> None:
     with right, st.popover("Shopping history", width="stretch"):
         example = customer_selector("Customer", "graph_user")
     if example is None:
+        st.info(NO_CUSTOMER_SELECTED)
         return
     user_id = example["user_id"]
     with st.spinner("Loading purchases and graph recommendations…"):
@@ -611,6 +619,16 @@ def knowledge_graph_tab() -> None:
         show_hits(related, context="graph_related")
 
 
+def restore_input(key: str) -> None:
+    """Re-seed a keyed input Streamlit dropped while its panel was hidden."""
+    if key not in st.session_state and f"saved_{key}" in st.session_state:
+        st.session_state[key] = st.session_state[f"saved_{key}"]
+
+
+def remember_input(key: str, value: object) -> None:
+    st.session_state[f"saved_{key}"] = value
+
+
 def use_example_query(query: str) -> None:
     st.session_state["text_query"] = query
 
@@ -621,11 +639,13 @@ def text_search_tab() -> None:
         with st.form("description_search", border=False):
             left, middle, right = st.columns([0.6, 0.23, 0.17], vertical_alignment="bottom")
             with left:
+                restore_input("text_query")
                 query = st.text_input(
                     "Describe what you are looking for",
                     key="text_query",
                     placeholder="e.g. a chunky cream cardigan",
                 )
+                remember_input("text_query", query)
             with middle:
                 sections = call_api("GET", "/sections") or []
                 section = st.selectbox(
@@ -1033,6 +1053,8 @@ def chat_history(domain: str | None = None) -> list[dict]:
 
 MAX_SHORTLIST = 20
 MAX_TASTES = 10
+# ShopperPreferences limits: memory beyond them would make every chat request fail (422).
+PREFERENCE_LIMITS = {"sections": 3, "colours": 5}
 STEP_LABELS = {
     "Understand request": "Plan",
     "SearchCatalog": "Search catalog",
@@ -1120,16 +1142,19 @@ def shortlist() -> list[dict]:
     return st.session_state.setdefault("shortlist", [])
 
 
-def add_to_shortlist(product: dict, announce: bool = True) -> None:
+def add_to_shortlist(product: dict, announce: bool = True) -> bool:
+    """Add a piece unless it is saved already or the list is full; return whether it was added."""
     items = shortlist()
     if any(item["product_id"] == product["product_id"] for item in items):
-        return
+        return False
     if len(items) >= MAX_SHORTLIST:
-        st.toast(f"Your shortlist holds up to {MAX_SHORTLIST} pieces.", icon=":material/info:")
-        return
+        if announce:
+            st.toast(f"Your shortlist holds up to {MAX_SHORTLIST} pieces.", icon=":material/info:")
+        return False
     items.append(product)
     if announce:
         st.toast(f"Saved {product['name']} to your shortlist.", icon=":material/favorite:")
+    return True
 
 
 def remove_from_shortlist(product_id: int) -> None:
@@ -1152,16 +1177,19 @@ def cocktail_shortlist() -> list[dict]:
     return st.session_state.setdefault("cocktail_shortlist", [])
 
 
-def add_cocktail(cocktail: dict, announce: bool = True) -> None:
+def add_cocktail(cocktail: dict, announce: bool = True) -> bool:
+    """Add a drink unless it is saved already or the list is full; return whether it was added."""
     items = cocktail_shortlist()
     if any(item["drink_id"] == cocktail["drink_id"] for item in items):
-        return
+        return False
     if len(items) >= MAX_SHORTLIST:
-        st.toast(f"Your shortlist holds up to {MAX_SHORTLIST} drinks.", icon=":material/info:")
-        return
+        if announce:
+            st.toast(f"Your shortlist holds up to {MAX_SHORTLIST} drinks.", icon=":material/info:")
+        return False
     items.append(cocktail)
     if announce:
         st.toast(f"Saved {cocktail['name']} to your shortlist.", icon=":material/favorite:")
+    return True
 
 
 def remove_cocktail(drink_id: int) -> None:
@@ -1182,13 +1210,26 @@ def forget_taste(field: str, value: object) -> None:
         memory[field] = [item for item in memory.get(field, []) if item != value]
 
 
-def remember_tastes(tastes: dict) -> None:
+def merge_newest(old: list, new: list, limit: int) -> tuple[list, list]:
+    """Merge approved values into memory within the API's limit; the newest values win.
+
+    Returns (kept, dropped). A value approved again moves to the newest end.
+    """
+    new = list(dict.fromkeys(new))
+    merged = [value for value in old if value not in new] + new
+    return merged[-limit:], merged[:-limit]
+
+
+def remember_tastes(tastes: dict) -> list:
+    """Store approved tastes; return the older values dropped to stay within the limits."""
     memory = cocktail_memory()
     if tastes.get("alcohol_free"):
         memory["alcohol_free"] = True
+    dropped = []
     for field in ("liked_ingredients", "avoided_ingredients"):
-        values = [*memory.get(field, []), *tastes.get(field, [])]
-        memory[field] = list(dict.fromkeys(values))[:MAX_TASTES]
+        memory[field], lost = merge_newest(memory.get(field, []), tastes.get(field, []), MAX_TASTES)
+        dropped += lost
+    return dropped
 
 
 def auto_approve(domain: str | None = None) -> list[str]:
@@ -1278,7 +1319,7 @@ def show_chat_products(products: list[dict], index: int, context: str) -> None:
             ),
         ):
             if (photo := product_photo(pid)) is not None:
-                st.image(photo, width=56 if compact else "stretch")
+                st.image(photo, caption=product["name"], width=56 if compact else "stretch")
             with st.container(gap=None):
                 st.text(product["name"])
                 st.caption(f"€{product['price']:.2f} · {product['colour']}")
@@ -1359,14 +1400,19 @@ def approval_options(action: dict) -> list[tuple[str, object, str]]:
     return options
 
 
-def approval_card(turn: dict, index: int, context: str, active: bool) -> None:
+def approval_card(turn: dict, index: int, context: str, active: bool):
+    """Render a proposal; an inactive card returns the slot holding its status caption."""
     action = turn["pending_action"]
     with st.container(key=f"approval_{context}_{index}", border=True):
         st.markdown(":material/how_to_reg: **Needs your approval**")
         st.caption(plain(action.get("summary", "")))
         if not active:
-            st.caption(turn.get("resolution", "No longer pending."))
-            return
+            status = st.empty()
+            status.caption(turn.get("resolution", "No longer pending."))
+            return status
+        if turn.get("decision_error"):
+            # The API did not accept the last decision: nothing was applied, so it can be retried.
+            st.error(turn["decision_error"])
         for field, value, label in approval_options(action):
             st.checkbox(label, value=True, key=f"approve_{context}_{index}_{field}_{value}")
         with st.container(horizontal=True):
@@ -1386,9 +1432,12 @@ def approval_card(turn: dict, index: int, context: str, active: bool) -> None:
                 args=(index, False, context),
             )
         st.caption("Uncheck anything you don't want before approving.")
+    return None
 
 
-def show_chat_turn(turn: dict, index: int, context: str, latest: bool = False) -> None:
+def show_chat_turn(turn: dict, index: int, context: str, latest: bool = False):
+    """Render one turn; returns the status slot of an inactive approval card, if any."""
+    status = None
     with st.chat_message(turn["role"]):
         if turn["role"] == "assistant":
             show_trace(turn.get("steps", []))
@@ -1403,7 +1452,9 @@ def show_chat_turn(turn: dict, index: int, context: str, latest: bool = False) -
         if turn.get("cocktails"):
             show_chat_cocktails(turn["cocktails"], index, context)
         if turn.get("pending_action"):
-            approval_card(turn, index, context, active=latest and not turn.get("resolution"))
+            status = approval_card(
+                turn, index, context, active=latest and not turn.get("resolution")
+            )
         if latest and (clarification := turn.get("clarification")):
             with st.container(horizontal=True, key=f"chat_options_{context}_{index}"):
                 for number, option in enumerate(clarification["options"]):
@@ -1431,6 +1482,7 @@ def show_chat_turn(turn: dict, index: int, context: str, latest: bool = False) -
                 on_change=send_feedback,
                 args=(index, context),
             )
+    return status
 
 
 def reset_chat() -> None:
@@ -1484,8 +1536,14 @@ def chat_payload(history: list[dict]) -> dict:
     return payload
 
 
-def stream_chat(payload: dict, on_step) -> dict | None:
-    """POST /chat/stream and report each agent step; return the final reply."""
+def stream_chat(
+    payload: dict, on_step, on_error: Callable[[str], object] | None = None
+) -> dict | None:
+    """POST /chat/stream and report each agent step; return the final reply.
+
+    Failures are reported through on_error (default: shown with st.error) and return None.
+    """
+    report = on_error or st.error
     try:
         with api_client().stream("POST", "/chat/stream", json=payload) as response:
             if response.is_error:
@@ -1494,7 +1552,7 @@ def stream_chat(payload: dict, on_step) -> dict | None:
                     detail = response.json().get("detail", response.text)
                 except ValueError:
                     detail = response.text
-                st.error(detail)
+                report(detail)
                 return None
             for line in response.iter_lines():
                 if not line.strip():
@@ -1506,17 +1564,34 @@ def stream_chat(payload: dict, on_step) -> dict | None:
                 elif kind == "reply":
                     return event["reply"]
                 elif kind == "error":
-                    st.error(event.get("detail", "The assistant failed. Please try again."))
+                    report(event.get("detail", "The assistant failed. Please try again."))
                     return None
                 else:  # a plain, non-streamed reply
                     return event
     except (httpx.HTTPError, json.JSONDecodeError):
-        st.error("The assistant is unavailable. Please try again.")
+        report("The assistant is unavailable. Please try again.")
     return None
 
 
 def saved_count(count: int, noun: str) -> str:
     return f"Saved {count} {noun if count == 1 else noun + 's'} to your shortlist."
+
+
+def announce_shortlist(added: int, requested: int, noun: str, size: int) -> None:
+    """Report what an applied effect really added: duplicates and a full list add nothing."""
+    if added:
+        st.toast(saved_count(added, noun), icon=":material/favorite:")
+    if added < requested and size >= MAX_SHORTLIST:
+        st.toast(f"Your shortlist holds up to {MAX_SHORTLIST} {noun}s.", icon=":material/info:")
+
+
+def announce_memory(dropped: list) -> None:
+    st.toast("Curio will remember that for this session.", icon=":material/memory:")
+    if dropped:
+        st.toast(
+            f"Memory is full, so Curio forgot older values: {', '.join(map(str, dropped))}.",
+            icon=":material/info:",
+        )
 
 
 def apply_effects(reply: dict) -> None:
@@ -1525,33 +1600,44 @@ def apply_effects(reply: dict) -> None:
     for effect in reply.get("applied", []):
         kind = effect["kind"]
         if kind == "shortlist":
-            for pid in effect.get("product_ids", []):
+            ids = effect.get("product_ids", [])
+            added = 0
+            for pid in ids:
                 product = products.get(pid) or call_api("GET", f"/products/{pid}")
                 if product:
-                    add_to_shortlist(product, announce=False)
-            count = len(effect.get("product_ids", []))
-            st.toast(saved_count(count, "piece"), icon=":material/favorite:")
+                    added += add_to_shortlist(product, announce=False)
+            announce_shortlist(added, len(ids), "piece", len(shortlist()))
         elif kind == "cocktail_shortlist":
-            for did in effect.get("drink_ids", []):
+            ids = effect.get("drink_ids", [])
+            added = 0
+            for did in ids:
                 cocktail = cocktails.get(did) or call_api("GET", f"/cocktails/{did}")
                 if cocktail:
-                    add_cocktail(cocktail, announce=False)
-            count = len(effect.get("drink_ids", []))
-            st.toast(saved_count(count, "drink"), icon=":material/favorite:")
+                    added += add_cocktail(cocktail, announce=False)
+            announce_shortlist(added, len(ids), "drink", len(cocktail_shortlist()))
         elif kind == "preferences" and effect.get("preferences"):
             memory = preferences()
-            for field in ("sections", "colours"):
-                values = [*memory.get(field, []), *effect["preferences"].get(field, [])]
-                memory[field] = list(dict.fromkeys(values))
+            dropped = []
+            for field, limit in PREFERENCE_LIMITS.items():
+                memory[field], lost = merge_newest(
+                    memory.get(field, []), effect["preferences"].get(field, []), limit
+                )
+                dropped += lost
             if effect["preferences"].get("max_price") is not None:
                 memory["max_price"] = effect["preferences"]["max_price"]
-            st.toast("Curio will remember that for this session.", icon=":material/memory:")
+            announce_memory(dropped)
         elif kind == "cocktail_preferences" and effect.get("cocktail_preferences"):
-            remember_tastes(effect["cocktail_preferences"])
-            st.toast("Curio will remember that for this session.", icon=":material/memory:")
+            announce_memory(remember_tastes(effect["cocktail_preferences"]))
 
 
-def run_turn(payload: dict, history: list[dict], context: str, user_turn: dict | None) -> None:
+def run_turn(
+    payload: dict,
+    history: list[dict],
+    context: str,
+    user_turn: dict | None,
+    on_error: Callable[[str], object] | None = None,
+) -> bool:
+    """Stream one turn and append it to history; return whether the API answered."""
     progress = st.empty()
     with progress.container(), st.chat_message("assistant"):
         live = st.status("Curio is planning…", expanded=context != "popup")
@@ -1560,11 +1646,11 @@ def run_turn(payload: dict, history: list[dict], context: str, user_turn: dict |
             live.markdown(step_line(step))
             live.update(label=f"{STEP_LABELS.get(step['name'], step['name'])}…")
 
-        reply = stream_chat(payload, on_step)
+        reply = stream_chat(payload, on_step, on_error)
         if reply is None:
             live.update(label="Stopped", state="error", expanded=False)
             st.caption("Please send your message again to retry.")
-            return
+            return False
     # The finished turn below repeats these steps in its collapsed trace.
     progress.empty()
     apply_effects(reply)
@@ -1584,6 +1670,7 @@ def run_turn(payload: dict, history: list[dict], context: str, user_turn: dict |
         history.append(user_turn)
     history.append(assistant_turn)
     show_chat_turn(assistant_turn, len(history) - 1, context, latest=True)
+    return True
 
 
 def chat_available(domain: str, health: dict) -> bool:
@@ -1632,25 +1719,43 @@ def chat_conversation(context: str) -> None:
         if not history and not message:
             welcome(copy, context)
         payload = None
+        decided = None
         if decision is not None and decision["index"] < len(history):
-            turn = history[decision["index"]]
-            action = turn.get("pending_action")
-            if action and not turn.get("resolution"):
+            decided = history[decision["index"]]
+            action = decided.get("pending_action")
+            if action and not decided.get("resolution"):
                 payload = chat_payload(history)
                 payload["decision"] = {
                     "action": action,
                     "approved": decision["approved"],
                     "edited_args": decision["edits"],
                 }
-                turn["resolution"] = "Approved." if decision["approved"] else "Declined."
         busy = bool(message) or payload is not None
+        status = None
         for index, turn in enumerate(history):
-            show_chat_turn(turn, index, context, latest=index == len(history) - 1 and not busy)
+            latest = index == len(history) - 1 and not busy
+            slot = show_chat_turn(turn, index, context, latest=latest)
+            if turn is decided:
+                status = slot
         if payload is not None:
+            # The card is resolved only once the API accepted the decision; until then it
+            # stays retryable (an error, an expired proposal or an interrupted run).
             approved = payload["decision"]["approved"]
+            if status is not None:
+                status.caption("Sending your decision…")
             user_turn = {"role": "user", "content": "Approved" if approved else "Declined"}
             show_chat_turn(user_turn, len(history), context)
-            run_turn(payload, history, context, user_turn)
+            errors: list[str] = []
+            if run_turn(payload, history, context, user_turn, on_error=errors.append):
+                decided.pop("decision_error", None)
+                decided["resolution"] = "Approved." if approved else "Declined."
+                if status is not None:
+                    status.caption(decided["resolution"])
+            else:
+                decided["decision_error"] = (
+                    errors[-1] if errors else "The assistant failed. Please try again."
+                )
+                st.rerun()  # show the card again with its buttons and the error
         elif message:
             user_turn = {"role": "user", "content": message}
             show_chat_turn(user_turn, len(history), context)
@@ -1668,7 +1773,7 @@ def compare_dialog(product_ids: list[int]) -> None:
     for column, product in zip(st.columns(len(products)), products, strict=True):
         with column, st.container(key=f"compare_{product['product_id']}"):
             if (photo := product_photo(product["product_id"])) is not None:
-                st.image(photo, width="stretch")
+                st.image(photo, caption=product["name"], width="stretch")
             st.text(product["name"])
             st.markdown(f"**€{product['price']:.2f}**")
             if product["price"] == cheapest:
@@ -1752,12 +1857,13 @@ def fashion_session_panel() -> None:
                 vertical_alignment="center",
             ):
                 if (photo := product_photo(product["product_id"])) is not None:
-                    st.image(photo, width=40)
+                    st.image(photo, caption=product["name"], width=40)
                 with st.container(gap=None, width="stretch"):
                     st.text(product["name"])
                     st.caption(f"€{product['price']:.2f}")
                 st.button(
-                    ":material/close:",
+                    "Remove",
+                    icon=":material/close:",
                     key=f"shortlist_remove_{product['product_id']}",
                     help=f"Remove {product['name']}",
                     type="tertiary",
@@ -1826,7 +1932,8 @@ def cocktail_session_panel() -> None:
                     st.text(cocktail["name"])
                     st.caption(alcohol_label(cocktail))
                 st.button(
-                    ":material/close:",
+                    "Remove",
+                    icon=":material/close:",
                     key=f"cocktail_shortlist_remove_{cocktail['drink_id']}",
                     help=f"Remove {cocktail['name']}",
                     type="tertiary",
@@ -1903,7 +2010,8 @@ ALCOHOL_FILTERS = {"any": "Any", "alcoholic": "Alcoholic", "non_alcoholic": "Alc
 ALCOHOL_STATUS = {
     "Alcoholic": ("Alcoholic", "orange"),
     "Non alcoholic": ("Alcohol-free", "green"),
-    "Optional alcohol": ("Optional alcohol", "blue"),
+    # Not alcohol-free: these recipes list alcoholic ingredients (see Cocktail.alcohol_free).
+    "Optional alcohol": ("Alcohol optional", "blue"),
 }
 COCKTAIL_EXAMPLES = ["Margarita", "Something with rum and lime", "Creamy coffee"]
 PANTRY_TOP_K = 9
@@ -1926,7 +2034,8 @@ def cocktail_image(cocktail: dict, width: int | str = "stretch", *, key: str = "
     """
     url = cocktail.get("image_url")
     if url and url.startswith("https://"):
-        st.image(url, width=width)
+        # The caption names the photo for screen readers; ui.css hides it visually.
+        st.image(url, caption=cocktail["name"], width=width)
     elif key:
         with st.container(key=f"missing_photo_{key}"):
             st.caption("No photo available.", text_alignment="center")
@@ -2039,14 +2148,17 @@ def cocktail_search_panel(ingredients: list[str]) -> None:
     with st.container(key="cocktail_search_panel", border=True):
         st.subheader("Find a recipe")
         with st.form("cocktail_search", border=False):
+            restore_input("cocktail_query")
             query = st.text_input(
                 "Describe a drink",
                 key="cocktail_query",
                 placeholder="e.g. fresh and minty, with lime",
                 max_chars=200,
             )
+            remember_input("cocktail_query", query)
             left, middle, right = st.columns([0.42, 0.33, 0.25], vertical_alignment="bottom")
             with left:
+                restore_input("cocktail_ingredients")
                 required = st.multiselect(
                     "Must include",
                     ingredients,
@@ -2054,6 +2166,7 @@ def cocktail_search_panel(ingredients: list[str]) -> None:
                     max_selections=10,
                     placeholder="Any ingredients",
                 )
+                remember_input("cocktail_ingredients", required)
             with middle:
                 alcohol = st.segmented_control(
                     "Alcohol",
@@ -2102,6 +2215,7 @@ def pantry_panel(ingredients: list[str]) -> None:
     with st.container(key="pantry_panel", border=True):
         st.subheader("What can I make?")
         st.caption("Pick what you have. Curio finds drinks you can make now or almost.")
+        restore_input("pantry_ingredients")
         pantry = st.multiselect(
             "Ingredients you have",
             ingredients,
@@ -2109,6 +2223,7 @@ def pantry_panel(ingredients: list[str]) -> None:
             max_selections=15,
             placeholder="e.g. Gin, Lime, Tonic water",
         )
+        remember_input("pantry_ingredients", pantry)
         left, right = st.columns(2, vertical_alignment="bottom")
         with left:
             max_missing = st.slider(
@@ -2348,6 +2463,10 @@ def main() -> None:
     page.run()
     if page.title not in ("Ask Curio", "Assistant"):
         assistant_popup()
+    else:
+        # The conversation on this page already took any queued message; an "open popup"
+        # request must not carry over and open the popover on the next page.
+        st.session_state.pop("assistant_popup", None)
     with st.container(key="catalog_note"):
         st.caption(catalog_note(health))
 

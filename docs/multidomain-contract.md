@@ -10,13 +10,16 @@ https://github.com/yo1am1/cocktail_advisor (`data/cocktails/final_cocktails.csv`
 columns `,id,name,alcoholic,category,glassType,instructions,drinkThumbnail,ingredients,
 ingredientMeasures,recipes`; `ingredients`/`ingredientMeasures` are Python-literal lists, parse
 with `ast.literal_eval`, never `eval`). It accepts `--source PATH_OR_URL` (default: the raw
-GitHub URL) and writes `data/cocktails.parquet` with columns:
+GitHub URL pinned to commit `92e05ae48b3f2af9f62ca5fdcd23b7b7c2f3fba6`, checked against SHA-256
+`fac8041d2ac5450632113dfc516a5e52e90646f85b07f8edafbf2f8798aa3394`; a mismatch fails the run)
+and `--sha256 HEX` (checks any source; another `--source` is not checked without it). It
+writes `data/cocktails.parquet` with columns:
 
 | column | type | notes |
 |---|---|---|
 | drink_id | int | positive, unique; `id + 1` from the CSV (CSV ids start at 0) |
 | name | str | stripped |
-| alcoholic | str | `Alcoholic`, `Non alcoholic` or `Optional alcohol` |
+| alcoholic | str | `Alcoholic`, `Non alcoholic` or `Optional alcohol` (see below) |
 | category | str | e.g. `Cocktail`, `Ordinary Drink`, `Shot` |
 | glass | str | |
 | instructions | str | |
@@ -33,7 +36,15 @@ when that file exists. No API key and no network at serving time.
 ## Python interfaces (`clothes_recommender.cocktails`)
 
 Types: `cocktails/domain.py` (already written: Cocktail, Ingredient, CocktailHit,
-PantryMatch, CocktailPreferences, CocktailQuery, AlcoholFilter).
+PantryMatch, CocktailPreferences, CocktailQuery, AlcoholFilter, IngredientTerm).
+
+- `Cocktail.alcohol_free` is True only for `alcoholic == "Non alcoholic"`. `Optional alcohol`
+  recipes list alcoholic ingredients (wine, rum, Galliano), so every filter treats them as
+  alcoholic; they are still labelled "Alcohol optional".
+- `IngredientTerm` (stripped, 1-60 characters) bounds every item of
+  `CocktailQuery.ingredients`/`exclude_ingredients` and
+  `CocktailPreferences.liked_ingredients`/`avoided_ingredients`; blank or longer items are a
+  validation error (HTTP 422).
 
 `cocktails/catalog.py`:
 
@@ -60,17 +71,23 @@ class CocktailRecommender:
     def __init__(self, catalog: CocktailCatalog) -> None: ...
     def search(self, query: CocktailQuery) -> list[CocktailHit]:
         ...
-        # TF-IDF cosine over name, category, glass and ingredient names (+ name boost);
-        # `ingredients` must all be in the recipe; `exclude_ingredients` must all be absent;
-        # alcohol: non_alcoholic keeps Cocktail.alcohol_free, alcoholic keeps the rest.
-        # Empty query with filters ranks by filter match then name. reasons e.g.
-        # "Contains lime, mint", "Alcohol-free".
+        # TF-IDF cosine over name, category, glass and ingredient names (+ name boost),
+        # scaled by the share of query words the recipe uses; words are normalised for
+        # plurals and spelling variants ("limes", "whisky" -> "whiskey"), flavour words
+        # ("fresh", "creamy", "fruity", ...) stand for ingredient hints, and "alcohol-free",
+        # "non-alcoholic" or "mocktail" set alcohol=non_alcoholic when it is "any".
+        # `ingredients` must all be in the recipe; `exclude_ingredients` must all be absent
+        # (same normalisation: "eggs" excludes "Egg"); filter terms are normalised once per
+        # query. alcohol: non_alcoholic keeps Cocktail.alcohol_free ("Non alcoholic" only),
+        # alcoholic keeps the rest. Empty query with filters ranks by filter match then name.
+        # reasons e.g. "Contains lime, mint", "Alcohol-free".
 
     def similar(
         self, drink_id: int, top_k: int = 5, alcohol: AlcoholFilter = "any"
     ) -> list[CocktailHit]:
         ...
-        # IDF-weighted ingredient overlap (cosine); excludes the drink itself;
+        # IDF-weighted overlap of ingredient families (cosine; "Lime" ~ "Lime juice",
+        # "White rum" ~ "Light rum"); excludes the drink itself;
         # reasons "Shares rum, lime juice". Unknown id -> [].
 
     def pantry(
@@ -82,8 +99,8 @@ class CocktailRecommender:
         top_k: int = 10,
     ) -> list[PantryMatch]:
         ...
-        # Ingredient matching is case-insensitive and treats "Lime" as covering "Lime juice"
-        # only via an explicit small alias table (document it). Rank: fewest missing, then
+        # Ingredient matching is case- and plural-insensitive and treats "Lime" as covering
+        # "Lime juice" only via an explicit small alias table (document it). Rank: fewest missing, then
         # coverage, then name. Empty pantry -> [].
 ```
 

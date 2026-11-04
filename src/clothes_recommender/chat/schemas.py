@@ -57,8 +57,9 @@ class Clarification(BaseModel):
 class PendingAction(BaseModel):
     """A state-changing action proposed by the agent, waiting for the shopper's decision.
 
-    The server signs everything except `products` and `summary` (display-only), so a client
-    can approve exactly what the agent proposed, or narrow it, but never forge or widen it.
+    The server signs everything except `products`, `cocktails` and `summary` (display-only),
+    so a client can approve exactly what the agent proposed, or narrow it, but never forge or
+    widen it. `intent` keeps the proposing turn's search filters for the resumed turn.
     """
 
     id: str
@@ -67,6 +68,7 @@ class PendingAction(BaseModel):
     request: str = Field(max_length=2000)
     issued_at: int
     signature: str
+    intent: SearchIntent | None = None
     summary: str = ""
     products: list[Product] = Field(default_factory=list)
     cocktails: list[Cocktail] = Field(default_factory=list, max_length=5)

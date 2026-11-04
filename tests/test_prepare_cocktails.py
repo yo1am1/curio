@@ -1,4 +1,5 @@
 import csv
+import hashlib
 import json
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import pytest
 from clothes_recommender.cocktails.catalog import COLUMNS, CocktailCatalog
 from scripts import prepare_cocktails
 from scripts.prepare_cocktails import (
+    DEFAULT_SHA256,
     DEFAULT_SOURCE,
     MalformedRowError,
     main,
@@ -235,3 +237,36 @@ def test_main_exits_nonzero_on_errors(tmp_path: Path) -> None:
     with pytest.raises(SystemExit) as exit_info:
         main(["--source", str(tmp_path / "missing.csv"), "--data-dir", str(tmp_path)])
     assert exit_info.value.code == 1
+
+
+def test_default_source_is_pinned_to_a_commit() -> None:
+    commit = DEFAULT_SOURCE.split("/")[5]
+    assert len(commit) == 40 and all(c in "0123456789abcdef" for c in commit)
+    assert "/main/" not in DEFAULT_SOURCE
+    assert len(DEFAULT_SHA256) == 64
+
+
+def test_default_source_checksum_is_verified(
+    source: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _mock_stream(monkeypatch, lambda request: httpx.Response(200, content=source.read_bytes()))
+    with pytest.raises(ValueError, match="SHA-256 mismatch"):
+        prepare(DEFAULT_SOURCE, tmp_path)
+    assert not (tmp_path / "cocktails.parquet").exists()
+    with pytest.raises(SystemExit):
+        main(["--data-dir", str(tmp_path)])
+    monkeypatch.setattr(
+        prepare_cocktails, "DEFAULT_SHA256", hashlib.sha256(source.read_bytes()).hexdigest()
+    )
+    assert prepare(DEFAULT_SOURCE, tmp_path).written == 4
+
+
+def test_sha256_option_checks_any_source(source: Path, tmp_path: Path) -> None:
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    # Another source skips the pinned checksum unless --sha256 is given.
+    main(["--source", str(source), "--data-dir", str(tmp_path)])
+    main(["--source", str(source), "--sha256", digest.upper(), "--data-dir", str(tmp_path)])
+    with pytest.raises(ValueError, match="SHA-256 mismatch"):
+        read_source(str(source), sha256="0" * 64)
+    with pytest.raises(SystemExit):
+        main(["--source", str(source), "--sha256", "0" * 64, "--data-dir", str(tmp_path)])

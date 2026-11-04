@@ -1,7 +1,8 @@
 [project]
 name = "curio-recommendations"
-version = "0.2.0"
-description = "Curio: source-grounded agentic fashion recommendations, visual search and product comparisons."
+version = "1.0.0"
+description = "Curio: a source-grounded recommendation agent for fashion (H&M purchases, photo search, product connections) and cocktails (offline recipe search, similar drinks, pantry matching)."
+keywords = ["recommendations", "agent", "llm", "fashion", "cocktails", "clip", "qdrant", "fastapi", "streamlit"]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

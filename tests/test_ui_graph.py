@@ -219,7 +219,6 @@ def test_graph_explorer_focus_strategy_reasons_and_related_controls(mocked_api):
 @pytest.mark.parametrize(
     ("endpoint", "payload", "message"),
     [
-        ("/demo/customers", [], "No example customers"),
         ("/products/1/graph", {"nodes": [], "edges": []}, "No relationships"),
         ("/products/1/related", [], "No co-purchased products"),
     ],
@@ -230,6 +229,16 @@ def test_graph_empty_states(mocked_api, endpoint, payload, message):
     app = AppTest.from_function(run_ui).run()
     assert not app.exception
     assert any(message in info.value for info in app.info)
+
+
+def test_no_example_customers_falls_back_to_browsing_all(mocked_api):
+    calls, overrides = mocked_api
+    overrides["/demo/customers"] = (200, {"json": []})
+    app = AppTest.from_function(run_ui).run()
+    assert not app.exception
+    assert app.toggle(key="graph_user_browse_all").value is True
+    assert ("/users", {}) in calls
+    assert any(widget.label == "Focus product" for widget in app.selectbox)
 
 
 def test_graph_endpoint_error_is_visible_without_crashing(mocked_api):

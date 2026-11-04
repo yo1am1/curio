@@ -628,3 +628,40 @@ def test_chat_accepts_cocktail_context_and_history(services) -> None:
     assert context.cocktail_preferences.alcohol_free
     assert context.cocktail_shortlist == [1]
     assert context.auto_approve == ["SaveCocktails", "RememberTastes"]
+
+
+def test_malformed_cocktail_decisions_are_409_not_502(cocktail_services) -> None:
+    from clothes_recommender.chat.guardrails import ActionSigner
+
+    signer = ActionSigner(b"k" * 32)
+    agent = _cocktail_agent_services(
+        cocktail_services, _tool_call("SaveCocktails", {"drink_ids": [1, 3]}), signer=signer
+    )
+    with TestClient(create_app(agent)) as client:
+        pending = client.post("/chat", json={"message": "save", "domain": "cocktails"}).json()[
+            "pending_action"
+        ]
+        unhashable = {"action": pending, "approved": True, "edited_args": {"drink_ids": [{"x": 1}]}}
+        non_ascii = {"action": {**pending, "signature": "é"}, "approved": True}
+        for decision in (unhashable, non_ascii):
+            body = {"decision": decision, "domain": "cocktails"}
+            response = client.post("/chat", json=body)
+            assert response.status_code == 409
+            (event,) = [
+                json.loads(line)
+                for line in client.post("/chat/stream", json=body).text.splitlines()
+            ]
+            assert event["type"] == "error" and event["status"] == 409
+
+
+def test_zero_denominator_measure_does_not_fail_the_cocktail_turn(cocktail_services) -> None:
+    agent = _cocktail_agent_services(
+        cocktail_services,
+        _tool_call("SearchCocktails", {"query": "mojito"}),
+        {"content": "Try the Mojito [id 1]."},
+    )
+    with TestClient(create_app(agent)) as client:
+        body = {"message": "I have 1/00 oz of rum", "domain": "cocktails"}
+        response = client.post("/chat", json=body)
+    assert response.status_code == 200
+    assert response.json()["grounding"]["status"] == "verified"

@@ -18,7 +18,8 @@ IngredientName = Annotated[
 
 class SearchCocktails(BaseModel):
     """Search the recipe catalog by description (name, style, flavour words, glass), required
-    ingredients, alcohol ('alcoholic', 'non_alcoholic' or 'any') and category. The shopper's
+    ingredients, alcohol ('alcoholic', 'non_alcoholic' or 'any') and category. 'non_alcoholic'
+    keeps only alcohol-free recipes; alcohol-optional ones count as alcoholic. The shopper's
     remembered tastes (alcohol-free, avoided ingredients) are applied automatically."""
 
     model_config = ConfigDict(extra="forbid")
@@ -70,10 +71,11 @@ class SaveCocktails(BaseModel):
 
 
 class RememberTastes(BaseModel):
-    """Propose remembering drink tastes for later searches in this session: alcohol-free only,
-    liked ingredients, avoided ingredients. The shopper must approve it first; this ends your
-    turn. Only propose tastes the shopper stated as lasting ('I don't drink alcohol', 'I hate
-    gin'). Avoided ingredients filter listed recipe ingredients; they are no allergy guarantee."""
+    """Propose remembering drink tastes for later searches in this session: alcohol-free only
+    (which also leaves out alcohol-optional recipes), liked ingredients, avoided ingredients.
+    The shopper must approve it first; this ends your turn. Only propose tastes the shopper
+    stated as lasting ('I don't drink alcohol', 'I hate gin'). Avoided ingredients filter
+    listed recipe ingredients; they are no allergy guarantee."""
 
     model_config = ConfigDict(extra="forbid")
     alcohol_free: bool = False

@@ -54,6 +54,8 @@ MAX_HISTORY_TURNS = 10
 MAX_TOOL_CALLS = 5
 # Wall-clock budget for one turn; checked before every model call.
 TURN_DEADLINE_SECONDS = 90.0
+# TurnContext.shortlist and cocktail_shortlist hold at most this many IDs.
+MAX_SHORTLIST = 20
 
 
 class ToolError(Exception):
@@ -112,6 +114,11 @@ class Toolkit[T](Protocol):
 
     def plan(self, turn: Turn[T], history: Sequence[BaseMessage]) -> Iterator[AgentStep]:
         """Planning steps before the tool loop; each yielded step is timed separately."""
+        ...
+
+    def refresh(self, turn: Turn[T]) -> None:
+        """Re-apply `turn.context`'s remembered preferences to the turn's filters, after a
+        resume or an approved preferences change."""
         ...
 
     def prompt(
@@ -228,18 +235,22 @@ class AgentEngine[T]:
         started = self._clock()
         action = self._signer.verify(decision.action)
         schema = self._approval_schema(action)
+        # The proposing turn's signed filters, so a follow-up search keeps them.
+        intent = action.intent or SearchIntent(query=action.request)
         turn = self._new_turn(
             action.request,
             context,
-            SearchIntent(query=action.request, wants_products=False),
+            intent.model_copy(update={"wants_products": False}),
             referenced,
             resuming=True,
         )
+        self._toolkit.refresh(turn)
         if decision.approved:
             args = narrow_args(decision)
             effect, items, outcome = self._apply_decision(schema, args)
-            turn.applied.append(effect)
-            turn.show(items)
+            self._applied(turn, effect)
+            if items:
+                turn.show(items)
             step = AgentStep(
                 kind="approval", name=action.tool, summary=f"Approved: {outcome}", detail=args
             )
@@ -282,16 +293,8 @@ class AgentEngine[T]:
 
     def _loop(self, turn: Turn[T], messages: list[BaseMessage]) -> Iterator[AgentEvent]:
         while True:
-            if self._clock() - turn.started > TURN_DEADLINE_SECONDS:
-                yield self._record(
-                    turn,
-                    AgentStep(
-                        kind="guardrail",
-                        name="Time budget",
-                        summary="Stopped after the turn's time budget; showing verified items.",
-                        status="blocked",
-                    ),
-                )
+            if self._out_of_time(turn):
+                yield self._record(turn, _time_budget_step())
                 yield self._fallback_reply(turn)
                 return
             started = self._clock()
@@ -398,8 +401,9 @@ class AgentEngine[T]:
         try:
             if name in turn.context.auto_approve:
                 effect, items, outcome = self._toolkit.apply(action)
-                turn.applied.append(effect)
-                turn.show(items)
+                self._applied(turn, effect)
+                if items:
+                    turn.show(items)
                 yield self._record(
                     turn,
                     AgentStep(
@@ -426,6 +430,7 @@ class AgentEngine[T]:
             name,
             _canonical_args(action),
             turn.message,
+            intent=turn.intent,
             summary=f"Proposed: {outcome}",
             **self._toolkit.pending_display(items),
         )
@@ -488,6 +493,11 @@ class AgentEngine[T]:
             ),
             started,
         )
+        final = GroundingReport(status="fallback", checked=report.checked, issues=report.issues)
+        if self._out_of_time(turn):
+            yield self._record(turn, _time_budget_step())
+            yield self._reply(turn, self._toolkit.fallback(turn.items), final)
+            return
         started = self._clock()
         instruction = self._toolkit.repair_instruction.format(issues="; ".join(report.issues))
         repaired = self._agent.invoke([*messages, answer, HumanMessage(instruction)])
@@ -516,10 +526,18 @@ class AgentEngine[T]:
             ),
             started,
         )
-        final = GroundingReport(status="fallback", checked=report.checked, issues=report.issues)
         yield self._reply(turn, self._toolkit.fallback(turn.items), final)
 
     # --- Helpers --------------------------------------------------------------------------
+
+    def _out_of_time(self, turn: Turn[T]) -> bool:
+        return self._clock() - turn.started > TURN_DEADLINE_SECONDS
+
+    def _applied(self, turn: Turn[T], effect: AppliedEffect) -> None:
+        """Record an applied effect and let later tool calls in this turn use it."""
+        turn.applied.append(effect)
+        turn.context = _with_effect(turn.context, effect)
+        self._toolkit.refresh(turn)
 
     def _validate(self, name: str, args: object) -> BaseModel | None:
         schema = self._toolkit.tools.get(name)
@@ -568,6 +586,55 @@ def _final(events: Iterable[AgentEvent]) -> AssistantReply:
         if isinstance(event, ReplyEvent):
             return event.reply
     raise RuntimeError("The assistant finished without a reply")  # pragma: no cover
+
+
+def _time_budget_step() -> AgentStep:
+    return AgentStep(
+        kind="guardrail",
+        name="Time budget",
+        summary="Stopped after the turn's time budget; showing verified items.",
+        status="blocked",
+    )
+
+
+def _with_effect(context: TurnContext, effect: AppliedEffect) -> TurnContext:
+    """The client-held context as the client will store it after applying `effect`."""
+    update: dict[str, Any] = {}
+    if effect.preferences is not None:
+        update["preferences"] = _merged(context.preferences, effect.preferences)
+    if effect.cocktail_preferences is not None:
+        update["cocktail_preferences"] = _merged(
+            context.cocktail_preferences, effect.cocktail_preferences
+        )
+    if effect.product_ids:
+        update["shortlist"] = _union(context.shortlist, effect.product_ids, MAX_SHORTLIST)
+    if effect.drink_ids:
+        update["cocktail_shortlist"] = _union(
+            context.cocktail_shortlist, effect.drink_ids, MAX_SHORTLIST
+        )
+    return context.model_copy(update=update)
+
+
+def _merged[M: BaseModel](current: M, approved: M) -> M:
+    """Approved values added to remembered ones: lists are joined, set flags and values win."""
+    data = current.model_dump()
+    for name, value in approved.model_dump(exclude_defaults=True).items():
+        if isinstance(value, list):
+            limit = next(
+                (m.max_length for m in type(current).model_fields[name].metadata if _bounded(m)),
+                None,
+            )
+            value = _union(data[name], value, limit)
+        data[name] = value
+    return type(current).model_validate(data)
+
+
+def _bounded(constraint: object) -> bool:
+    return getattr(constraint, "max_length", None) is not None
+
+
+def _union[V](current: Sequence[V], added: Iterable[V], limit: int | None) -> list[V]:
+    return list(dict.fromkeys([*current, *added]))[:limit]
 
 
 def _canonical_args(action: BaseModel) -> dict:

@@ -136,6 +136,9 @@ class FashionToolkit:
             turn.show(self._find_products(intent))
             yield _search_step(intent, turn.items)
 
+    def refresh(self, turn: Turn[Product]) -> None:
+        turn.intent, _ = _with_preferences(turn.intent, turn.context.preferences)
+
     def prompt(
         self, turn: Turn[Product], message: str, history: Sequence[BaseMessage]
     ) -> list[BaseMessage]:

@@ -2,6 +2,10 @@
 
 [Back to the product overview](../README.md).
 
+Curio 1.0 has two domains, fashion and cocktails, behind one API, one Streamlit UI and
+one agent engine. Fashion needs the prepared H&M data and image index; cocktails need only
+`data/cocktails.parquet`. Either can run without the other.
+
 ## Fashion engine
 
 Recommendations use historical H&M transactions. Photo search has its own image index.
@@ -30,7 +34,28 @@ their main product group, and a purchase with co-purchased complements for the g
 recommenders' output; nothing is tuned for these customers. "Browse all customers" keeps
 everyone else accessible, and offline evaluation scores all eligible customers.
 
+## Cocktail engine
+
+The cocktail domain serves 425 recipes from `data/cocktails.parquet`, in memory, with no
+model, index or network call at serving time. `CocktailRecommender`
+(`cocktails/recommend.py`) is deterministic, and ties go to the lower drink ID.
+
+| Feature | How it works |
+|---|---|
+| Search | TF-IDF cosine over name, category, glass and ingredient names, with a name boost, scaled by the share of query words a recipe uses. Plurals and spelling variants are normalised ("limes", "whisky" → "whiskey"); flavour words ("fresh", "creamy", "fruity", ...) stand for ingredient hints; "alcohol-free", "non-alcoholic" or "mocktail" set the alcohol filter. Required and excluded ingredients, alcohol and category are filters. Each hit has reasons ("Contains lime, mint"). |
+| Similar drinks | IDF-weighted overlap of ingredient families ("Lime" ~ "Lime juice", "White rum" ~ "Light rum"). |
+| What can I make? | Ranks recipes by fewest missing ingredients, then coverage. Matching ignores case and plurals and uses a small explicit alias table (`PANTRY_ALIASES`: a lime covers lime juice and peel, "rum" covers the common styles); a few staples (ice, water) count as available. Up to three missing ingredients can be allowed. |
+| Cocktail agent | The shared agent engine with cocktail tools: SearchCocktails, InspectCocktails, SimilarCocktails, WhatCanIMake, SaveCocktails and RememberTastes. See [agent architecture](agent-architecture.md). |
+
+Alcohol-free means TheCocktailDB's "Non alcoholic" label only. "Optional alcohol" recipes
+list alcoholic ingredients, so every filter treats them as alcoholic; they are labelled
+"Alcohol optional". Ingredient filters and avoided ingredients only see the listed recipe
+ingredients and are not an allergen or dietary guarantee. The layout of the prepared file
+and every interface are in the [multi-domain contract](multidomain-contract.md).
+
 ## Data
+
+### H&M data
 
 The app uses the [H&M Personalized Fashion Recommendations](https://www.kaggle.com/competitions/h-and-m-personalized-fashion-recommendations)
 dataset from Kaggle: 105k articles with photos and 31.8M real purchases from 2018 to 2020.
@@ -80,6 +105,27 @@ new untouched evaluation set. New historical price features must use event price
 before each cutoff, rather than the displayed full-window product median. Existing
 prepared files gain these fields only after regeneration.
 
+### Cocktail data
+
+```sh
+uv run python -m scripts.prepare_cocktails                 # default: pinned source, checksum-verified
+uv run python -m scripts.prepare_cocktails --source path/to/final_cocktails.csv --sha256 <hex>
+```
+
+The source is `final_cocktails.csv` in [yo1am1/cocktail_advisor](https://github.com/yo1am1/cocktail_advisor),
+pinned to commit `92e05ae` and checked against a SHA-256, so drink IDs stay stable. Its list
+columns are parsed with `ast.literal_eval`. Malformed rows are skipped with a warning,
+duplicate recipes are kept once, ingredient spellings are unified, and image links other
+than `https://www.thecocktaildb.com/...` are dropped. The API reads the file at startup:
+restart it after preparing.
+
+**Terms.** The recipes and photos come from [TheCocktailDB](https://www.thecocktaildb.com/).
+The cocktail_advisor code is Apache-2.0, but the recipe data and images remain subject to
+TheCocktailDB's own terms; Curio does not relicense them, and this repository's MIT licence
+covers the code only. Check TheCocktailDB's terms before commercial use. The file is not
+committed; photos are loaded directly from thecocktaildb.com by the browser, and the UI
+credits "Recipe data: TheCocktailDB".
+
 ### Shopify enrichment and graph behavior
 
 The saved mapping in `taxonomy/hm_shopify_categories.json` assigns H&M product types to
@@ -115,6 +161,11 @@ flowchart LR
     RP --> P
     API --> G[GraphRecommender]
     API --> A[ShoppingAssistant]
+    API --> CA[CocktailAssistant]
+    API --> CR[CocktailRecommender]
+    CR --> CC[(cocktails.parquet)]
+    CA --> CR
+    CA --> LLM
     S --> E[CLIP encoder]
     S --> Q[(Qdrant)]
     CB --> Q
@@ -138,8 +189,11 @@ src/clothes_recommender/
 ├── vector_store.py    # Qdrant wrapper: upsert, filtered search, vector lookup
 ├── search.py          # Text and image search
 ├── recommenders/      # learned, repeat, content_based, collaborative, graph, popularity
-├── chat/              # llm, intent, prompts, tools (policies), schemas, guardrails,
-│                      # navigator (recommender bridge), assistant (agent loop)
+├── cocktails/         # domain (types), catalog, recommend (search, similar, pantry)
+├── chat/              # engine (shared agent loop), llm, intent, prompts, schemas,
+│                      # guardrails (grounding, signed proposals), tools + assistant
+│                      # (fashion), cocktail_tools + cocktail_agent (cocktails),
+│                      # navigator (recommender bridge)
 ├── services.py        # Composition root
 ├── api.py             # FastAPI app
 └── ui.py              # Streamlit client
@@ -149,7 +203,8 @@ scripts/fetch_query_photos.py # Example image-search photos of garments outside 
 scripts/build_index.py # Embed product photos with CLIP, upsert into Qdrant
 scripts/classify_product_types.py # Reviewable H&M-to-Shopify category decisions
 scripts/evaluate.py # Chronological holdout evaluation; JSON results for the Model quality page
-scripts/take_screenshots.py # Re-capture the README screenshots with Playwright
+scripts/prepare_cocktails.py # Download the pinned recipe CSV, write data/cocktails.parquet
+scripts/take_screenshots.py # Development captures of every page with Playwright
 ```
 
 ## Quick start
@@ -159,6 +214,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Python 3.13.
 ```bash
 uv sync --all-extras
 cp .env.example .env                                   # optional: configure an LLM for the chat tab
+uv run python -m scripts.prepare_cocktails             # optional: enables the cocktail domain
 ```
 
 Get the H&M data in one of two ways. The Kaggle archive needs a free account with the
@@ -215,6 +271,21 @@ docker compose up --build
 docker compose exec api python -m scripts.build_index --limit 3000
 ```
 
+The image includes the `ui` and `anthropic` extras, so `LLM_PROVIDER=anthropic` works in
+Docker; development tools are left out. The API mounts `./data` read-only, so prepare the
+cocktail recipes with the one-off `prepare-cocktails` service, which mounts it writable,
+then restart the API so it loads the file:
+
+```bash
+docker compose run --rm --user "$(id -u):$(id -g)" prepare-cocktails
+docker compose restart api
+```
+
+`--user` makes the written file belong to you. Running
+`uv run python -m scripts.prepare_cocktails` on the host and then
+`docker compose restart api` works too. The CLIP model is downloaded once into the
+`hf-cache` volume; the image creates that directory for its non-root user.
+
 ### LLM configuration
 
 The assistant works with any LangChain chat provider, configured only through `.env`:
@@ -231,14 +302,16 @@ Any OpenAI-compatible gateway (OmniRoute, OpenRouter, LiteLLM, Ollama, vLLM) wor
 `LLM_BASE_URL=http://127.0.0.1:20128/v1`, choose an available gateway model ID for
 `LLM_MODEL`, and keep the gateway key in `.env`. The API uses this configuration
 for both intent extraction and catalog-grounded replies. Without `LLM_MODEL`
-every feature except chat still works. Set `AGENT_SIGNING_KEY` to a long random
+every feature except chat still works. One configuration serves both the fashion and the
+cocktail assistant. Set `AGENT_SIGNING_KEY` to a long random
 string when running several API workers, so approval proposals verify on any worker.
 
 ## API
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/health` | Index size and whether chat is enabled |
+| GET | `/health` | Index and catalog sizes, whether chat and ranking are enabled, `cocktails_enabled` and `cocktail_count` |
+| GET | `/domains` | `fashion` and `cocktails`, each with `enabled` and `chat_enabled` |
 | GET | `/products/{id}` | Product details |
 | GET | `/products/{id}/graph` | Bounded product neighborhood: nodes and edges |
 | GET | `/products/{id}/related?kind=complement\|alternative` | Co-purchased complements or higher-priced alternatives |
@@ -250,12 +323,19 @@ string when running several API workers, so approval proposals verify on any wor
 | GET | `/users`, `/users/{id}` | User ids; profile with purchase history |
 | GET | `/demo/customers` | Up to ten descriptive customer examples and starting products |
 | GET | `/users/{id}/recommendations?strategy=learned\|repeat\|collaborative\|graph\|content` | Personalised recommendations; learned, repeat, collaborative and graph hits include reasons |
-| POST | `/chat` | One agent turn: `{"message", "history", "preferences", "shopper_id", "shortlist", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal |
+| GET | `/cocktails/ingredients`, `/cocktails/categories` | Distinct ingredient names (catalog spelling) and categories |
+| POST | `/cocktails/search` | `{"query": "fresh lime and mint", "ingredients": [], "exclude_ingredients": [], "alcohol": "any\|alcoholic\|non_alcoholic", "category": null, "top_k": 10}` |
+| POST | `/cocktails/pantry` | `{"ingredients": ["Gin", "Lime"], "alcohol": "any", "max_missing": 2, "top_k": 10}`: drinks you can make, with what is missing |
+| GET | `/cocktails/{id}` | Full recipe (404 for an unknown ID) |
+| GET | `/cocktails/{id}/similar?top_k=5&alcohol=any` | Drinks sharing the most distinctive ingredients |
+| POST | `/chat` | One agent turn: `{"domain": "fashion\|cocktails", "message", "history", "preferences", "shopper_id", "shortlist", "cocktail_preferences", "cocktail_shortlist", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal. `domain` defaults to `fashion` |
 | POST | `/chat/stream` | The same turn as NDJSON: `step` events, then `reply` (or `error`) |
 | POST, GET | `/chat/feedback` | Rate an answer; summary of ratings and recent negative feedback |
 | GET | `/evaluation` | Offline evaluation results saved by `scripts.evaluate --output` |
 
-Interactive docs at `http://localhost:8000/docs`.
+Every `/cocktails` endpoint returns 503 until `scripts.prepare_cocktails` has been run, and
+`/chat` returns 503 when the requested domain's assistant is unavailable. The API title and
+version shown at `http://localhost:8000/docs` come from the installed package metadata.
 
 ## Offline evaluation
 
@@ -371,13 +451,23 @@ uv run pytest                        # fast, offline unit tests (fake encoder, i
 uv run pytest -m integration        # tests that download the real CLIP model
 uv run ruff check . && uv run ruff format --check .
 
-# Re-capture README screenshots (API + UI running; uses the local Google Chrome)
-uv run python -m scripts.take_screenshots --example 5 --skip-chat
+# Development captures of every page (API + UI running; uses the local Google Chrome)
+uv run python -m scripts.take_screenshots --example 5 --skip-chat --out data/screenshots
 ```
+
+`take_screenshots` writes development captures (`mvp-*`, `text-search`, `cocktails-*`, ...)
+and checks layout invariants on the way. It does not overwrite the README images: those are
+the curated `docs/screenshots/curio-*.jpg` files, cropped from captures of the same pages.
+The cocktail README images show the real recipe catalog; the fashion images show the
+prepared H&M sample.
+
+CI (`.github/workflows/ci.yml`) runs `uv sync --locked`, Ruff, `scripts.prepare_cocktails`
+(so the probes on the real recipe catalog run instead of skipping), the offline test suite
+and `docker compose config`. It needs no secrets.
 
 ### Release scope and compatibility
 
-This is Curio's fashion-only portfolio release. The installable distribution is
-`curio-recommendations`; the `clothes_recommender` import path remains stable for
-existing scripts. Work on other recommendation domains is saved on
-`next/curio-multidomain`, outside this release.
+Version 1.0.0 covers fashion and cocktails; see the [changelog](../CHANGELOG.md). The
+installable distribution is `curio-recommendations`; the `clothes_recommender` import path
+remains stable for existing scripts. `ChatRequest.domain` defaults to `fashion`, so fashion
+clients written for 0.2.0 keep working.

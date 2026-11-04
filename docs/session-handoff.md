@@ -1,3 +1,41 @@
+# Curio v1.0.0 release preparation — 2026-11-04
+
+`release/v1.0` now ships fashion and cocktails behind one API, UI and agent engine.
+Delivered since the fashion checkpoint: the shared agent engine (policy-gated tools,
+signed approvals that carry the proposing turn's filters, clarifications, grounding with
+one self-correction, tool-call and time budgets, streamed trace, feedback); the cocktail
+domain (pinned and checksum-verified `scripts.prepare_cocktails`, offline search, similar
+drinks, "What can I make?", six cocktail tools, cocktail grounding and safety rules); and
+the header domain switch with per-domain history, shortlist and memory. A release audit
+found issues in the agent, cocktail search and UI; the fixes landed with regression tests.
+
+Release preparation: version 1.0.0 in `pyproject.toml` and `uv.lock` (the API version
+comes from package metadata), `CHANGELOG.md`, README and technical guide rewritten for
+both domains, API table with `/domains`, every `/cocktails` route and `ChatRequest.domain`,
+cocktail data terms (TheCocktailDB data via Apache-2.0 cocktail_advisor; the data is not
+relicensed), and two new README screenshots of the real recipe catalog
+(`curio-cocktails.jpg`, `curio-cocktails-pantry.jpg`). Docker: the Hugging Face cache
+directory now belongs to the non-root user, the image includes the `anthropic` extra and
+uv 0.11, and a `prepare-cocktails` compose service (profile `tools`) writes the recipe
+file. CI pins uv, prepares the cocktail data so real-catalog probes run, and validates
+the compose file.
+
+Verification: `uv run pytest -q` gave 816 passed, 3 skipped (local H&M/Shopify data),
+1 deselected; Ruff check and format were clean; `uv lock --check` passed;
+`docker compose config` passed. No Docker daemon was available, so the image was not
+built and the volume ownership fix is untested in a container.
+`scripts.prepare_cocktails` downloaded and verified 425 recipes. Cocktail screenshots
+came from the local demo UI; no chat or fashion screenshots were re-captured, because
+that demo used a synthetic fashion catalog and a scripted model.
+
+Known gaps: no live LLM evaluation at scale; feedback stays in memory; the fashion photo
+index is partial (3,537 of 14,300); prices are historical; cocktail filters are not
+allergen guarantees; "whiskey, lemon, sugar" does not find Whiskey Sour (needs pantry
+alias entries); Streamlit photo alt text is the position number. Nothing was committed,
+tagged or pushed in this step.
+
+---
+
 # Curio fashion release checkpoint — 2026-11-02
 
 `release/fashion-mvp` starts from fashion-only `7c46cd8` and presents Curio

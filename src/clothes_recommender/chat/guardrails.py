@@ -10,6 +10,7 @@ from collections.abc import Iterable, Sequence
 from itertools import combinations
 from typing import Any
 
+from clothes_recommender.chat.intent import SearchIntent
 from clothes_recommender.chat.schemas import (
     ActionDecision,
     GroundingReport,
@@ -139,7 +140,7 @@ def measures_in(text: str) -> list[tuple[str, Measure]]:
     found = []
     for match in _MEASURE.finditer(text):
         denominators = [part.partition("/")[2] for part in match.group(1).split()]
-        if "0" in denominators:
+        if any(denominator and int(denominator) == 0 for denominator in denominators):
             continue
         found.append((match.group(0), (_quantity(match.group(1)), _UNITS[match.group(2).lower()])))
     return found
@@ -150,20 +151,42 @@ class CocktailGroundingCheck:
 
     Catalog drink names are matched case-sensitively in their catalog spelling, so ordinary
     words ("a perfect afternoon drink") do not count as the drink "Afternoon". Names that are
-    also ingredient names ("Limeade") are never treated as drink mentions.
+    also ingredient names ("Limeade") are never treated as drink mentions, and neither is a
+    drink name inside a longer glass or ingredient name ("Martini" in "Martini Glass",
+    "Daiquiri" in "Daiquiri mix").
     """
 
-    def __init__(self, drink_names: Iterable[str], ingredient_names: Iterable[str]) -> None:
+    def __init__(
+        self,
+        drink_names: Iterable[str],
+        ingredient_names: Iterable[str],
+        *,
+        glass_names: Iterable[str] = (),
+    ) -> None:
+        ingredient_names = list(ingredient_names)
         ingredients = {name.casefold() for name in ingredient_names}
         names = sorted(
             {name for name in drink_names if name.strip() and name.casefold() not in ingredients},
             key=lambda name: (-len(name), name),
         )
-        self._names = (
-            re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, names)) + r")(?!\w)")
-            if names
-            else None
+        self._names = _any_of(names) if names else None
+        phrases = sorted(
+            {name for name in [*ingredient_names, *glass_names] if name.strip()},
+            key=lambda name: (-len(name), name),
         )
+        self._phrases = _any_of(phrases, re.IGNORECASE) if phrases else None
+
+    def _drink_mentions(self, text: str) -> list[str]:
+        """Drink names in `text`, except those inside a longer glass or ingredient name."""
+        if self._names is None:
+            return []
+        phrases = [m.span() for m in self._phrases.finditer(text)] if self._phrases else []
+        mentions = []
+        for match in self._names.finditer(text):
+            start, end = match.span()
+            if not any(s <= start and end <= e and e - s > end - start for s, e in phrases):
+                mentions.append(match.group(0))
+        return list(dict.fromkeys(mentions))
 
     def check(self, text: str, evidence: Sequence[Cocktail], typed: str = "") -> GroundingReport:
         """`typed` is what the shopper wrote: drinks and amounts they named may be repeated."""
@@ -176,7 +199,7 @@ class CocktailGroundingCheck:
             if drink_id not in known_ids:
                 issues.append(f"drink {drink_id} was not returned by any tool")
         evidence_names = [c.name for c in evidence]
-        for name in dict.fromkeys(self._names.findall(text) if self._names else []):
+        for name in self._drink_mentions(text):
             checked += 1
             if not _name_allowed(name, evidence_names, typed):
                 issues.append(f"{name} was not returned by any tool")
@@ -193,6 +216,10 @@ class CocktailGroundingCheck:
         return GroundingReport(
             status="fallback" if issues else "verified", checked=checked, issues=issues
         )
+
+
+def _any_of(names: Sequence[str], flags: int = 0) -> re.Pattern[str]:
+    return re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, names)) + r")(?!\w)", flags)
 
 
 def _name_allowed(name: str, evidence_names: Sequence[str], typed: str) -> bool:
@@ -218,13 +245,32 @@ class ActionSigner:
         self._ttl = ttl_seconds
         self._clock = clock
 
-    def _digest(self, action_id: str, tool: str, args: dict, request: str, issued_at: int) -> str:
+    def _digest(
+        self,
+        action_id: str,
+        tool: str,
+        args: dict,
+        request: str,
+        issued_at: int,
+        intent: SearchIntent | None,
+    ) -> str:
+        filters = intent.model_dump(mode="json") if intent is not None else None
         payload = json.dumps(
-            [action_id, tool, args, request, issued_at], sort_keys=True, separators=(",", ":")
+            [action_id, tool, args, request, issued_at, filters],
+            sort_keys=True,
+            separators=(",", ":"),
         )
         return hmac.new(self._key, payload.encode(), hashlib.sha256).hexdigest()
 
-    def issue(self, tool: str, args: dict[str, Any], request: str, **display: Any) -> PendingAction:
+    def issue(
+        self,
+        tool: str,
+        args: dict[str, Any],
+        request: str,
+        *,
+        intent: SearchIntent | None = None,
+        **display: Any,
+    ) -> PendingAction:
         action_id = secrets.token_hex(8)
         issued_at = int(self._clock())
         return PendingAction(
@@ -233,15 +279,16 @@ class ActionSigner:
             args=args,
             request=request,
             issued_at=issued_at,
-            signature=self._digest(action_id, tool, args, request, issued_at),
+            signature=self._digest(action_id, tool, args, request, issued_at, intent),
+            intent=intent,
             **display,
         )
 
     def verify(self, action: PendingAction) -> PendingAction:
         expected = self._digest(
-            action.id, action.tool, action.args, action.request, action.issued_at
+            action.id, action.tool, action.args, action.request, action.issued_at, action.intent
         )
-        if not hmac.compare_digest(expected, action.signature):
+        if not hmac.compare_digest(expected.encode(), action.signature.encode()):
             raise InvalidActionError("This proposal was not issued by Curio or was modified.")
         if not 0 <= self._clock() - action.issued_at <= self._ttl:
             raise InvalidActionError("This proposal has expired. Please ask again.")
@@ -260,7 +307,7 @@ def narrow_args(decision: ActionDecision) -> dict[str, Any]:
     for field, value in edits.items():
         original = proposed[field]
         if isinstance(original, list):
-            if not isinstance(value, list) or not set(value) <= set(original):
+            if not isinstance(value, list) or not _subset(value, original):
                 raise InvalidActionError(f"Edited {field} must be a subset of the proposal.")
             narrowed[field] = [item for item in original if item in value]
         elif isinstance(original, bool):
@@ -273,3 +320,11 @@ def narrow_args(decision: ActionDecision) -> dict[str, Any]:
         else:
             narrowed[field] = value
     return narrowed
+
+
+def _subset(values: list[Any], original: list[Any]) -> bool:
+    """Whether every edited value was proposed; unhashable values never were."""
+    try:
+        return set(values) <= set(original)
+    except TypeError:
+        return False

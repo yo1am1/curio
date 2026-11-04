@@ -75,20 +75,23 @@ def test_empty_query_browses_by_name(
 
 def test_empty_query_with_filters_ranks_by_name(recommender: CocktailRecommender) -> None:
     hits = _search(recommender, alcohol="non_alcoholic")
-    assert [h.cocktail.name for h in hits] == ["Lemonade", "Shirley Temple", "Virgin Mojito"]
+    assert [h.cocktail.name for h in hits] == ["Lemonade", "Virgin Mojito"]
     assert {h.score for h in hits} == {1.0}
-    assert [h.reasons for h in hits] == [["Alcohol-free"], ["Alcohol optional"], ["Alcohol-free"]]
+    assert [h.reasons for h in hits] == [["Alcohol-free"], ["Alcohol-free"]]
 
 
-def test_alcohol_filters_treat_optional_alcohol_as_alcohol_free(
+def test_alcohol_filters_treat_optional_alcohol_as_alcoholic(
     recommender: CocktailRecommender,
 ) -> None:
     alcohol_free = set(_ids(_search(recommender, alcohol="non_alcoholic")))
-    alcoholic = set(_ids(_search(recommender, alcohol="alcoholic")))
-    assert alcohol_free == {3, 6, 8}
-    assert alcoholic == {1, 2, 4, 5, 7}
+    alcoholic = _search(recommender, alcohol="alcoholic", top_k=50)
+    assert alcohol_free == {3, 6}
+    assert set(_ids(alcoholic)) == {1, 2, 4, 5, 7, 8}
     assert _ids(_search(recommender, query="mojito", alcohol="non_alcoholic")) == [3]
-    assert all("Contains alcohol" in h.reasons for h in _search(recommender, alcohol="alcoholic"))
+    assert all(
+        h.reasons == ["Alcohol optional"] if h.cocktail.drink_id == 8 else ["Contains alcohol"]
+        for h in alcoholic
+    )
 
 
 def test_required_ingredients_must_all_be_present(recommender: CocktailRecommender) -> None:
@@ -111,8 +114,11 @@ def test_excluded_ingredients_must_all_be_absent(recommender: CocktailRecommende
     assert _search(recommender, query="mojito", exclude_ingredients=["mint"]) == []
 
 
-def test_blank_filter_terms_are_ignored(recommender: CocktailRecommender) -> None:
-    assert len(_search(recommender, ingredients=["  "], exclude_ingredients=[""], top_k=50)) == 8
+def test_blank_filter_terms_are_rejected() -> None:
+    with pytest.raises(ValidationError):
+        CocktailQuery(ingredients=["  "])
+    with pytest.raises(ValidationError):
+        CocktailQuery(exclude_ingredients=[""])
 
 
 def test_category_filter_is_case_insensitive(recommender: CocktailRecommender) -> None:
@@ -169,7 +175,8 @@ def test_similar_respects_alcohol_filter_and_top_k(recommender: CocktailRecommen
     alcohol_free = recommender.similar(1, top_k=10, alcohol="non_alcoholic")
     assert _ids(alcohol_free) == [3, 6]
     assert alcohol_free[0].reasons[-1] == "Alcohol-free"
-    assert set(_ids(recommender.similar(3, top_k=10, alcohol="alcoholic"))) == {1, 2, 5}
+    # The gin and tonic's lime wedge counts as the virgin mojito's lime juice.
+    assert set(_ids(recommender.similar(3, top_k=10, alcohol="alcoholic"))) == {1, 2, 4, 5}
     assert len(recommender.similar(1, top_k=1)) == 1
     assert recommender.similar(1, top_k=0) == []
 

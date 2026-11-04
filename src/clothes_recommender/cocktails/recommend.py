@@ -3,13 +3,24 @@
 Everything is precomputed from the catalog at construction, deterministic, and ties are broken
 by the lower drink_id.
 
+Words are normalised the same way for recipes and requests (`term`): a light plural rule
+("limes" -> "lime", "cherries" -> "cherry") and the spelling variants in `VARIANTS`
+("whisky" -> "whiskey").
+
 Ingredient matching:
 - Search filters (`ingredients`, `exclude_ingredients`) match a recipe ingredient when the
-  names are equal ignoring case, an alias in `PANTRY_ALIASES` covers it, or every word of the
-  filter is a word of the ingredient ("rum" matches "Light rum", "egg" matches "Egg white").
-  The broad match keeps exclusions on the safe side; it is still no allergen guarantee.
+  names are equal ignoring case and plurals, an alias in `PANTRY_ALIASES` covers it, or every
+  word of the filter is a word of the ingredient ("rum" matches "Light rum", "eggs" matches
+  "Egg white"). The broad match keeps exclusions on the safe side; it is still no allergen
+  guarantee.
 - The pantry is stricter: an item covers a recipe ingredient only when the names are equal
-  ignoring case or `PANTRY_ALIASES` lists it, and `PANTRY_STAPLES` count as always available.
+  ignoring case and plurals or `PANTRY_ALIASES` lists it, and `PANTRY_STAPLES` count as always
+  available.
+- Similar recipes compare `FAMILIES` of ingredients ("Lime" ~ "Lime juice", "White rum" ~
+  "Light rum").
+
+Free-text search also maps flavour words to ingredient hints (`FLAVOURS`: "fresh", "creamy",
+"fruity", ...) and reads "alcohol-free", "non-alcoholic" or "mocktail" as the alcohol filter.
 """
 
 import math
@@ -57,6 +68,52 @@ PANTRY_ALIASES: dict[str, tuple[str, ...]] = {
     "sugar syrup": ("sugar syrup", "simple syrup"),
     "simple syrup": ("sugar syrup", "simple syrup"),
 }
+# Spelling variants mapped to the catalog's more common form (after accent folding).
+VARIANTS: dict[str, str] = {
+    "whisky": "whiskey",
+    "whiskies": "whiskey",
+    "yogurt": "yoghurt",
+    "sirup": "syrup",
+    "liquor": "liqueur",
+    "chilli": "chili",
+}
+# Ingredient families for similar recipes (keys and values are normalised `term` forms).
+FAMILIES: dict[str, str] = {
+    "lime juice": "lime",
+    "fresh lime juice": "lime",
+    "lemon juice": "lemon",
+    "fresh lemon juice": "lemon",
+    "orange juice": "orange",
+    "fresh orange juice": "orange",
+    "white rum": "light rum",
+    "silver rum": "light rum",
+    "club soda": "soda water",
+    "carbonated water": "soda water",
+    "sugar syrup": "simple syrup",
+}
+# Flavour words in a search and the catalog words they hint at; their weight is shared.
+FLAVOURS: dict[str, tuple[str, ...]] = {
+    "fresh": ("mint", "lime", "lemon", "cucumber"),
+    "refreshing": ("mint", "lime", "lemon", "cucumber"),
+    "minty": ("mint", "menthe"),
+    "fruity": ("fruit", "pineapple", "strawberry", "orange", "mango", "peach", "passion"),
+    "tropical": ("pineapple", "coconut", "mango", "passion", "banana", "papaya"),
+    "citrusy": ("citrus", "lime", "lemon", "orange", "grapefruit"),
+    "sweet": ("sugar", "syrup", "grenadine", "honey"),
+    "sour": ("sour", "lemon", "lime"),
+    "creamy": ("creamy", "cream", "milk"),
+    "chocolatey": ("chocolate", "cocoa", "cacao"),
+    "chocolaty": ("chocolate", "cocoa", "cacao"),
+    "spicy": ("spice", "spiced", "pepper", "ginger", "cinnamon", "chili"),
+    "fizzy": ("soda", "tonic", "fizz", "champagne", "prosecco"),
+    "bubbly": ("soda", "tonic", "fizz", "champagne", "prosecco"),
+    "smoky": ("scotch", "islay", "mezcal"),
+}
+# Query words (or word pairs) that ask for alcohol-free drinks instead of matching text.
+ALCOHOL_FREE_WORDS = frozenset({"mocktail", "nonalcoholic", "alcoholfree"})
+ALCOHOL_FREE_PAIRS = frozenset(
+    {("alcohol", "free"), ("non", "alcoholic"), ("no", "alcohol"), ("without", "alcohol")}
+)
 # Assumed to be in every kitchen, so they never count as missing.
 PANTRY_STAPLES = frozenset({"ice", "water"})
 NAME_WEIGHT = 2
@@ -75,11 +132,50 @@ def tokens(text: str) -> list[str]:
     return [t for t in _TOKEN.findall(ascii_text) if t not in _STOPWORDS]
 
 
+def term(word: str) -> str:
+    """A token's normalised form: spelling variant, then a light plural rule."""
+    word = VARIANTS.get(word, word)
+    if len(word) <= 3 or word.endswith(("ss", "us")):
+        return word
+    if word.endswith("ies") and len(word) > 4:
+        word = word[:-3] + "y"
+    elif word.endswith(("ches", "shes", "sses", "xes", "oes")):
+        word = word[:-2]
+    elif word.endswith("s"):
+        word = word[:-1]
+    return VARIANTS.get(word, word)
+
+
+def terms(text: str) -> list[str]:
+    """`tokens` in their normalised form ("Limes" -> lime, "Whisky" -> whiskey)."""
+    return [term(t) for t in tokens(text)]
+
+
 @dataclass(frozen=True)
 class _Ingredient:
     key: str
     name: str  # catalog spelling as written in the recipe
+    words: frozenset[str]  # normalised words
+    match_key: str  # normalised words joined ("Fresh Limes" -> "fresh lime")
+    family: str  # FAMILIES group of match_key, used by similar()
+
+
+@dataclass(frozen=True)
+class _Filter:
+    """A search filter term, normalised once per query."""
+
+    key: str
+    match_key: str
+    aliases: frozenset[str]
     words: frozenset[str]
+
+    def hits(self, ingredient: _Ingredient) -> bool:
+        return (
+            ingredient.key == self.key
+            or ingredient.match_key == self.match_key
+            or ingredient.key in self.aliases
+            or (bool(self.words) and self.words <= ingredient.words)
+        )
 
 
 class CocktailRecommender:
@@ -93,17 +189,25 @@ class CocktailRecommender:
         self._ingredient_idf, self._ingredient_vectors = _ingredient_matrix(self._recipes)
 
     def search(self, query: CocktailQuery) -> list[CocktailHit]:
+        words, alcohol_free = _alcohol_words(tokens(query.query))
+        if alcohol_free and query.alcohol == "any":
+            query = query.model_copy(update={"alcohol": "non_alcoholic"})
+        required = _filters(query.ingredients)
+        excluded = _filters(query.exclude_ingredients)
         candidates = [
             row
             for row, cocktail in enumerate(self._cocktails)
             if _alcohol_ok(cocktail, query.alcohol)
             and _category_ok(cocktail, query.category)
-            and self._ingredients_ok(row, query.ingredients, query.exclude_ingredients)
+            and self._ingredients_ok(row, required, excluded)
         ]
-        terms = self._query_terms(query.query)
-        vector = self._query_vector(terms)
+        concepts = self._query_concepts(words)
+        weights: Counter[str] = Counter()
+        for concept in concepts:
+            weights.update(concept)
+        vector = self._query_vector(weights)
         if vector is None:
-            if tokens(query.query):
+            if words:
                 return []  # no recipe uses any query word
             has_filters = bool(
                 query.ingredients
@@ -116,7 +220,7 @@ class CocktailRecommender:
         else:
             similarity = self._documents[candidates] @ vector if candidates else np.empty(0)
             scores = {
-                row: float(score)
+                row: float(score) * self._coverage(row, concepts)
                 for row, score in zip(candidates, similarity, strict=True)
                 if score > 0
             }
@@ -125,7 +229,7 @@ class CocktailRecommender:
             CocktailHit(
                 cocktail=self._cocktails[row],
                 score=round(scores[row], 6),
-                reasons=self._search_reasons(row, query, set(terms)),
+                reasons=self._search_reasons(row, query, required, set(weights)),
             )
             for row in ranked[: query.top_k]
         ]
@@ -165,14 +269,19 @@ class CocktailRecommender:
         covered = pantry_coverage(ingredients)
         if not covered or top_k < 1:
             return []
+        covered_terms = {_match_key(key) for key in covered}
+
+        def has(i: _Ingredient) -> bool:
+            return i.key in covered or i.match_key in covered_terms
+
         matches = []
         for row, cocktail in enumerate(self._cocktails):
             if not _alcohol_ok(cocktail, alcohol):
                 continue
             recipe = self._recipes[row]
-            have = [i.name for i in recipe if i.key in covered or i.key in PANTRY_STAPLES]
-            missing = [i.name for i in recipe if not (i.key in covered or i.key in PANTRY_STAPLES)]
-            uses_pantry = any(i.key in covered for i in recipe)
+            have = [i.name for i in recipe if has(i) or i.key in PANTRY_STAPLES]
+            missing = [i.name for i in recipe if not (has(i) or i.key in PANTRY_STAPLES)]
+            uses_pantry = any(has(i) for i in recipe)
             if not recipe or not uses_pantry or len(missing) > max(max_missing, 0):
                 continue
             matches.append(
@@ -193,50 +302,69 @@ class CocktailRecommender:
         )
         return matches[:top_k]
 
-    def _ingredients_ok(self, row: int, required: Sequence[str], excluded: Sequence[str]) -> bool:
+    def _ingredients_ok(
+        self, row: int, required: Sequence[_Filter], excluded: Sequence[_Filter]
+    ) -> bool:
         recipe = self._recipes[row]
-        return all(_filter_hits(term, recipe) for term in required if term.strip()) and not any(
-            _filter_hits(term, recipe) for term in excluded if term.strip()
+        return all(_filter_hits(f, recipe) for f in required) and not any(
+            _filter_hits(f, recipe) for f in excluded
         )
 
-    def _query_terms(self, text: str) -> dict[str, float]:
-        """Vocabulary words a query uses with their counts; unknown words expand as prefixes."""
-        terms: Counter[str] = Counter()
-        for word in tokens(text):
-            if word in self._vocabulary:
-                terms[word] += 1
-            elif len(word) >= MIN_PREFIX:
-                expansions = [w for w in self._vocabulary if w.startswith(word)]
-                for expansion in expansions:
-                    terms[expansion] += 1 / len(expansions)
-        return dict(terms)
+    def _query_concepts(self, words: Sequence[str]) -> list[dict[str, float]]:
+        """Per known query word, the vocabulary words it stands for with their weights: the
+        word itself, a flavour word's hints (sharing its weight) or, for other unknown words,
+        the vocabulary words it starts (also sharing its weight)."""
+        concepts = []
+        for token in words:
+            word = term(token)
+            hints = [w for w in map(term, FLAVOURS.get(token, ())) if w in self._vocabulary]
+            if not hints and word in self._vocabulary:
+                hints = [word]
+            elif not hints and len(word) >= MIN_PREFIX:
+                hints = [w for w in self._vocabulary if w.startswith(word)]
+            if hints:
+                concepts.append(dict.fromkeys(hints, 1 / len(hints)))
+        return concepts
 
-    def _query_vector(self, terms: dict[str, float]) -> np.ndarray | None:
-        if not terms:
+    def _coverage(self, row: int, concepts: Sequence[dict[str, float]]) -> float:
+        """Share of the query's words a recipe uses, so recipes using all of them rank first
+        ("rum and lime" puts rum-and-lime drinks above rum-only ones)."""
+        document = self._documents[row]
+        used = sum(any(document[self._vocabulary[w]] > 0 for w in c) for c in concepts)
+        return used / len(concepts)
+
+    def _query_vector(self, weights: dict[str, float]) -> np.ndarray | None:
+        if not weights:
             return None
         vector = np.zeros(len(self._vocabulary))
-        for word, weight in terms.items():
+        for word, weight in weights.items():
             column = self._vocabulary[word]
             vector[column] = weight * self._idf[column]
         return vector / np.linalg.norm(vector)
 
-    def _search_reasons(self, row: int, query: CocktailQuery, query_words: set[str]) -> list[str]:
+    def _search_reasons(
+        self,
+        row: int,
+        query: CocktailQuery,
+        required: Sequence[_Filter],
+        query_words: set[str],
+    ) -> list[str]:
         cocktail = self._cocktails[row]
         recipe = self._recipes[row]
         reasons = []
-        in_name = [w for w in dict.fromkeys(tokens(cocktail.name)) if w in query_words]
+        in_name = [w for w in dict.fromkeys(tokens(cocktail.name)) if term(w) in query_words]
         if in_name:
             reasons.append(f'Name matches "{" ".join(in_name)}"')
         contained = [
             i.name.lower()
             for i in recipe
-            if i.words & query_words or any(_ingredient_hit(t, i) for t in query.ingredients)
+            if i.words & query_words or any(f.hits(i) for f in required)
         ]
         if contained:
             reasons.append(f"Contains {_join(contained)}")
-        if query.category or query_words & set(tokens(cocktail.category)):
+        if query.category or query_words & set(terms(cocktail.category)):
             reasons.append(f"Category: {cocktail.category}")
-        if query_words & (set(tokens(cocktail.glass)) - {"glass"}):
+        if query_words & (set(terms(cocktail.glass)) - {"glass"}):
             reasons.append(f"Served in a {cocktail.glass.lower()}")
         if any(t.strip() for t in query.exclude_ingredients):
             excluded = [t.strip().lower() for t in query.exclude_ingredients if t.strip()]
@@ -246,8 +374,11 @@ class CocktailRecommender:
         return reasons
 
     def _similar_reasons(self, row: int, other: int, alcohol: AlcoholFilter) -> list[str]:
-        theirs = {i.key for i in self._recipes[other]}
-        shared = {i.key: i.name for i in self._recipes[row] if i.key in theirs}
+        theirs = {i.family for i in self._recipes[other]}
+        shared: dict[str, str] = {}
+        for i in self._recipes[row]:
+            if i.family in theirs:
+                shared.setdefault(i.family, i.name)
         by_rarity = sorted(shared, key=lambda key: (-self._ingredient_idf[key], key))
         reasons = [f"Shares {_join([shared[key].lower() for key in by_rarity])}"]
         if self._cocktails[row].category == self._cocktails[other].category:
@@ -274,20 +405,61 @@ def pantry_coverage(items: Iterable[str]) -> set[str]:
     return covered
 
 
+def _match_key(key: str) -> str:
+    return " ".join(terms(key))
+
+
 def _recipe_ingredients(cocktail: Cocktail) -> list[_Ingredient]:
     unique: dict[str, _Ingredient] = {}
     for ingredient in cocktail.ingredients:
         key = ingredient_key(ingredient.name)
         if key and key not in unique:
-            unique[key] = _Ingredient(key, ingredient.name.strip(), frozenset(tokens(key)))
+            words = terms(key)
+            match_key = " ".join(words)
+            unique[key] = _Ingredient(
+                key,
+                ingredient.name.strip(),
+                frozenset(words),
+                match_key,
+                FAMILIES.get(match_key, match_key or key),
+            )
     return list(unique.values())
 
 
+def _filters(values: Iterable[str]) -> list[_Filter]:
+    """Filter terms normalised once per query; blank terms are ignored."""
+    filters = []
+    for value in values:
+        key = ingredient_key(value)
+        if not key:
+            continue
+        words = terms(key)
+        match_key = " ".join(words)
+        aliases = PANTRY_ALIASES.get(key) or PANTRY_ALIASES.get(match_key, ())
+        filters.append(_Filter(key, match_key, frozenset(aliases), frozenset(words)))
+    return filters
+
+
+def _alcohol_words(words: list[str]) -> tuple[list[str], bool]:
+    """Query words without the ones asking for alcohol-free drinks, and whether any did."""
+    kept: list[str] = []
+    alcohol_free = False
+    for word in words:
+        if word in ALCOHOL_FREE_WORDS or term(word) in ALCOHOL_FREE_WORDS:
+            alcohol_free = True
+        elif kept and (kept[-1], word) in ALCOHOL_FREE_PAIRS:
+            kept.pop()
+            alcohol_free = True
+        else:
+            kept.append(word)
+    return kept, alcohol_free
+
+
 def _document_tokens(cocktail: Cocktail) -> list[str]:
-    words = tokens(cocktail.name) * NAME_WEIGHT
-    words += tokens(cocktail.category) + tokens(cocktail.glass)
+    words = terms(cocktail.name) * NAME_WEIGHT
+    words += terms(cocktail.category) + terms(cocktail.glass)
     for ingredient in cocktail.ingredients:
-        words += tokens(ingredient.name)
+        words += terms(ingredient.name)
     return words
 
 
@@ -307,15 +479,15 @@ def _tfidf(documents: list[list[str]]) -> tuple[dict[str, int], np.ndarray, np.n
 
 
 def _ingredient_matrix(recipes: list[list[_Ingredient]]) -> tuple[dict[str, float], np.ndarray]:
-    """IDF per ingredient key and the L2-normalised IDF-weighted recipe x ingredient matrix."""
-    frequency = Counter(i.key for recipe in recipes for i in recipe)
+    """IDF per ingredient family and the L2-normalised IDF-weighted recipe x family matrix."""
+    frequency = Counter(family for recipe in recipes for family in {i.family for i in recipe})
     keys = sorted(frequency)
     idf = {key: _smooth_idf(frequency[key], len(recipes)) for key in keys}
     column = {key: i for i, key in enumerate(keys)}
     matrix = np.zeros((len(recipes), len(keys)))
     for row, recipe in enumerate(recipes):
         for ingredient in recipe:
-            matrix[row, column[ingredient.key]] = idf[ingredient.key]
+            matrix[row, column[ingredient.family]] = idf[ingredient.family]
     return idf, _normalise_rows(matrix)
 
 
@@ -324,18 +496,8 @@ def _normalise_rows(matrix: np.ndarray) -> np.ndarray:
     return np.divide(matrix, norms, out=np.zeros_like(matrix), where=norms > 0)
 
 
-def _ingredient_hit(term: str, ingredient: _Ingredient) -> bool:
-    key = ingredient_key(term)
-    if not key:
-        return False
-    if key == ingredient.key or ingredient.key in PANTRY_ALIASES.get(key, ()):
-        return True
-    words = set(tokens(key))
-    return bool(words) and words <= ingredient.words
-
-
-def _filter_hits(term: str, recipe: Sequence[_Ingredient]) -> bool:
-    return any(_ingredient_hit(term, ingredient) for ingredient in recipe)
+def _filter_hits(f: _Filter, recipe: Sequence[_Ingredient]) -> bool:
+    return any(f.hits(ingredient) for ingredient in recipe)
 
 
 def _alcohol_ok(cocktail: Cocktail, alcohol: AlcoholFilter) -> bool:
