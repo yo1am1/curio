@@ -1,6 +1,6 @@
 # Curio: agentic recommendations for fashion and cocktails
 
-[![CI](https://github.com/yo1am1/curio/actions/workflows/ci.yml/badge.svg?branch=release%2Fv1.0)](https://github.com/yo1am1/curio/actions/workflows/ci.yml)
+[![CI](https://github.com/yo1am1/curio/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yo1am1/curio/actions/workflows/ci.yml)
 
 Curio recommends things through browsing pages and a tool-using assistant. Version 1.0
 has two domains, switched in the header:
