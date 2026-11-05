@@ -113,3 +113,33 @@ def test_genres_come_from_shelf_shares_strongest_first():
     assert genres_for(shelves) == ["Fantasy", "Young adult"]  # romance is under 12 %
     assert genres_for({"to-read": 10}) == []
     assert shelf_label("historical-fiction") == "historical fiction"
+
+
+def test_isbns_are_recovered_from_goodbooks_mangled_columns():
+    from clothes_recommender.books.catalog import isbn13, open_library_cover_url
+
+    # The ISBN-10 lost its leading zero. The ISBN-13 float is rounded to 12 digits
+    # (9780553804676 -> 9.78055380468e+12), so it is never used.
+    assert isbn13("439023483", "9.78043902348e+12") == "9780439023481"
+    assert isbn13("553804677", "9.78055380468e+12") == "9780553804676"
+    assert isbn13(None, "9.78055380468e+12") is None
+    assert isbn13("080442957X") == "9780804429573"  # an X check digit
+    assert isbn13(None, "9780439023481") == "9780439023481"
+    for bad in (("0804429570", None), (None, "9780439023480"), ("12345", "nan"), (None, "1e12")):
+        assert isbn13(*bad) is None, bad
+    url = open_library_cover_url("9780439023481")
+    assert url == "https://covers.openlibrary.org/b/isbn/9780439023481-M.jpg?default=false"
+    for bad in (None, "", "978043902348", "9780439023481/../x", "1234567890123"):
+        assert open_library_cover_url(bad) is None
+
+
+def test_a_catalog_prepared_without_isbns_still_loads():
+    from clothes_recommender.books.catalog import BookCatalog
+    from tests.conftest import book_frame
+
+    old = book_frame()
+    assert "isbn" not in old.columns
+    assert all(book.isbn is None for book in BookCatalog(old))
+    current = old.assign(isbn=["9780439023481", None, "not an isbn", *[None] * (len(old) - 3)])
+    books = list(BookCatalog(current))
+    assert [b.isbn for b in books[:3]] == ["9780439023481", None, None]

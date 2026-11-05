@@ -36,10 +36,12 @@ COVER = "https://images.gr-assets.com/books/1{0}m/{0}.jpg"
 NO_COVER = "https://s.gr-assets.com/assets/nophoto/book/111x148-bcc042a9c9.png"
 
 
-def _book(book_id: int, title: str, authors: str, year: str, cover: str) -> str:
+def _book(
+    book_id: int, title: str, authors: str, year: str, cover: str, isbn: str = "", isbn13: str = ""
+) -> str:
     return (
-        f'{book_id},{100 + book_id},0,0,1,,,"{authors}",{year},,"{title}",eng,4.1,1000,0,0,'
-        f"0,0,0,0,0,{cover},{cover}"
+        f'{book_id},{100 + book_id},0,0,1,{isbn},{isbn13},"{authors}",{year},,"{title}",eng,4.1,'
+        f"1000,0,0,0,0,0,0,0,{cover},{cover}"
     )
 
 
@@ -61,10 +63,13 @@ def source(tmp_path: Path) -> Path:
               "2007.0", COVER.format(1)),
         _book(2, "The Wise Man's Fear (The Kingkiller Chronicle, #2)", "Patrick Rothfuss",
               "2011.0", COVER.format(2)),
+        # ISBNs as goodbooks-10k stores them: the ISBN-10 without its leading zero, the
+        # ISBN-13 as a float rounded to 12 digits (never used).
         _book(3, "The Way of Kings (The Stormlight Archive, #1)", "Brandon Sanderson",
-              "2010.0", NO_COVER),
-        _book(4, "The Iliad", "Homer, Robert Fagles", "-750.0", COVER.format(4)),
-        _book(5, "Unloved", "Nobody Known", "", COVER.format(5)),
+              "2010.0", NO_COVER, "765326353", "9.78076532635e+12"),
+        _book(4, "The Iliad", "Homer, Robert Fagles", "-750.0", COVER.format(4), "",
+              "9.78043902348e+12"),
+        _book(5, "Unloved", "Nobody Known", "", COVER.format(5), "12345", "nan"),
     ]  # fmt: skip
     (root / "books.csv").write_text("\n".join([BOOKS_HEADER, *books]) + "\n")
     ratings = ["user_id,book_id,rating"]
@@ -101,8 +106,9 @@ def test_prepare_writes_both_files_that_the_catalog_and_recommender_load(source,
     out = tmp_path / "data"
     report = prepare(str(source), out, verify=False)
     assert (report.books, report.with_cover, report.with_pages, report.with_genres) == (5, 4, 1, 4)
+    assert report.with_isbn == 1
     frame = pd.read_parquet(out / "books.parquet")
-    assert list(frame.columns) == list(COLUMNS)
+    assert list(frame.columns) == [*COLUMNS, "isbn"]
     links = pd.read_parquet(out / "book_neighbours.parquet")
     assert list(links.columns) == list(NEIGHBOUR_COLUMNS)
 
@@ -119,6 +125,8 @@ def test_prepare_writes_both_files_that_the_catalog_and_recommender_load(source,
     iliad = catalog.get(4)
     assert (iliad.year, iliad.authors, iliad.pages) == (-750, ["Homer", "Robert Fagles"], None)
     assert catalog.get(3).image_url is None  # the "no photo" placeholder is dropped
+    assert catalog.get(3).isbn == "9780765326355"  # for the Open Library cover instead
+    assert catalog.get(4).isbn is None and catalog.get(5).isbn is None
     assert catalog.get(5).year is None and catalog.get(5).genres == []
     assert catalog.get(5).readers == 1  # the repeated rating counts once
 

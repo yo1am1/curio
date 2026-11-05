@@ -251,7 +251,17 @@ of about 9 MB together:
   bookkeeping ("to-read", "owned", "kindle", "read-in-2015"); genres come from shelf shares;
   descriptions are plain text, cut at 600 characters; only https covers on
   `images.gr-assets.com` are kept (a third of the books have Goodreads' "no photo"
-  placeholder, which is dropped). The XML archive is read member by member with a size cap,
+  placeholder, which is dropped). `isbn` is a checked ISBN-13 for 9,277 books, converted
+  from the ISBN-10 column after restoring its lost leading zeros; the ISBN-13 column is a
+  float rounded to 12 digits, so it is not used. For a book without a Goodreads cover the
+  UI shows Open Library's (`covers.openlibrary.org/b/isbn/<isbn>-M.jpg?default=false`,
+  credited "Some covers: Open Library"): it asks Open Library first with a cached HEAD
+  request, shows the placeholder on a 404, and stops asking for a minute after a network
+  error. 3,211 of the 3,332 books without a Goodreads cover have an ISBN; The Lies of Locke
+  Lamora and all 40 sampled coverless books have an Open Library cover. Open Library
+  rate-limits cover lookups by ISBN (about 100 per 5 minutes per IP), so a busy server may
+  show placeholders for a while. A `books.parquet` prepared before this column loads
+  without ISBNs and simply shows placeholders; prepare again to add them. The XML archive is read member by member with a size cap,
   and documents with a DOCTYPE are skipped.
 - `book_neighbours.parquet`: the 50 strongest readers-also-liked links per book
   (499,419 rows), so the 72 MB ratings file is not needed to serve.

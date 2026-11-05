@@ -217,6 +217,7 @@ run unless `--no-verify` is given. It writes, atomically:
 | tags | str | JSON list of up to 12 descriptive shelves ("epic fantasy"), most used first |
 | image_url | str or null | only `https://images.gr-assets.com/...`; placeholders dropped |
 | readers | int | goodbooks-10k users who rated it |
+| isbn | str or null | optional column: a checked ISBN-13 (from the zero-padded, checksummed ISBN-10), for the Open Library cover fallback; a file prepared without it loads with no ISBNs |
 
 `data/book_neighbours.parquet` (`book_id`, `neighbour_id`, `score` float32, `co_readers`
 int32): for each book its 50 strongest "readers who liked X also liked Y" links. Liked
@@ -226,8 +227,10 @@ dropped.
 
 Settings: `Settings.books_path -> data_dir / "books.parquet"`,
 `Settings.book_neighbours_path -> data_dir / "book_neighbours.parquet"`. No API key and no
-network at serving time (covers load in the browser from Goodreads). UIs credit "Book
-data: goodbooks-10k from Goodreads (CC BY-SA 4.0)".
+network at serving time for the API (covers load in the browser from Goodreads; for a book
+without one the UI asks Open Library by ISBN and shows its placeholder when there is no
+cover). UIs credit "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.0)" and "Some
+covers: Open Library".
 
 ### Python interfaces (`clothes_recommender.books`)
 

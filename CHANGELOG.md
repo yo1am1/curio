@@ -145,6 +145,14 @@ All notable changes to Curio are recorded here. The format follows
   carry them through the client-held state, bounded (300 characters, four notes). They are
   client-supplied, so they are display-only: marked `carried`, never sent to the model and
   never grounding evidence.
+- Book covers: a third of the books (3,332, The Lies of Locke Lamora among them) had no
+  cover. `prepare_books` now keeps a checked ISBN-13 (`isbn`, 9,277 books; goodbooks-10k's
+  ISBN-10 lost its leading zeros and its ISBN-13 is a rounded float, so the ISBN-10 is
+  padded, checksummed and converted), and the UI shows the Open Library cover for a book
+  without a Goodreads one, after a cached HEAD request, so a missing cover (404) or a
+  network error shows the placeholder, never a broken image. A `books.parquet` prepared
+  without the column still loads (no ISBNs). Credited "Some covers: Open Library" in the UI
+  and the README. Re-run `scripts.prepare_books` to add the ISBNs.
 
 ### Security
 
@@ -159,8 +167,9 @@ All notable changes to Curio are recorded here. The format follows
   the partial photo index has few men's (13) and children's (3) shoes.
 
 - Book genres and moods come from Goodreads reader shelves (crowd labels). A third of the
-  books have no cover in the dataset (141 of the 800 most popular) and 9 % no page count; a
-  length filter leaves those out. An Open Library cover fallback by ISBN is planned.
+  books have no Goodreads cover in the dataset; the UI falls back to Open Library by ISBN,
+  except for 121 of them without a usable ISBN and any Open Library does not have. 9 % have
+  no page count; a length filter leaves those out.
 - The Docker `demo` and `fashion` profiles still publish ports 8000 and 8501 on every host
   interface (Docker's default); only the uv quick start is local-only.
 - Book grounding does not check single-word titles shorter than six letters ("It", "Dune"),

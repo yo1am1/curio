@@ -31,6 +31,9 @@ class Book(BaseModel):
     tags: list[str] = Field(default_factory=list)  # descriptive reader shelves, most used first
     # Only https covers on images.gr-assets.com are kept; placeholders become None.
     image_url: str | None = None
+    # A checked ISBN-13, for the Open Library cover when Goodreads has none; None in
+    # catalogs prepared before ISBNs were kept.
+    isbn: str | None = Field(default=None, pattern=r"^97[89]\d{10}$")
     source_url: str  # the book's Goodreads page
     readers: int = Field(default=0, ge=0)  # goodbooks-10k readers who rated it
 

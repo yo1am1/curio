@@ -40,7 +40,12 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from clothes_recommender.books.catalog import COLUMNS, NEIGHBOUR_COLUMNS, trusted_cover_url
+from clothes_recommender.books.catalog import (
+    NEIGHBOUR_COLUMNS,
+    OUTPUT_COLUMNS,
+    isbn13,
+    trusted_cover_url,
+)
 from clothes_recommender.books.taxonomy import MAX_TAGS, genres_for, is_descriptive, shelf_label
 from clothes_recommender.config import get_settings
 
@@ -197,6 +202,7 @@ def book_records(books: pd.DataFrame) -> list[dict]:
                 "average_rating": float(row["average_rating"]),
                 "ratings_count": int(row["ratings_count"]),
                 "image_url": trusted_cover_url(row["image_url"]),
+                "isbn": isbn13(row.get("isbn"), row.get("isbn13")),
             }
         )
     return records
@@ -331,11 +337,11 @@ def to_frame(records: list[dict]) -> pd.DataFrame:
             }
             for record in records
         ],
-        columns=list(COLUMNS),
+        columns=list(OUTPUT_COLUMNS),
     )
     for column in ("year", "pages"):
         frame[column] = frame[column].astype("Int64")
-    for column in ("series", "series_position", "language", "image_url"):
+    for column in ("series", "series_position", "language", "image_url", "isbn"):
         frame[column] = frame[column].astype(object).where(frame[column].notna(), None)
     return frame.sort_values("book_id", ignore_index=True)
 
@@ -359,6 +365,7 @@ def write_parquet(frame: pd.DataFrame, path: Path) -> None:
 class PrepareReport:
     books: int = 0
     with_cover: int = 0
+    with_isbn: int = 0
     with_pages: int = 0
     with_genres: int = 0
     ratings: int = 0
@@ -367,7 +374,8 @@ class PrepareReport:
 
     def summary(self, data_dir: Path) -> str:
         return (
-            f"Wrote {self.books} books ({self.with_cover} with covers, {self.with_pages} with "
+            f"Wrote {self.books} books ({self.with_cover} with covers, {self.with_isbn} with "
+            f"ISBNs, {self.with_pages} with "
             f"page counts, {self.with_genres} with genres) and {self.neighbour_rows} "
             f"readers-also-liked links from {self.ratings:,} ratings to {data_dir} "
             f"in {self.seconds:.0f} s."
@@ -389,7 +397,8 @@ def prepare(
             local[file.path] = fetch(
                 source, file, Path(folder) / Path(file.path).name, verify=verify
             )
-        books = pd.read_csv(local[BOOKS_CSV.path])
+        # ISBNs as text: pandas would read them as numbers and lose leading zeros.
+        books = pd.read_csv(local[BOOKS_CSV.path], dtype={"isbn": str, "isbn13": str})
         _require(books, BOOKS_CSV, ("book_id", "goodreads_book_id", "title", "authors"))
         records = book_records(books)
         shelves = shelves_by_book(
@@ -422,6 +431,7 @@ def prepare(
     write_parquet(links, data_dir / NEIGHBOURS_OUTPUT)
     report.books = len(records)
     report.with_cover = sum(r["image_url"] is not None for r in records)
+    report.with_isbn = sum(r["isbn"] is not None for r in records)
     report.with_pages = sum(r["pages"] is not None for r in records)
     report.with_genres = sum(bool(r["genres"]) for r in records)
     report.ratings = len(ratings)

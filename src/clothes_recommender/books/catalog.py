@@ -33,7 +33,14 @@ COLUMNS = (
     "image_url",
     "readers",
 )
+# Written by newer prepare runs; a catalog prepared before them simply has no ISBNs.
+OPTIONAL_COLUMNS = ("isbn",)
+OUTPUT_COLUMNS = (*COLUMNS, *OPTIONAL_COLUMNS)
 NEIGHBOUR_COLUMNS = ("book_id", "neighbour_id", "score", "co_readers")
+# Open Library's cover by ISBN; "default=false" makes a missing cover a 404, not a blank image.
+OPEN_LIBRARY_COVER = "https://covers.openlibrary.org/b/isbn/{}-M.jpg?default=false"
+OPEN_LIBRARY_BOOK = "https://openlibrary.org/isbn/{}"
+_ISBN13 = re.compile(r"97[89]\d{10}")
 
 _WHITESPACE = re.compile(r"\s+")
 _PUNCTUATION = re.compile(r"[^\w\s]")
@@ -77,12 +84,49 @@ def trusted_cover_url(url: object) -> str | None:
     return url
 
 
+def isbn13(isbn: object = None, isbn13_text: object = None) -> str | None:
+    """A valid ISBN-13 from goodbooks-10k's mangled columns, or None.
+
+    books.csv stores the ISBN-10 as a number, so leading zeros are lost ("439023483"); it is
+    padded, its check digit verified and converted to ISBN-13. The ISBN-13 column is a float
+    rounded to 12 significant digits ("9.78055380468e+12" for 9780553804676), so it cannot
+    be trusted and only an exact, checked 13-digit value is used.
+    """
+    ten = isbn.strip().upper().zfill(10) if isinstance(isbn, str) else ""
+    if re.fullmatch(r"\d{9}[\dX]", ten) and _isbn10_valid(ten):
+        return _with_check_digit("978" + ten[:9])
+    text = isbn13_text.strip() if isinstance(isbn13_text, str) else ""
+    if re.fullmatch(r"97[89]\d{10}", text) and _with_check_digit(text[:12]) == text:
+        return text
+    return None
+
+
+def _isbn10_valid(ten: str) -> bool:
+    values = [10 if c == "X" else int(c) for c in ten]
+    return "X" not in ten[:9] and sum((10 - i) * v for i, v in enumerate(values)) % 11 == 0
+
+
+def _with_check_digit(twelve: str) -> str:
+    total = sum(int(c) * (1 if i % 2 == 0 else 3) for i, c in enumerate(twelve))
+    return twelve + str((10 - total % 10) % 10)
+
+
+def open_library_cover_url(isbn: str | None) -> str | None:
+    """The Open Library cover URL for a valid ISBN-13 (built here, never read from data)."""
+    if not isinstance(isbn, str) or not _ISBN13.fullmatch(isbn):
+        return None
+    return OPEN_LIBRARY_COVER.format(isbn)
+
+
 class BookCatalog:
     def __init__(self, frame: pd.DataFrame) -> None:
         missing = [column for column in COLUMNS if column not in frame.columns]
         if missing:
             raise ValueError(f"Book catalog is missing columns: {', '.join(missing)}")
-        books = [_book(record) for record in frame[list(COLUMNS)].to_dict("records")]
+        frame = frame.assign(
+            **{column: None for column in OPTIONAL_COLUMNS if column not in frame.columns}
+        )
+        books = [_book(record) for record in frame[list(OUTPUT_COLUMNS)].to_dict("records")]
         self._by_id: dict[int, Book] = {}
         for book in sorted(books, key=lambda b: b.book_id):
             if book.book_id in self._by_id:
@@ -165,6 +209,7 @@ def _book(record: dict) -> Book:
         genres=_list(record["genres"]),
         tags=_list(record["tags"]),
         image_url=trusted_cover_url(record["image_url"]),
+        isbn=isbn13(None, _text(record["isbn"])),
         source_url=GOODREADS_BOOK_URL.format(int(record["goodreads_book_id"])),
         readers=_int(record["readers"]) or 0,
     )

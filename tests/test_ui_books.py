@@ -121,10 +121,10 @@ def api(monkeypatch):
         if path == "/books/1":
             return httpx.Response(200, json=WIND)
         if path == "/books/3":
-            return httpx.Response(200, json=KINGS)
+            return httpx.Response(200, json=state.get("book_3", KINGS))
         if path == "/books/1/similar":
             return httpx.Response(200, json=[hit(KINGS, "960 readers who liked it")])
-        if path == "/books/1/by-author":
+        if path in ("/books/1/by-author", "/books/3/similar", "/books/3/by-author"):
             return httpx.Response(200, json=[])
         if path == "/chat/stream":
             return httpx.Response(200, text=ndjson(state["replies"].pop(0)))
@@ -176,7 +176,7 @@ def test_books_is_the_third_domain_in_the_switch(api):
     assert app.chat_input[0].proto.placeholder == "Describe a book or ask a follow-up…"
     assert app.caption[-1].value == (
         "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.0) · 10,000 books · "
-        "Ratings are Goodreads averages, not Curio's."
+        "Ratings are Goodreads averages, not Curio's. · Some covers: Open Library"
     )
     assert app.toggle(key="session_ask_shortlist").label == "Ask before adding to my reading list"
 
@@ -302,6 +302,79 @@ def test_book_dialog_shows_facts_related_books_saves_and_hands_off(api):
     assert app.session_state["chat_queued_books"] == (
         "Tell me about The Name of the Wind (book 1)."
     )
+
+
+# --- Covers from Open Library --------------------------------------------------------------
+
+ISBN = "9780765326355"
+OPEN_LIBRARY = f"https://covers.openlibrary.org/b/isbn/{ISBN}-M.jpg?default=false"
+
+
+@pytest.fixture
+def covers(monkeypatch):
+    """Open Library answers (`state["status"]`: a status code or an exception) and the URLs
+    asked; caches and the outage pause are reset."""
+    asked: list[str] = []
+    state: dict = {"status": 200}
+
+    def head(url, **kwargs):
+        asked.append(url)
+        if isinstance(state["status"], Exception):
+            raise state["status"]
+        content = {"content-type": "image/jpeg"} if state["status"] == 200 else {}
+        return httpx.Response(state["status"], headers=content, request=httpx.Request("HEAD", url))
+
+    monkeypatch.setattr(httpx, "head", head)
+    monkeypatch.setattr(ui, "_cover_outage_until", 0.0)
+    ui._open_library_cover.clear()
+    yield asked, state
+    ui._open_library_cover.clear()
+
+
+def images(app) -> list[str]:
+    return [img.url for element in app.get("image") for img in element.proto.imgs]
+
+
+def test_a_book_without_a_goodreads_cover_shows_the_open_library_one(api, covers):
+    _, state = api
+    asked, answer = covers
+    state["book_3"] = {**KINGS, "isbn": ISBN}
+    app = book_app("book_details(3)").run()
+    assert not app.exception
+    assert images(app) == [OPEN_LIBRARY] and asked == [OPEN_LIBRARY]
+    credit = f"Cover: [Open Library](https://openlibrary.org/isbn/{ISBN})"
+    assert any(c.value == credit for c in app.caption)
+    # Open Library has none (404): the placeholder with the title, never a broken image.
+    ui._open_library_cover.clear()
+    answer["status"] = 404
+    app = book_app("book_details(3)").run()
+    assert not app.exception and images(app) == []
+    assert any(c.value == "The Way of Kings" for c in app.caption)  # the placeholder
+    # Without an ISBN (a catalog prepared before ISBNs were kept) nothing is asked.
+    state["book_3"] = KINGS
+    asked.clear()
+    app = book_app("book_details(3)").run()
+    assert images(app) == [] and asked == []
+
+
+def test_open_library_covers_fall_back_to_the_placeholder(covers):
+    asked, state = covers
+    kings = {"title": "The Way of Kings", "image_url": None, "isbn": ISBN}
+    assert ui.open_library_cover(kings) == OPEN_LIBRARY
+    assert ui.open_library_cover(kings) == OPEN_LIBRARY and asked == [OPEN_LIBRARY]  # cached
+    ui._open_library_cover.clear()
+    state["status"] = 404  # Open Library has no cover: the placeholder
+    assert ui.open_library_cover(kings) is None
+    # No checked ISBN, no request: the URL is never taken from the API.
+    for isbn in (None, "", "0765326353", "9780765326355/../x"):
+        assert ui.open_library_cover({**kings, "isbn": isbn}) is None
+    assert len(asked) == 2
+    # A network failure is not cached and pauses the lookups.
+    ui._open_library_cover.clear()
+    state["status"] = httpx.ConnectError("offline")
+    assert ui.open_library_cover(kings) is None
+    state["status"] = 200
+    assert ui.open_library_cover(kings) is None and len(asked) == 3
 
 
 # --- Book chat -----------------------------------------------------------------------------

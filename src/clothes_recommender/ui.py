@@ -6,6 +6,7 @@ Run with: uv run streamlit run src/clothes_recommender/ui.py
 import json
 import math
 import re
+import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +14,7 @@ from pathlib import Path
 import httpx
 import streamlit as st
 
+from clothes_recommender.books.catalog import OPEN_LIBRARY_BOOK, open_library_cover_url
 from clothes_recommender.config import get_settings
 
 GRID_COLUMNS = 3
@@ -949,6 +951,7 @@ LLM_HINT = "set LLM_MODEL (and LLM_API_KEY / LLM_BASE_URL) in .env, then restart
 RECIPE_CREDIT = "Recipe data: TheCocktailDB · Please drink responsibly."
 BOOK_SOURCE = "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.0)"
 BOOK_RATINGS = "Ratings are Goodreads averages, not Curio's."
+COVER_CREDIT = "Some covers: Open Library"
 BOOK_CREDIT = f"{BOOK_SOURCE} · {BOOK_RATINGS}"
 
 
@@ -2741,8 +2744,43 @@ def book_index() -> list[dict]:
     return call_api("GET", "/books/index") or []
 
 
+# Open Library answers a missing cover with a 404 ("default=false"); the browser would show a
+# broken image, so the UI asks first. Answers are cached; a network failure is not, and
+# pauses the lookups for a minute so a page never waits on every cover.
+COVER_TIMEOUT = 3.0
+COVER_OUTAGE_SECONDS = 60.0
+_cover_outage_until = 0.0
+
+
+@st.cache_data(ttl=7 * 24 * 3600, max_entries=5000, show_spinner=False)
+def _open_library_cover(url: str) -> bool:
+    """Whether Open Library has the cover at `url`; raises (uncached) when it cannot say."""
+    response = httpx.head(url, timeout=COVER_TIMEOUT, follow_redirects=True)
+    if response.status_code == 404:
+        return False
+    response.raise_for_status()
+    return response.headers.get("content-type", "").startswith("image/")
+
+
+def open_library_cover(book: dict) -> str | None:
+    """The Open Library cover for a book without a Goodreads one, when Open Library has it.
+
+    The URL is built from the book's checked ISBN-13, never taken from the API.
+    """
+    global _cover_outage_until
+    url = open_library_cover_url(book.get("isbn"))
+    if url is None or time.monotonic() < _cover_outage_until:
+        return None
+    try:
+        return url if _open_library_cover(url) else None
+    except httpx.HTTPError:
+        _cover_outage_until = time.monotonic() + COVER_OUTAGE_SECONDS
+        return None
+
+
 def book_cover(book: dict, width: int | str = "stretch", *, key: str = "") -> None:
-    """The browser loads covers straight from Goodreads; only https is shown.
+    """The browser loads covers straight from Goodreads, or from Open Library by ISBN when
+    Goodreads has none; only https is shown.
 
     Full-width slots without a cover get a `missing_photo_<key>` placeholder with the title.
     """
@@ -2752,6 +2790,10 @@ def book_cover(book: dict, width: int | str = "stretch", *, key: str = "") -> No
             url = _MEDIUM_COVER.sub(r"\1l/", url)
         # The caption names the cover for screen readers; ui.css hides it visually.
         st.image(url, caption=book["title"], width=width)
+    elif cover := open_library_cover(book):
+        st.image(cover, caption=book["title"], width=width)
+        if key.startswith("detail_"):
+            st.caption(f"Cover: [Open Library]({OPEN_LIBRARY_BOOK.format(book['isbn'])})")
     elif key:
         with st.container(key=f"missing_photo_{key}"):
             st.caption(plain(book["title"]), text_alignment="center")
@@ -3129,7 +3171,7 @@ def cocktail_note(health: dict) -> str:
 def book_note(health: dict) -> str:
     count = health.get("book_count")
     books = f"{count:,} books · " if count else ""
-    return f"{BOOK_SOURCE} · {books}{BOOK_RATINGS}"
+    return f"{BOOK_SOURCE} · {books}{BOOK_RATINGS} · {COVER_CREDIT}"
 
 
 # In display order: the first domain the server serves is the default.

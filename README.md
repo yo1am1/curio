@@ -210,6 +210,10 @@ and is not covered by that licence:
   not part of this repository; if you share them, credit goodbooks-10k and share them under
   CC BY-SA 4.0. The book pages credit "Book data: goodbooks-10k from Goodreads (CC BY-SA
   4.0)" and link each book to Goodreads.
+- **Book covers missing from Goodreads** come from the [Open Library Covers
+  API](https://openlibrary.org/dev/docs/api/covers) by ISBN, loaded by your browser; the
+  book pages credit "Some covers: Open Library" and the book dialog links each such cover
+  to its Open Library page. The covers remain their publishers' material.
 - **Cocktail data**: recipes and photos come from [TheCocktailDB](https://www.thecocktaildb.com/).
   `prepare_cocktails` reads them from a CSV in
   [yo1am1/cocktail_advisor](https://github.com/yo1am1/cocktail_advisor), whose code is

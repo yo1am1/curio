@@ -115,6 +115,13 @@ def test_one_author_or_series_cannot_fill_the_results(api):
     assert len([h for h in _search(api, "harry potter", 8) if h["book"]["series"]]) == 8
 
 
+def test_books_without_a_goodreads_cover_carry_an_isbn_for_open_library(api):
+    hits = api.post("/books/search", json={"query": "the lies of locke lamora", "top_k": 1})
+    lamora = hits.json()[0]["book"]
+    assert lamora["title"] == "The Lies of Locke Lamora"
+    assert lamora["image_url"] is None and lamora["isbn"] == "9780553804676"
+
+
 def test_readers_also_liked_because_and_by_author(api):
     similar = api.get("/books/192/similar", params={"other_authors_only": True}).json()
     assert similar and all(h["book"]["authors"][0] != "Patrick Rothfuss" for h in similar)
