@@ -101,7 +101,7 @@ def test_literary_lore_leads_for_its_author(pairer):
         "Great Gatsby → Gin Rickey (Gin, Lime, Soda Water)"
     )
     # A second theme the recipe also pours is cited.
-    assert "Also suits Classics and Victorian England: Gin" in result.pairings[0].reasons
+    assert "Also suits Classics: Gin" in result.pairings[0].reasons
 
 
 def test_reasons_cite_only_ingredients_of_the_style(pairer):

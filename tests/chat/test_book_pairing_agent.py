@@ -219,7 +219,7 @@ def test_an_invented_drink_is_flagged_and_falls_back_to_the_paired_drinks(agent)
     }
     assert [s.name for s in reply.steps][-2:] == ["Grounding check", "Self-correction"]
     assert reply.text == (
-        "The Big Sleep leans Mystery and noir and Classics and Victorian England. To pair:\n"
+        "The Big Sleep leans Mystery and noir and Classics. To pair:\n"
         "- Manhattan · contains alcohol\n- Sazerac · contains alcohol\n"
         "- Martini · contains alcohol\n\n"
         "Please drink responsibly. Ingredient filters only cover listed recipe ingredients; "

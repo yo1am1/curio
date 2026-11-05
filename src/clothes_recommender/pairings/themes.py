@@ -150,7 +150,7 @@ THRILLER = Theme(
 )
 CLASSICS = Theme(
     id="classics",
-    label="Classics and Victorian England",
+    label="Classics",
     style="a drawing-room classic: gin, sherry or port",
     soft_style="a drawing-room cup of tea",
     genres=("Classics", "Plays"),
