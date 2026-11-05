@@ -169,9 +169,9 @@ Cocktails use an in-memory TF-IDF and ingredient-overlap recommender, and books 
 in-memory TF-IDF search plus item-item collaborative filtering precomputed from goodbooks-10k
 ratings (numpy and scipy only); neither needs a model or a network call to serve.
 
-The fashion screenshots use 5,000 historical customers and a partial photo index
-covering 3,586 of 14,300 catalog products, prepared from the public Hugging Face mirror
-of the H&M data. Recommendations for unphotographed products show a placeholder. Prices are approximate historical values;
+The fashion screenshots use 5,000 historical customers and a photo index covering 14,280
+of the 14,300 catalog products (the mirror lacks 20 photos), prepared from the public
+Hugging Face mirror of the H&M data. A product without a photo shows a placeholder. Prices are approximate historical values;
 there is no live stock or checkout.
 
 On the 819-customer holdout, MAP@12 was 0.0302 versus 0.0248 for buy-again;

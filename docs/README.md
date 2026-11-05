@@ -12,7 +12,7 @@
 
 The technical guide describes version 1.0: fashion and cocktails. README screenshots
 show the current Curio UI; historical development records retain earlier captures.
-Fashion uses historical research data, approximate prices and a partial photo index.
+Fashion uses historical research data, approximate prices and a photo index covering 14,280 of 14,300 products.
 Cocktails use 425 recipes from TheCocktailDB, whose data terms are TheCocktailDB's own.
 Books use goodbooks-10k (CC BY-SA 4.0, collected from Goodreads).
 No hosted demo is available yet.

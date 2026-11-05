@@ -26,9 +26,9 @@ def test_fashion_feed_shows_personal_picks_with_evidence(ui):
     expect(ui.page.get_by_role("heading", name="For you")).to_be_visible()
     cards = ui.page.locator('[class*="st-key-product_card_recommendations_"]')
     expect(cards).to_have_count(12)
-    # Purchase-based picks are often unphotographed (the photo index covers about a quarter
-    # of the catalog); those cards show a placeholder rather than a broken image.
-    visible_photos(ui, 0)
+    # The photo index covers 14,280 of 14,300 products, so nearly every pick has a photo; a
+    # product without one shows a placeholder rather than a broken image.
+    visible_photos(ui, 10)
     ui.shot("01-fashion-feed")
     ui.click(ui.page.get_by_role("button", name="How picks are chosen"))
     for strategy in ("Similar shoppers", "Purchase connections", "Visual style"):

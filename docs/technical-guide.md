@@ -95,9 +95,9 @@ On the real sample a plan takes about 0.6-1 s with CLIP on CPU. Results on the r
 look like outfits: a women's summer wedding under €80 is River Wrap Dress €29.99, Paloma
 heels €12.99, Sylvia Cross Bag €17.99 and Class Ziggy hoop earrings €7.99 (€68.96); a men's
 is a white linen shirt, slim suit trousers and the slim blazer bought with them, plus
-loafers (€73.96). The photo index covers a quarter of the catalog and has few men's (13)
-and children's (3) shoes, so those slots have little choice or fall back to another shoe
-type.
+loafers (€73.96). The photo index covers 14,280 of the 14,300 products, but the sample has few men's (26)
+and children's (46) shoes, so those slots have less choice and may fall back to another
+shoe type.
 
 ## Cocktail engine
 
@@ -746,7 +746,7 @@ uv run python -m scripts.take_screenshots --example 5 --skip-chat --out data/scr
 and checks layout invariants on the way. The curated README images
 (`docs/screenshots/curio-*.jpg`) come from `scripts.capture_readme`, which drives the
 running stack through the same flows; its docstring lists the commands. The current images
-use the H&M sample prepared from the Hugging Face mirror (3,586 photographed products) and
+use the H&M sample prepared from the Hugging Face mirror (14,280 of 14,300 products photographed) and
 the real recipe catalog; chat replies come from the scripted stub, as the README says.
 
 ### End-to-end tests

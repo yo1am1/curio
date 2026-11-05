@@ -10,7 +10,7 @@ the scripted stub in tests/e2e/llm_stub.py was used:
     uv run python -m scripts.capture_readme --out docs/screenshots
 
 `--only books` refreshes just the book screenshots, `--only outfit` the outfit builder.
-Example customer 3 is used because all of its default picks have photos in the partial index.
+Example customer 3 is used for the feed; its default picks all have photos.
 """
 
 import argparse

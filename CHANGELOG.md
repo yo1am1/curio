@@ -6,6 +6,17 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Full photo index** (portfolio item 10): `scripts.fetch_photos` without `--limit` and an
+  incremental `scripts.build_index` now cover 14,280 of the 14,300 sampled products (the
+  pinned mirror lacks 20 photos), up from 3,586; 368 MB of downsized photos, about 25 minutes
+  to fetch and 7 minutes to embed on 4 CPUs. Re-running `scripts.evaluate` on the full index
+  doubles the visual-style recommender's catalog coverage (16.2% to 32.4%) while its holdout
+  MAP@12 falls from 0.0077 to 0.0052, as it now ranks four times as many candidates; the
+  other strategies are unchanged. Men's and children's shoes with photos rose from 13 and 3
+  to 26 and 46, so outfit slots have more choice.
+
 ## [1.1.0] - 2026-11-05
 
 ### Added
