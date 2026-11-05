@@ -212,6 +212,93 @@ def test_health_without_cocktail_fields_keeps_the_fashion_app(api):
     assert app.title[0].value == "Find your next favorite."
 
 
+COCKTAILS_ONLY = {
+    **HEALTH,
+    "indexed_products": 0,
+    "catalog_products": 0,
+    "chat_enabled": False,
+    "fashion_enabled": False,
+    "llm_configured": False,
+    "domains": [
+        {
+            "id": "fashion",
+            "label": "Fashion",
+            "enabled": False,
+            "chat_enabled": False,
+            "item_count": 0,
+            "hint": "The fashion catalog is not prepared on this server: see the guide.",
+        },
+        {
+            "id": "cocktails",
+            "label": "Cocktails",
+            "enabled": True,
+            "chat_enabled": False,
+            "item_count": 425,
+            "hint": "Chat is disabled: set LLM_MODEL in .env.",
+        },
+    ],
+}
+FASHION_PATHS = ("/demo/customers", "/products", "/sections", "/users", "/search", "/evaluation")
+
+
+@pytest.mark.parametrize("stored", [None, "fashion"])
+def test_without_fashion_the_app_opens_on_cocktails(api, stored):
+    calls, state = api
+    state["health"] = COCKTAILS_ONLY
+    app = AppTest.from_function(run_main, default_timeout=10)
+    if stored:
+        app.session_state["domain"] = stored  # e.g. remembered from before fashion went away
+    app.run()
+    assert not app.exception
+    assert app.session_state["domain"] == "cocktails"
+    switch = app.segmented_control(key="domain_switch")
+    assert (switch.value, switch.options, switch.disabled) == ("cocktails", ["Cocktails"], True)
+    hint = next(c for c in app.caption if c.value == "Fashion is not available")
+    assert "fashion catalog is not prepared" in hint.proto.help
+    assert app.title[0].value == "Mix something new tonight."
+    # Chat says how to enable it instead of failing, and nothing asks for fashion data.
+    assert any("search recipes on the Cocktails page" in info.value for info in app.info)
+    assert any("LLM_MODEL" in caption.value for caption in app.caption)
+    assert not app.chat_input
+    assert not any(path.startswith(FASHION_PATHS) for path in paths(calls))
+    assert app.caption[-1].value.startswith("Recipe data: TheCocktailDB · 425 recipes")
+
+
+def test_cocktails_page_works_without_fashion(api):
+    calls, state = api
+    state["health"] = COCKTAILS_ONLY
+    app = cocktail_app("cocktails_page()").run()
+    app.text_input(key="cocktail_query").input("mint").run()
+    assert not app.exception
+    assert "/cocktails/search" in paths(calls)
+    assert not any(path.startswith(FASHION_PATHS) for path in paths(calls))
+
+
+def test_without_any_domain_the_app_explains_how_to_start(api):
+    calls, state = api
+    domains = [
+        {**d, "enabled": False, "hint": f"Prepare {d['id']}."} for d in COCKTAILS_ONLY["domains"]
+    ]
+    state["health"] = {**COCKTAILS_ONLY, "cocktails_enabled": False, "domains": domains}
+    app = AppTest.from_function(run_main, default_timeout=10).run()
+    assert not app.exception
+    assert app.title[0].value == "Almost ready."
+    assert app.code[0].value == ui.QUICK_START
+    assert any("Prepare fashion." in m.value for m in app.markdown)
+    assert any("Prepare cocktails." in m.value for m in app.markdown)
+    assert paths(calls) == ["/health"]
+
+
+def test_served_domains_reads_new_and_legacy_health():
+    assert ui.available_domains(COCKTAILS_ONLY) == ["cocktails"]
+    assert ui.available_domains({**HEALTH}) == ["fashion", "cocktails"]
+    legacy = ui.served_domains({"status": "ok", "chat_enabled": True})
+    assert legacy["fashion"]["chat_enabled"] is True
+    assert legacy["cocktails"] == {"id": "cocktails", "enabled": False, "chat_enabled": None}
+    unknown = {"domains": [{"id": "books", "enabled": True}, *COCKTAILS_ONLY["domains"]]}
+    assert ui.available_domains(unknown) == ["cocktails"]  # a newer server's extra domain
+
+
 def run_navigation():
     import streamlit as st
 
@@ -221,9 +308,10 @@ def run_navigation():
         return [(page.title, page.url_path, page.visibility) for page in pages]
 
     st.session_state["pages"] = {
-        "fashion": describe(ui.domain_pages("fashion", cocktails_enabled=True)),
-        "cocktails": describe(ui.domain_pages("cocktails", cocktails_enabled=True)),
-        "disabled": describe(ui.domain_pages("fashion", cocktails_enabled=False)),
+        "fashion": describe(ui.domain_pages("fashion", ["fashion", "cocktails"])),
+        "cocktails": describe(ui.domain_pages("cocktails", ["fashion", "cocktails"])),
+        "disabled": describe(ui.domain_pages("fashion", ["fashion"])),
+        "cocktails_only": describe(ui.domain_pages("cocktails", ["cocktails"])),
     }
 
 
@@ -247,6 +335,8 @@ def test_navigation_shows_each_domains_pages_and_keeps_every_route():
     hidden = {path for _, path, shown in pages["fashion"] if shown == "hidden"}
     assert hidden == {"quality", "assistant", "cocktails"}
     assert "cocktails" not in {path for _, path, _ in pages["disabled"]}
+    # Without fashion data, no fashion route is registered: deep links fall back to home.
+    assert {path for _, path, _ in pages["cocktails_only"]} == {"", "cocktails", "assistant"}
     assert all(ui.PAGE_DOMAINS[path] == "fashion" for path in ("fashion", "discover", "quality"))
 
 
@@ -421,7 +511,7 @@ def test_starter_prompt_sends_a_cocktail_message(api):
     state["replies"] = [reply()]
     app = cocktail_app("agent_home()").run()
     starters = [b.label for b in app.button if b.key.startswith("chat_starter_home_")]
-    assert starters == list(ui.DOMAIN_COPY["cocktails"].starters)
+    assert starters == list(ui.DOMAIN_VIEWS["cocktails"].copy.starters)
     app.button(key="chat_starter_home_1").click().run()
     assert not app.exception
     assert bodies(calls, "/chat/stream")[-1]["message"] == "Alcohol-free drinks"

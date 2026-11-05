@@ -6,7 +6,7 @@ Run with: uv run streamlit run src/clothes_recommender/ui.py
 import json
 import math
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -929,40 +929,19 @@ def discovery_page() -> None:
 
 # --- Domains -------------------------------------------------------------------------------
 
+# Each domain's client-side wiring (label, state keys, copy, pages, session panel, chat
+# context) is one `DomainView` entry in `DOMAIN_VIEWS`, defined with the app shell below.
+# Which domains a server actually serves comes from /health (`domains`).
 FASHION = "fashion"
 COCKTAILS = "cocktails"
-DOMAIN_LABELS = {
-    FASHION: ":material/checkroom: Fashion",
-    COCKTAILS: ":material/local_bar: Cocktails",
-}
-# Client-held state per domain; the fashion keys predate the cocktail domain and stay as they are.
-STATE_KEYS = {
-    FASHION: {
-        "history": "chat_history",
-        "shortlist": "shortlist",
-        "memory": "preferences",
-        "queued": "chat_queued",
-        "decision": "chat_decision",
-    },
-    COCKTAILS: {
-        "history": "chat_history_cocktails",
-        "shortlist": "cocktail_shortlist",
-        "memory": "cocktail_preferences",
-        "queued": "chat_queued_cocktails",
-        "decision": "chat_decision_cocktails",
-    },
-}
-# Pages that belong to one domain; a deep link to one of them selects that domain.
-PAGE_DOMAINS = {
-    "fashion": FASHION,
-    "discover": FASHION,
-    "connections": FASHION,
-    "quality": FASHION,
-    "cocktails": COCKTAILS,
-}
 COCKTAILS_UNAVAILABLE = (
     "Cocktail recipes are not prepared on this server yet (run scripts.prepare_cocktails)."
 )
+FASHION_UNAVAILABLE = (
+    "The H&M fashion data is not prepared on this server (see the technical guide's "
+    "fashion data steps)."
+)
+LLM_HINT = "set LLM_MODEL (and LLM_API_KEY / LLM_BASE_URL) in .env, then restart the API."
 RECIPE_CREDIT = "Recipe data: TheCocktailDB · Please drink responsibly."
 
 
@@ -982,67 +961,74 @@ class DomainCopy:
     ask_memory: str
 
 
-DOMAIN_COPY = {
-    FASHION: DomainCopy(
-        title="Find your next favorite.",
-        intro=(
-            "Tell Curio your style, occasion or budget. It searches, compares and asks before "
-            "changing anything you own."
-        ),
-        placeholder="Describe a piece or ask a follow-up…",
-        welcome=(
-            "Tell me what you're looking for, including a colour, occasion or budget. "
-            "Try **white sneakers under €40**."
-        ),
-        starters=("White sneakers under €40", "A linen shirt for summer", "Warm knitwear"),
-        unavailable=(
-            "The assistant is currently unavailable. "
-            "You can still discover pieces by description or photo."
-        ),
-        popup_caption="Find pieces. Refine by colour, style or budget.",
-        popup_note="H&M research catalog · Prices are approximate. Current stock is unknown.",
-        memory_hint="Nothing yet. Say “I always shop menswear” and Curio will ask to remember.",
-        shortlist_hint="Save pieces from answers, or ask Curio to shortlist them.",
-        compare_prompt="Compare the pieces in my shortlist and tell me which to pick.",
-        ask_memory="Ask before remembering preferences",
+FASHION_COPY = DomainCopy(
+    title="Find your next favorite.",
+    intro=(
+        "Tell Curio your style, occasion or budget. It searches, compares and asks before "
+        "changing anything you own."
     ),
-    COCKTAILS: DomainCopy(
-        title="Mix something new tonight.",
-        intro=(
-            "Tell Curio a flavour, a mood or what's in your cupboard. It finds recipes, "
-            "explains them and asks before changing anything you keep."
-        ),
-        placeholder="Describe a drink or ask a follow-up…",
-        welcome=(
-            "Tell me a flavour, an ingredient you have, or whether you'd like it alcohol-free. "
-            "Try **something fresh with lime and mint**."
-        ),
-        starters=(
-            "Something fresh with lime and mint",
-            "Alcohol-free drinks",
-            "What can I make with gin and tonic?",
-        ),
-        unavailable=(
-            "The cocktail assistant is currently unavailable. "
-            "You can still search recipes on the Cocktails page."
-        ),
-        popup_caption="Find drinks. Refine by ingredient, glass or alcohol.",
-        popup_note=RECIPE_CREDIT,
-        memory_hint="Nothing yet. Say “I don't drink alcohol” and Curio will ask to remember.",
-        shortlist_hint="Save drinks from answers, or ask Curio to shortlist them.",
-        compare_prompt="Compare the drinks in my shortlist and tell me which to make.",
-        ask_memory="Ask before remembering tastes",
+    placeholder="Describe a piece or ask a follow-up…",
+    welcome=(
+        "Tell me what you're looking for, including a colour, occasion or budget. "
+        "Try **white sneakers under €40**."
     ),
-}
+    starters=("White sneakers under €40", "A linen shirt for summer", "Warm knitwear"),
+    unavailable=(
+        "The assistant is currently unavailable. "
+        "You can still discover pieces by description or photo."
+    ),
+    popup_caption="Find pieces. Refine by colour, style or budget.",
+    popup_note="H&M research catalog · Prices are approximate. Current stock is unknown.",
+    memory_hint="Nothing yet. Say “I always shop menswear” and Curio will ask to remember.",
+    shortlist_hint="Save pieces from answers, or ask Curio to shortlist them.",
+    compare_prompt="Compare the pieces in my shortlist and tell me which to pick.",
+    ask_memory="Ask before remembering preferences",
+)
+COCKTAIL_COPY = DomainCopy(
+    title="Mix something new tonight.",
+    intro=(
+        "Tell Curio a flavour, a mood or what's in your cupboard. It finds recipes, "
+        "explains them and asks before changing anything you keep."
+    ),
+    placeholder="Describe a drink or ask a follow-up…",
+    welcome=(
+        "Tell me a flavour, an ingredient you have, or whether you'd like it alcohol-free. "
+        "Try **something fresh with lime and mint**."
+    ),
+    starters=(
+        "Something fresh with lime and mint",
+        "Alcohol-free drinks",
+        "What can I make with gin and tonic?",
+    ),
+    unavailable=(
+        "The cocktail assistant is currently unavailable. "
+        "You can still search recipes on the Cocktails page."
+    ),
+    popup_caption="Find drinks. Refine by ingredient, glass or alcohol.",
+    popup_note=RECIPE_CREDIT,
+    memory_hint="Nothing yet. Say “I don't drink alcohol” and Curio will ask to remember.",
+    shortlist_hint="Save drinks from answers, or ask Curio to shortlist them.",
+    compare_prompt="Compare the drinks in my shortlist and tell me which to make.",
+    ask_memory="Ask before remembering tastes",
+)
 
 
 def current_domain() -> str:
-    domain = st.session_state.get("domain", FASHION)
-    return domain if domain in STATE_KEYS else FASHION
+    """The selected domain; `main` moves it to the first served one when needed."""
+    domain = st.session_state.get("domain")
+    return domain if domain in DOMAIN_VIEWS else next(iter(DOMAIN_VIEWS))
+
+
+def domain_view(domain: str | None = None) -> "DomainView":
+    return DOMAIN_VIEWS[domain or current_domain()]
+
+
+def domain_copy(domain: str | None = None) -> DomainCopy:
+    return domain_view(domain).copy
 
 
 def state_key(name: str, domain: str | None = None) -> str:
-    return STATE_KEYS[domain or current_domain()][name]
+    return domain_view(domain).state[name]
 
 
 def chat_history(domain: str | None = None) -> list[dict]:
@@ -1083,22 +1069,17 @@ STEP_ICONS = {
     "pending": ":material/hourglass_top:",
     "skipped": ":material/do_not_disturb_on:",
 }
-GROUNDING_BADGES = {
-    FASHION: {
-        "verified": ("Prices verified against the catalog", "green", ":material/verified:"),
-        "repaired": ("Self-corrected to match the catalog", "orange", ":material/auto_fix_high:"),
-        "fallback": ("Unverified answer replaced with catalog facts", "red", ":material/shield:"),
-    },
-    COCKTAILS: {
-        "verified": ("Checked against the recipes", "green", ":material/verified:"),
-        "repaired": ("Self-corrected to match the recipes", "orange", ":material/auto_fix_high:"),
-        "fallback": ("Unverified answer replaced with recipe facts", "red", ":material/shield:"),
-    },
+# Grounding status -> (badge label, colour, icon), per domain.
+type Badges = dict[str, tuple[str, str, str]]
+FASHION_BADGES: Badges = {
+    "verified": ("Prices verified against the catalog", "green", ":material/verified:"),
+    "repaired": ("Self-corrected to match the catalog", "orange", ":material/auto_fix_high:"),
+    "fallback": ("Unverified answer replaced with catalog facts", "red", ":material/shield:"),
 }
-# Approval tools by policy setting, per domain.
-APPROVAL_TOOLS = {
-    FASHION: {"ask_shortlist": "SaveToShortlist", "ask_memory": "RememberPreferences"},
-    COCKTAILS: {"ask_shortlist": "SaveCocktails", "ask_memory": "RememberTastes"},
+COCKTAIL_BADGES: Badges = {
+    "verified": ("Checked against the recipes", "green", ":material/verified:"),
+    "repaired": ("Self-corrected to match the recipes", "orange", ":material/auto_fix_high:"),
+    "fallback": ("Unverified answer replaced with recipe facts", "red", ":material/shield:"),
 }
 # Proposal arguments the shopper may narrow: list values can be dropped one by one.
 APPROVAL_LIST_FIELDS = (
@@ -1236,7 +1217,7 @@ def auto_approve(domain: str | None = None) -> list[str]:
     policy = st.session_state.get("approval_policy", {})
     return [
         tool
-        for setting, tool in APPROVAL_TOOLS[domain or current_domain()].items()
+        for setting, tool in domain_view(domain).approval_tools.items()
         if not policy.get(setting, True)
     ]
 
@@ -1278,8 +1259,7 @@ def queue_decision(index: int, approved: bool, context: str) -> None:
 
 def feedback_key(context: str, index: int) -> str:
     # Per-domain keys stop a rating on one domain's answer from carrying over to the other's.
-    prefix = "feedback" if current_domain() == FASHION else "feedback_cocktails"
-    return f"{prefix}_{context}_{index}"
+    return f"{domain_view().feedback_prefix}_{context}_{index}"
 
 
 def send_feedback(index: int, context: str) -> None:
@@ -1443,7 +1423,7 @@ def show_chat_turn(turn: dict, index: int, context: str, latest: bool = False):
             show_trace(turn.get("steps", []))
         st.markdown(turn["content"])
         grounding = (turn.get("grounding") or {}).get("status")
-        badges = GROUNDING_BADGES[current_domain()]
+        badges = domain_view().badges
         if grounding in badges:
             label, color, icon = badges[grounding]
             st.badge(label, color=color, icon=icon)
@@ -1530,7 +1510,7 @@ def chat_payload(history: list[dict]) -> dict:
     """Recent turns plus client-held session state; unset state and the default domain are
     left out, so fashion requests look exactly as they did before cocktails existed."""
     payload: dict = {"history": [history_item(turn) for turn in history[-10:]]}
-    payload |= cocktail_context() if current_domain() == COCKTAILS else fashion_context()
+    payload |= domain_view().chat_context()
     if policy := auto_approve():
         payload["auto_approve"] = policy
     return payload
@@ -1673,13 +1653,38 @@ def run_turn(
     return True
 
 
+def served_domains(health: dict) -> dict[str, dict]:
+    """Each known domain's entry from /health: `enabled`, `chat_enabled`, `hint`, ...
+
+    APIs older than 1.1 report no `domains`; they always served fashion and flagged cocktails
+    with `cocktails_enabled`, and their cocktail chat status needs /domains (None here).
+    """
+    if "domains" in health:
+        return {d["id"]: d for d in health["domains"] if d.get("id") in DOMAIN_VIEWS}
+    return {
+        FASHION: {"id": FASHION, "enabled": True, "chat_enabled": bool(health.get("chat_enabled"))},
+        COCKTAILS: {
+            "id": COCKTAILS,
+            "enabled": bool(health.get("cocktails_enabled")),
+            "chat_enabled": None,
+        },
+    }
+
+
+def available_domains(health: dict) -> list[str]:
+    """Served domains in registry order; the first one is the default."""
+    served = served_domains(health)
+    return [domain for domain in DOMAIN_VIEWS if served.get(domain, {}).get("enabled")]
+
+
 def chat_available(domain: str, health: dict) -> bool:
-    if domain == FASHION:
-        return bool(health.get("chat_enabled"))
-    if not health.get("cocktails_enabled"):
+    info = served_domains(health).get(domain)
+    if not info or not info.get("enabled"):
         return False
-    domains = call_api("GET", "/domains") or []
-    return any(item.get("id") == COCKTAILS and item.get("chat_enabled") for item in domains)
+    if info.get("chat_enabled") is None:  # an API older than 1.1
+        domains = call_api("GET", "/domains") or []
+        return any(item.get("id") == domain and item.get("chat_enabled") for item in domains)
+    return bool(info["chat_enabled"])
 
 
 def welcome(copy: DomainCopy, context: str) -> None:
@@ -1696,12 +1701,14 @@ def welcome(copy: DomainCopy, context: str) -> None:
 
 
 def chat_conversation(context: str) -> None:
-    copy = DOMAIN_COPY[current_domain()]
+    copy = domain_copy()
     health = call_api("GET", "/health")
     if health is None:
         return
     if not chat_available(current_domain(), health):
         st.info(copy.unavailable)
+        if health.get("llm_configured") is False:
+            st.caption(f"To enable chat, {LLM_HINT}")
         return
     history = chat_history()
     queued = st.session_state.pop(state_key("queued"), None)
@@ -1802,7 +1809,7 @@ def approval_toggles() -> None:
         key="session_ask_shortlist",
     )
     policy["ask_memory"] = st.toggle(
-        DOMAIN_COPY[current_domain()].ask_memory,
+        domain_copy().ask_memory,
         value=policy.get("ask_memory", True),
         key="session_ask_memory",
     )
@@ -1810,7 +1817,7 @@ def approval_toggles() -> None:
 
 def fashion_session_panel() -> None:
     """Client-held agent state: personalization link, approval policy, memory and shortlist."""
-    copy = DOMAIN_COPY[FASHION]
+    copy = FASHION_COPY
     with st.container(key="agent_session", border=True):
         st.subheader("Your session", anchor=False)
         examples = (call_api("GET", "/demo/customers") or [])[:10]
@@ -1899,7 +1906,7 @@ def taste_chips(memory: dict) -> list[tuple[str, object, str]]:
 
 
 def cocktail_session_panel() -> None:
-    copy = DOMAIN_COPY[COCKTAILS]
+    copy = COCKTAIL_COPY
     with st.container(key="agent_session", border=True):
         st.subheader("Your session", anchor=False)
         approval_toggles()
@@ -1959,14 +1966,11 @@ def cocktail_session_panel() -> None:
 
 
 def session_panel() -> None:
-    if current_domain() == COCKTAILS:
-        cocktail_session_panel()
-    else:
-        fashion_session_panel()
+    domain_view().session_panel()
 
 
 def agent_home() -> None:
-    copy = DOMAIN_COPY[current_domain()]
+    copy = domain_copy()
     st.title(copy.title)
     st.caption(copy.intro)
     st.button("New conversation", type="tertiary", key="chat_reset_home", on_click=reset_chat)
@@ -1995,7 +1999,7 @@ def assistant_popup() -> None:
         )
     if not popup.open:
         return
-    copy = DOMAIN_COPY[current_domain()]
+    copy = domain_copy()
     with popup, st.container(key="assistant_panel"):
         with st.container(horizontal=True, vertical_alignment="center"):
             st.subheader("Curio", width="stretch", anchor=False)
@@ -2359,78 +2363,171 @@ def compare_cocktails_dialog(drink_ids: list[int]) -> None:
 # --- App shell -----------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class DomainPage:
+    page: Callable[[], None]
+    title: str
+    url_path: str
+    in_menu: bool = True  # False: routable (deep links, hand-offs) but not in the menu
+
+
+@dataclass(frozen=True)
+class DomainView:
+    """Everything the UI needs to show one domain. A new domain is one `DOMAIN_VIEWS` entry
+    (plus its pages); the header switch, navigation, chat and session panel follow from it."""
+
+    label: str  # header switch option
+    unavailable: str  # caption beside the switch when the server does not serve the domain
+    setup_hint: str  # its help text when the API gives no hint (an API older than 1.1)
+    copy: DomainCopy
+    state: Mapping[str, str]  # client-held session state keys
+    badges: Badges
+    approval_tools: Mapping[str, str]  # approval policy setting -> APPROVE tool
+    feedback_prefix: str
+    pages: tuple[DomainPage, ...]
+    session_panel: Callable[[], None]
+    chat_context: Callable[[], dict]  # this domain's fields of a chat request
+    catalog_note: Callable[[dict], str]  # footer, from /health
+
+
+def fashion_note(health: dict) -> str:
+    indexed = f"{health.get('indexed_products', 0):,}"
+    total = f" of {health['catalog_products']:,}" if health.get("catalog_products") else ""
+    return f"H&M 2020 research catalog · Photo search: {indexed}{total} pieces"
+
+
+def cocktail_note(health: dict) -> str:
+    count = health.get("cocktail_count")
+    recipes = f"{count:,} recipes · " if count else ""
+    return f"Recipe data: TheCocktailDB · {recipes}Please drink responsibly."
+
+
+# In display order: the first domain the server serves is the default.
+DOMAIN_VIEWS: dict[str, DomainView] = {
+    FASHION: DomainView(
+        label=":material/checkroom: Fashion",
+        unavailable="Fashion is not available",
+        setup_hint=FASHION_UNAVAILABLE,
+        copy=FASHION_COPY,
+        # The fashion keys predate the domain switch and stay as they are.
+        state={
+            "history": "chat_history",
+            "shortlist": "shortlist",
+            "memory": "preferences",
+            "queued": "chat_queued",
+            "decision": "chat_decision",
+        },
+        badges=FASHION_BADGES,
+        approval_tools={"ask_shortlist": "SaveToShortlist", "ask_memory": "RememberPreferences"},
+        feedback_prefix="feedback",
+        pages=(
+            DomainPage(recommendations_tab, "Fashion", "fashion"),
+            DomainPage(discovery_page, "Discover", "discover"),
+            DomainPage(knowledge_graph_tab, "Product connections", "connections"),
+            DomainPage(evaluation_tab, "Model quality", "quality", in_menu=False),
+        ),
+        session_panel=fashion_session_panel,
+        chat_context=fashion_context,
+        catalog_note=fashion_note,
+    ),
+    COCKTAILS: DomainView(
+        label=":material/local_bar: Cocktails",
+        unavailable="Cocktails are not available",
+        setup_hint=COCKTAILS_UNAVAILABLE,
+        copy=COCKTAIL_COPY,
+        state={
+            "history": "chat_history_cocktails",
+            "shortlist": "cocktail_shortlist",
+            "memory": "cocktail_preferences",
+            "queued": "chat_queued_cocktails",
+            "decision": "chat_decision_cocktails",
+        },
+        badges=COCKTAIL_BADGES,
+        approval_tools={"ask_shortlist": "SaveCocktails", "ask_memory": "RememberTastes"},
+        feedback_prefix="feedback_cocktails",
+        pages=(DomainPage(cocktails_page, "Cocktails", "cocktails"),),
+        session_panel=cocktail_session_panel,
+        chat_context=cocktail_context,
+        catalog_note=cocktail_note,
+    ),
+}
+# Pages that belong to one domain; a deep link to one of them selects that domain.
+PAGE_DOMAINS = {
+    page.url_path: domain for domain, view in DOMAIN_VIEWS.items() for page in view.pages
+}
+QUICK_START = "uv run python -m scripts.prepare_cocktails"
+
+
 def switch_domain() -> None:
     st.session_state["domain"] = st.session_state["domain_switch"]
     st.session_state["domain_switched"] = True
 
 
-def active_domain(health: dict) -> str:
-    """The selected domain, falling back to fashion when cocktails are not served."""
-    if current_domain() == COCKTAILS and not health.get("cocktails_enabled"):
-        st.session_state["domain"] = FASHION
+def active_domain(available: Sequence[str]) -> str:
+    """The selected domain, or the first served one when the selection is not served."""
+    if current_domain() not in available:
+        st.session_state["domain"] = available[0]
     return current_domain()
 
 
-def domain_switch(cocktails_enabled: bool) -> None:
+def domain_switch(available: Sequence[str], served: dict[str, dict]) -> None:
     # The widget mirrors `domain`, which deep links and tests may set directly.
     st.session_state["domain_switch"] = current_domain()
     st.segmented_control(
         "Catalog",
-        list(DOMAIN_LABELS),
-        format_func=DOMAIN_LABELS.get,
+        list(available),
+        format_func=lambda domain: DOMAIN_VIEWS[domain].label,
         required=True,
         key="domain_switch",
         on_change=switch_domain,
-        disabled=not cocktails_enabled,
+        disabled=len(available) < 2,
         label_visibility="collapsed",
     )
-    if not cocktails_enabled:
-        st.caption("Cocktails are not available", help=COCKTAILS_UNAVAILABLE)
+    for domain, view in DOMAIN_VIEWS.items():
+        if domain not in available:
+            hint = served.get(domain, {}).get("hint") or view.setup_hint
+            st.caption(view.unavailable, help=hint)
 
 
-def domain_pages(domain: str, cocktails_enabled: bool) -> list:
-    """Every page stays routable; only the active domain's pages are shown in the menu."""
-
-    def shown(owner: str) -> str:
-        return "visible" if owner == domain else "hidden"
-
-    pages = [
-        st.Page(agent_home, title="Ask Curio", default=True),
-        st.Page(
-            recommendations_tab, title="Fashion", url_path="fashion", visibility=shown(FASHION)
-        ),
-        st.Page(discovery_page, title="Discover", url_path="discover", visibility=shown(FASHION)),
-        st.Page(
-            knowledge_graph_tab,
-            title="Product connections",
-            url_path="connections",
-            visibility=shown(FASHION),
-        ),
-    ]
-    if cocktails_enabled:
-        pages.append(
-            st.Page(
-                cocktails_page,
-                title="Cocktails",
-                url_path="cocktails",
-                visibility=shown(COCKTAILS),
+def domain_pages(domain: str, available: Collection[str]) -> list:
+    """Every served domain's pages stay routable; only the active domain's are in the menu.
+    Pages of a domain the server does not serve are not registered at all."""
+    pages = [st.Page(agent_home, title="Ask Curio", default=True)]
+    for owner, view in DOMAIN_VIEWS.items():
+        if owner not in available:
+            continue
+        for spec in view.pages:
+            shown = spec.in_menu and owner == domain
+            pages.append(
+                st.Page(
+                    spec.page,
+                    title=spec.title,
+                    url_path=spec.url_path,
+                    visibility="visible" if shown else "hidden",
+                )
             )
-        )
-    return [
-        *pages,
-        st.Page(evaluation_tab, title="Model quality", url_path="quality", visibility="hidden"),
-        st.Page(chat_tab, title="Assistant", url_path="assistant", visibility="hidden"),
-    ]
+    pages.append(st.Page(chat_tab, title="Assistant", url_path="assistant", visibility="hidden"))
+    return pages
+
+
+def setup_page() -> None:
+    """Shown when the API serves no domain yet, instead of an empty app."""
+    served = served_domains(st.session_state.get("service_health", {}))
+    st.title("Almost ready.")
+    st.caption("Curio's API is running, but no catalog is prepared on it yet.")
+    st.markdown(
+        "The quickest start is the cocktail catalog (about 400 KB). Prepare it, then "
+        "restart the API:"
+    )
+    st.code(QUICK_START, language="bash")
+    st.caption("`docker compose --profile demo up` and `scripts/quickstart.sh` do this for you.")
+    for domain, view in DOMAIN_VIEWS.items():
+        hint = served.get(domain, {}).get("hint") or view.setup_hint
+        st.markdown(f"**{view.label}**: {plain(hint)}")
 
 
 def catalog_note(health: dict) -> str:
-    if current_domain() == COCKTAILS:
-        count = health.get("cocktail_count")
-        recipes = f"{count:,} recipes · " if count else ""
-        return f"Recipe data: TheCocktailDB · {recipes}Please drink responsibly."
-    indexed = f"{health['indexed_products']:,}"
-    total = f" of {health['catalog_products']:,}" if health.get("catalog_products") else ""
-    return f"H&M 2020 research catalog · Photo search: {indexed}{total} pieces"
+    return domain_view().catalog_note(health)
 
 
 def main() -> None:
@@ -2450,9 +2547,13 @@ def main() -> None:
             st.rerun()
         return
     st.session_state["service_health"] = health
-    cocktails_enabled = bool(health.get("cocktails_enabled"))
-    domain = active_domain(health)
-    pages = domain_pages(domain, cocktails_enabled)
+    served = served_domains(health)
+    available = available_domains(health)
+    if not available:
+        st.navigation([st.Page(setup_page, title="Get started", default=True)]).run()
+        return
+    domain = active_domain(available)
+    pages = domain_pages(domain, available)
     page = st.navigation(pages, position="top")
     owner = PAGE_DOMAINS.get(page.url_path)
     switched = st.session_state.pop("domain_switched", False)
@@ -2462,7 +2563,7 @@ def main() -> None:
         st.session_state["domain"] = owner  # a deep link selects its page's domain
         st.rerun()
     with header:
-        domain_switch(cocktails_enabled)
+        domain_switch(available, served)
     page.run()
     if page.title not in ("Ask Curio", "Assistant"):
         assistant_popup()
