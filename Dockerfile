@@ -20,11 +20,12 @@ COPY .streamlit ./.streamlit
 RUN uv sync --locked --no-dev $UV_EXTRAS --no-cache
 
 # Data is mounted at runtime (see docker-compose.yml), not baked into the image.
-# The Hugging Face cache directory must exist and belong to `app` before a named volume is
-# mounted on it; otherwise Docker creates the mount point as root and CLIP cannot download.
+# Named volumes take the owner of their mount point, so the Hugging Face cache and the data
+# directory (the demo's recipe volume) must exist and belong to `app`; otherwise Docker creates
+# them as root, and CLIP cannot download and the demo cannot write its recipes.
 RUN useradd --create-home --uid 1000 app \
-    && mkdir -p /home/app/.cache/huggingface \
-    && chown -R app:app /home/app/.cache
+    && mkdir -p /home/app/.cache/huggingface /app/data \
+    && chown -R app:app /home/app/.cache /app/data
 USER app
 
 EXPOSE 8000 8501

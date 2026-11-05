@@ -11,11 +11,13 @@ Embedded Qdrant allows one process, so stop any other API using the same index f
 """
 
 import os
+import shutil
 import socket
 import subprocess
 import sys
 import time
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
@@ -73,26 +75,12 @@ def llm_stub() -> Iterator[str]:
     server.shutdown()
 
 
-@pytest.fixture(scope="session")
-def api_url(llm_stub: str, artifacts: Path) -> Iterator[str]:
-    required = [DATA_DIR / "products.parquet", DATA_DIR / "cocktails.parquet", QDRANT_PATH]
-    if missing := [str(path) for path in required if not path.exists()]:
-        pytest.skip(f"E2E data not prepared: {', '.join(missing)}")
+@contextmanager
+def _api(env: dict[str, str], log: Path, cwd: Path = ROOT) -> Iterator[str]:
+    """The real API (`uvicorn ... --factory`) on a free port, configured by `env` (and by a
+    `.env` file in `cwd`, as in production)."""
     port = _free_port()
-    env = {
-        **os.environ,
-        "DATA_DIR": str(DATA_DIR),
-        "QDRANT_PATH": str(QDRANT_PATH),
-        "QDRANT_URL": "",
-        "LLM_PROVIDER": "openai",
-        "LLM_MODEL": "curio-e2e-stub",
-        "LLM_BASE_URL": llm_stub,
-        "LLM_API_KEY": "e2e-not-a-secret",
-        "AGENT_SIGNING_KEY": "e2e-signing-key-0123456789abcdef",
-        "NO_PROXY": "127.0.0.1,localhost",
-        "no_proxy": "127.0.0.1,localhost",
-    }
-    log = artifacts / "api.log"
+    env = {**os.environ, "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"} | env
     with log.open("w") as out:
         process = subprocess.Popen(
             [
@@ -106,7 +94,7 @@ def api_url(llm_stub: str, artifacts: Path) -> Iterator[str]:
                 "--port",
                 str(port),
             ],
-            cwd=ROOT,
+            cwd=cwd,
             env=env,
             stdout=out,
             stderr=subprocess.STDOUT,
@@ -120,11 +108,11 @@ def api_url(llm_stub: str, artifacts: Path) -> Iterator[str]:
         process.wait(30)
 
 
-@pytest.fixture(scope="session")
-def ui_url(api_url: str, artifacts: Path) -> Iterator[str]:
+@contextmanager
+def _streamlit(api_url: str, log: Path) -> Iterator[str]:
+    """The real Streamlit UI on a free port, talking to `api_url`."""
     port = _free_port()
     env = {**os.environ, "API_URL": api_url, "NO_PROXY": "127.0.0.1,localhost"}
-    log = artifacts / "ui.log"
     with log.open("w") as out:
         process = subprocess.Popen(
             [
@@ -152,6 +140,61 @@ def ui_url(api_url: str, artifacts: Path) -> Iterator[str]:
     finally:
         process.terminate()
         process.wait(30)
+
+
+@pytest.fixture(scope="session")
+def api_url(llm_stub: str, artifacts: Path) -> Iterator[str]:
+    required = [DATA_DIR / "products.parquet", DATA_DIR / "cocktails.parquet", QDRANT_PATH]
+    if missing := [str(path) for path in required if not path.exists()]:
+        pytest.skip(f"E2E data not prepared: {', '.join(missing)}")
+    env = {
+        "DATA_DIR": str(DATA_DIR),
+        "QDRANT_PATH": str(QDRANT_PATH),
+        "QDRANT_URL": "",
+        "ENABLED_DOMAINS": "",
+        "LLM_PROVIDER": "openai",
+        "LLM_MODEL": "curio-e2e-stub",
+        "LLM_BASE_URL": llm_stub,
+        "LLM_API_KEY": "e2e-not-a-secret",
+        "AGENT_SIGNING_KEY": "e2e-signing-key-0123456789abcdef",
+    }
+    with _api(env, artifacts / "api.log") as url:
+        yield url
+
+
+@pytest.fixture(scope="session")
+def ui_url(api_url: str, artifacts: Path) -> Iterator[str]:
+    with _streamlit(api_url, artifacts / "ui.log") as url:
+        yield url
+
+
+@pytest.fixture(scope="session")
+def quickstart_api_url(artifacts: Path, tmp_path_factory) -> Iterator[str]:
+    """The quick start: only the recipe file, no H&M data, no image index and no LLM.
+
+    It opens no Qdrant index, so it runs beside the full-data API above.
+    """
+    recipes = DATA_DIR / "cocktails.parquet"
+    if not recipes.exists():
+        pytest.skip(f"E2E data not prepared: {recipes}")
+    data = tmp_path_factory.mktemp("quickstart-data")
+    shutil.copy(recipes, data / "cocktails.parquet")
+    env = {
+        "DATA_DIR": str(data),
+        "QDRANT_PATH": str(data / ".qdrant"),
+        "QDRANT_URL": "",
+        "ENABLED_DOMAINS": "",
+        "LLM_MODEL": "",
+    }
+    # Started in the data folder, so a developer's .env (an LLM, other domains) cannot leak in.
+    with _api(env, artifacts / "quickstart-api.log", cwd=data) as url:
+        yield url
+
+
+@pytest.fixture(scope="session")
+def quickstart_ui_url(quickstart_api_url: str, artifacts: Path) -> Iterator[str]:
+    with _streamlit(quickstart_api_url, artifacts / "quickstart-ui.log") as url:
+        yield url
 
 
 @pytest.fixture(scope="session")
@@ -213,6 +256,15 @@ class Driver:
 def ui(browser, ui_url: str, artifacts: Path) -> Iterator[Driver]:
     context = browser.new_context(viewport={"width": 1440, "height": 1100})
     driver = Driver(context.new_page(), ui_url, artifacts)
+    yield driver
+    context.close()
+    assert not driver.errors, f"Browser errors: {driver.errors}"
+
+
+@pytest.fixture
+def quickstart_ui(browser, quickstart_ui_url: str, artifacts: Path) -> Iterator[Driver]:
+    context = browser.new_context(viewport={"width": 1440, "height": 1100})
+    driver = Driver(context.new_page(), quickstart_ui_url, artifacts)
     yield driver
     context.close()
     assert not driver.errors, f"Browser errors: {driver.errors}"

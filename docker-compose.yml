@@ -1,13 +1,89 @@
+# Curio runs in one of two stacks; start one at a time (both publish ports 8000 and 8501).
+#
+#   docker compose --profile demo up --build      # quick start: cocktails, no H&M download
+#   docker compose --profile fashion up --build   # full stack: fashion (+ cocktails if prepared)
+#
+# Optional: add `--profile ollama` to the demo for a local LLM (see docs/technical-guide.md).
+
+x-curio: &curio
+  image: curio:local   # one image for every service, built once
+  env_file: [{ path: .env, required: false }]
+
 services:
+  # --- Quick start (profile: demo) ---------------------------------------------------------
+  # Recipes live in the `demo-data` volume, so nothing is written to ./data and no host
+  # permissions are involved. The first run downloads the pinned ~400 KB recipe file.
+  demo-data:
+    <<: *curio
+    build: .
+    profiles: [demo]
+    volumes: [demo-data:/app/data]
+    command:
+      - sh
+      - -c
+      - test -s data/cocktails.parquet || python -m scripts.prepare_cocktails
+
+  demo-api:
+    <<: *curio
+    profiles: [demo]
+    environment:
+      ENABLED_DOMAINS: cocktails   # never loads CLIP or Qdrant, even with fashion data around
+    ports: ["8000:8000"]
+    volumes: [demo-data:/app/data:ro]
+    depends_on:
+      demo-data: { condition: service_completed_successfully }
+      # Only with `--profile ollama`: wait until the local model is pulled.
+      ollama-pull: { condition: service_completed_successfully, required: false }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  demo-ui:
+    <<: *curio
+    profiles: [demo]
+    command: ["streamlit", "run", "src/clothes_recommender/ui.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
+    environment:
+      API_URL: http://demo-api:8000
+    ports: ["8501:8501"]
+    depends_on:
+      demo-api: { condition: service_healthy }
+
+  # Optional local LLM for the demo: `docker compose --profile demo --profile ollama up`,
+  # with LLM_PROVIDER=openai, LLM_BASE_URL=http://ollama:11434/v1, LLM_API_KEY=ollama and
+  # LLM_MODEL=<a tool-calling model, e.g. qwen2.5:3b> in .env. `ollama-pull` fetches LLM_MODEL.
+  ollama:
+    image: ollama/ollama:0.40.6
+    profiles: [ollama]
+    volumes: [ollama-models:/root/.ollama]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  ollama-pull:
+    image: ollama/ollama:0.40.6
+    profiles: [ollama]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    command: ["pull", "${LLM_MODEL:-qwen2.5:3b}"]
+    depends_on:
+      ollama: { condition: service_healthy }
+
+  # --- Full stack (profile: fashion) -------------------------------------------------------
+  # Needs the prepared H&M data in ./data and an image index (docs/technical-guide.md).
   qdrant:
     image: qdrant/qdrant:v1.19.2   # keep in step with the qdrant-client minor version
+    profiles: [fashion]
     ports: ["6333:6333"]
     volumes: [qdrant-data:/qdrant/storage]
 
   api:
+    <<: *curio
     build: .
-    image: curio:local
-    env_file: [{ path: .env, required: false }]
+    profiles: [fashion]
     environment:
       QDRANT_URL: http://qdrant:6333
     ports: ["8000:8000"]
@@ -17,24 +93,27 @@ services:
     depends_on: [qdrant]
 
   ui:
-    image: curio:local   # same image as the API, built once
+    <<: *curio
+    profiles: [fashion]
     command: ["streamlit", "run", "src/clothes_recommender/ui.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
     environment:
       API_URL: http://api:8000
     ports: ["8501:8501"]
     depends_on: [api]
 
-  # One-off job: downloads the pinned recipe CSV and writes data/cocktails.parquet.
-  # The API mounts data read-only, so this service mounts it writable instead:
+  # One-off job: downloads the pinned recipe CSV and writes data/cocktails.parquet for the
+  # full stack. The API mounts data read-only, so this service mounts it writable instead:
   #   docker compose run --rm --user "$(id -u):$(id -g)" prepare-cocktails
-  #   docker compose restart api
+  #   docker compose --profile fashion restart api
   prepare-cocktails:
-    image: curio:local
-    profiles: [tools]   # not started by `docker compose up`
+    <<: *curio
+    profiles: [tools]   # not started by `up`
     command: ["python", "-m", "scripts.prepare_cocktails"]
     volumes:
       - ./data:/app/data
 
 volumes:
+  demo-data:
+  ollama-models:
   qdrant-data:
   hf-cache:

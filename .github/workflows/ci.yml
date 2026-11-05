@@ -26,5 +26,27 @@ jobs:
       # Runs every test under tests/ offline (fake encoder, in-memory Qdrant, scripted LLM,
       # small cocktail fixtures). No secrets or downloaded data are needed.
       - run: uv run pytest
-      - name: Validate docker-compose.yml
-        run: docker compose config --quiet
+      # The quick start's promise: with only the recipes prepared (no H&M data, image index or
+      # LLM, as on this runner) the API starts, reports each domain and answers fashion with 503.
+      - name: API starts with only the cocktail domain
+        run: |
+          uv run uvicorn clothes_recommender.api:create_app --factory --port 8000 > api.log 2>&1 &
+          for _ in $(seq 60); do curl -sf localhost:8000/health -o health.json && break; sleep 1; done
+          cat api.log
+          uv run python - <<'PY'
+          import json
+
+          health = json.load(open("health.json"))
+          enabled = {d["id"]: d["enabled"] for d in health["domains"]}
+          assert enabled == {"fashion": False, "cocktails": True}, health
+          assert health["cocktail_count"] == 425 and not health["fashion_enabled"], health
+          PY
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/products/1)" = 503
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'content-type: application/json' \
+            -d '{"query": "mojito"}' localhost:8000/cocktails/search)" = 200
+      - name: Validate docker-compose.yml (every profile)
+        run: |
+          docker compose config --quiet
+          for profile in demo fashion ollama tools; do
+            docker compose --profile "$profile" config --quiet
+          done
