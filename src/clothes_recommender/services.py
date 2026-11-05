@@ -9,10 +9,15 @@ Adding a domain: write a runtime (a dataclass with `assistant`, `item_count()` a
 `close()`), a loader that returns None while the domain's data is missing, and one
 `DomainSpec` entry in `DOMAINS`. `/health`, `/domains`, chat routing and the 503 for an
 unprepared domain follow from that entry.
+
+Cross-domain features link loaded domains after loading (`link_domains`): with books and
+cocktails both served, the book runtime gets a `BookCocktailPairer` and its agent the
+PairCocktail tool.
 """
 
+import dataclasses
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
@@ -38,6 +43,7 @@ from clothes_recommender.config import Settings
 from clothes_recommender.demo import DemoCustomer, select_demo_customers
 from clothes_recommender.embeddings import ClipEncoder
 from clothes_recommender.outfits import OutfitPlanner
+from clothes_recommender.pairings.pairer import BookCocktailPairer
 from clothes_recommender.recommenders.collaborative import CollaborativeRecommender
 from clothes_recommender.recommenders.content_based import ContentBasedRecommender
 from clothes_recommender.recommenders.graph import GraphRecommender
@@ -128,6 +134,8 @@ class BookServices:
     catalog: BookCatalog
     recommender: BookRecommender
     assistant: BookAssistant | None = None
+    # Book → cocktail pairing; set by `link_domains` when cocktails are served too.
+    pairing: BookCocktailPairer | None = None
 
     def item_count(self) -> int:
         return len(self.catalog)
@@ -171,6 +179,12 @@ class Services:
     @property
     def books(self) -> BookServices | None:
         return BOOKS.of(self)
+
+    @property
+    def pairing(self) -> BookCocktailPairer | None:
+        """Book → cocktail pairing, served when books and cocktails both are."""
+        books = self.books
+        return books.pairing if books is not None and self.cocktails is not None else None
 
     def close(self) -> None:
         for runtime in self.domains.values():
@@ -357,6 +371,7 @@ def build_services(settings: Settings) -> Services:
             runtime = spec.load(settings, kit)
             if runtime is not None:
                 loaded[spec.id] = cast(DomainRuntime, runtime)
+        link_domains(loaded)
     except BaseException:
         Services(loaded).close()  # a later domain failed: release the earlier ones
         raise
@@ -366,6 +381,25 @@ def build_services(settings: Settings) -> Services:
             "`uv run python -m scripts.prepare_cocktails` for the quickest start."
         )
     return Services(domains=loaded, llm_configured=kit is not None)
+
+
+def link_domains(domains: MutableMapping[str, DomainRuntime]) -> None:
+    """Cross-domain features over the loaded domains: book → cocktail pairing needs both.
+
+    The pairer reuses the cocktail recommender's search index; the book agent gets the
+    PairCocktail tool. A pairer that cannot be built leaves both domains serving as before.
+    """
+    books, cocktails = domains.get(BOOKS.id), domains.get(COCKTAILS.id)
+    if not isinstance(books, BookServices) or not isinstance(cocktails, CocktailServices):
+        return
+    try:
+        pairer = BookCocktailPairer(books.catalog, cocktails.catalog, cocktails.recommender)
+    except Exception:
+        logger.exception("Could not build book-cocktail pairing; it is disabled.")
+        return
+    if books.assistant is not None:
+        books.assistant.attach_pairing(pairer, cocktails.catalog)
+    domains[BOOKS.id] = dataclasses.replace(books, pairing=pairer)
 
 
 def _selected_domains(settings: Settings) -> list[DomainSpec]:

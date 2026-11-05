@@ -49,6 +49,8 @@ from clothes_recommender.outfits import (
     SlotName,
     SwapMode,
 )
+from clothes_recommender.pairings.domain import BookPairing, PairingRequest
+from clothes_recommender.pairings.pairer import BookCocktailPairer, PairingError, UnknownBookError
 from clothes_recommender.recommenders.base import Recommender, UnknownUserError
 from clothes_recommender.services import (
     BOOKS,
@@ -208,9 +210,19 @@ def get_books(services: ServicesDep) -> BookServices:
     return _require(BOOKS, services)
 
 
+def get_pairing(services: ServicesDep) -> BookCocktailPairer:
+    """Pairing needs books and cocktails: 503 with the setup hint of whichever is missing."""
+    books = _require(BOOKS, services)
+    _require(COCKTAILS, services)
+    if books.pairing is None:
+        raise HTTPException(status_code=503, detail="Book-cocktail pairing is not available.")
+    return books.pairing
+
+
 FashionDep = Annotated[FashionServices, Depends(get_fashion)]
 CocktailsDep = Annotated[CocktailServices, Depends(get_cocktails)]
 BooksDep = Annotated[BookServices, Depends(get_books)]
+PairingDep = Annotated[BookCocktailPairer, Depends(get_pairing)]
 
 
 def domain_infos(services: Services) -> list[DomainInfo]:
@@ -405,6 +417,18 @@ def create_app(services: Services | None = None) -> FastAPI:
         """More books by this book's first author."""
         book = get_book(book_id, books)
         return books.recommender.by_author(book.author, top_k, exclude_book_id=book_id)
+
+    @app.post("/pairings/book-cocktail")
+    def pair_book_cocktail(request: PairingRequest, pairer: PairingDep) -> BookPairing:
+        """Cocktails for one book (`book_id`) or a reader's taste (`book_ids`, liked and
+        avoided genres), with reasons. Children's and young-adult books, `alcohol_free` and
+        an alcohol-free `cocktail_preferences` get alcohol-free recipes only."""
+        try:
+            return pairer.pair(request)
+        except UnknownBookError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        except PairingError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
 
     @app.get("/products/{product_id}")
     def get_product(product_id: int, fashion: FashionDep) -> Product:
