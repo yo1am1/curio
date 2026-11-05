@@ -1,22 +1,26 @@
 #!/usr/bin/env bash
 # Curio quick start without Docker: install, prepare the cocktail recipes once, run API + UI.
 #
-#   scripts/quickstart.sh
+#   scripts/quickstart.sh                 # cocktails
+#   CURIO_BOOKS=1 scripts/quickstart.sh   # cocktails and books
 #
 # Needs uv (https://docs.astral.sh/uv/); uv fetches Python 3.13 itself. The first run
 # installs the dependencies and downloads the pinned ~400 KB recipe file; later runs start in
 # seconds. Chat works when LLM_* is set in .env (see .env.example). Fashion stays opt-in:
 # prepare the H&M data (docs/technical-guide.md#fashion-data), then run with
-# ENABLED_DOMAINS=fashion,cocktails.
+# ENABLED_DOMAINS=fashion,cocktails,books. CURIO_BOOKS=1 also prepares the book catalog once
+# (goodbooks-10k: a checksum-verified ~150 MB download, under a minute and about 1 GB of RAM
+# on a laptop; the result is ~9 MB). Books already prepared are always served.
 #
-# Environment: ENABLED_DOMAINS (default: cocktails), API_PORT (8000), UI_PORT (8501).
+# Environment: CURIO_BOOKS (0), ENABLED_DOMAINS (default: cocktails,books; a domain whose data
+# is not prepared is skipped), API_PORT (8000), UI_PORT (8501).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 API_PORT="${API_PORT:-8000}"
 UI_PORT="${UI_PORT:-8501}"
-export ENABLED_DOMAINS="${ENABLED_DOMAINS:-cocktails}"
+export ENABLED_DOMAINS="${ENABLED_DOMAINS:-cocktails,books}"
 export API_URL="http://127.0.0.1:${API_PORT}"
 # Local traffic between the UI and the API must not go through an HTTP proxy.
 export NO_PROXY="127.0.0.1,localhost${NO_PROXY:+,$NO_PROXY}"
@@ -36,6 +40,11 @@ uv sync --locked --extra ui --extra anthropic --quiet
 if [[ ! -s data/cocktails.parquet ]]; then
     say "Preparing the cocktail recipes (one-off ~400 KB download)"
     uv run --no-sync python -m scripts.prepare_cocktails
+fi
+
+if [[ "${CURIO_BOOKS:-0}" == 1 && ! ( -s data/books.parquet && -s data/book_neighbours.parquet ) ]]; then
+    say "Preparing the book catalog (one-off ~150 MB download, under a minute)"
+    uv run --no-sync python -m scripts.prepare_books
 fi
 
 say "Starting the API on ${API_URL} (domains: ${ENABLED_DOMAINS})"

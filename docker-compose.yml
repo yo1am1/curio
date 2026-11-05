@@ -1,6 +1,7 @@
 # Curio runs in one of two stacks; start one at a time (both publish ports 8000 and 8501).
 #
 #   docker compose --profile demo up --build      # quick start: cocktails, no H&M download
+#   DEMO_BOOKS=1 docker compose --profile demo up --build   # ... plus books (~150 MB download)
 #   docker compose --profile fashion up --build   # full stack: fashion (+ cocktails if prepared)
 #
 # Optional: add `--profile ollama` to the demo for a local LLM (see docs/technical-guide.md).
@@ -11,23 +12,33 @@ x-curio: &curio
 
 services:
   # --- Quick start (profile: demo) ---------------------------------------------------------
-  # Recipes live in the `demo-data` volume, so nothing is written to ./data and no host
-  # permissions are involved. The first run downloads the pinned ~400 KB recipe file.
+  # Recipes (and books) live in the `demo-data` volume, so nothing is written to ./data and no
+  # host permissions are involved. The first run downloads the pinned ~400 KB recipe file;
+  # with DEMO_BOOKS=1 (shell or .env) it also prepares goodbooks-10k once (~150 MB download,
+  # under a minute, about 1 GB of RAM).
   demo-data:
     <<: *curio
     build: .
     profiles: [demo]
     volumes: [demo-data:/app/data]
+    environment:
+      DEMO_BOOKS: ${DEMO_BOOKS:-0}
     command:
       - sh
       - -c
-      - test -s data/cocktails.parquet || python -m scripts.prepare_cocktails
+      - |
+        set -e
+        test -s data/cocktails.parquet || python -m scripts.prepare_cocktails
+        if [ "$$DEMO_BOOKS" = 1 ] && ! test -s data/book_neighbours.parquet; then
+          python -m scripts.prepare_books
+        fi
 
   demo-api:
     <<: *curio
     profiles: [demo]
     environment:
-      ENABLED_DOMAINS: cocktails   # never loads CLIP or Qdrant, even with fashion data around
+      # Never loads CLIP or Qdrant, even with fashion data around; books only once prepared.
+      ENABLED_DOMAINS: cocktails,books
     ports: ["8000:8000"]
     volumes: [demo-data:/app/data:ro]
     depends_on:
@@ -109,6 +120,15 @@ services:
     <<: *curio
     profiles: [tools]   # not started by `up`
     command: ["python", "-m", "scripts.prepare_cocktails"]
+    volumes:
+      - ./data:/app/data
+
+  # The same for the book catalog (goodbooks-10k):
+  #   docker compose run --rm --user "$(id -u):$(id -g)" prepare-books
+  prepare-books:
+    <<: *curio
+    profiles: [tools]
+    command: ["python", "-m", "scripts.prepare_books"]
     volumes:
       - ./data:/app/data
 
