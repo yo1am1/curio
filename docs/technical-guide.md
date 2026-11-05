@@ -93,7 +93,8 @@ bounded (300 characters, four notes), marked `carried`, and only shown again: th
 sent to the model and are not grounding evidence.
 On the real sample a plan takes about 0.6-1 s with CLIP on CPU. Results on the real data
 look like outfits: a women's summer wedding under €80 is River Wrap Dress €29.99, Paloma
-heels €12.99, Sylvia Cross Bag €17.99 and Class Ziggy hoop earrings €7.99 (€68.96); a men's
+heels €12.99, Hedi top handle bag €24.99 and Flirty Friday hoop earrings €9.99, bought together
+with the bag (€77.96); a men's
 is a white linen shirt, slim suit trousers and the slim blazer bought with them, plus
 loafers (€73.96). The photo index covers 14,280 of the 14,300 products, but the sample has few men's (26)
 and children's (46) shoes, so those slots have less choice and may fall back to another

@@ -101,7 +101,7 @@ spend what the later slots do not need at minimum, and prefers pieces bought tog
 or looking like, the ones already chosen. The trace shows the plan ("Planned 4 slots for
 “summer wedding”: dress, shoes, bag, accessory · for women · budget €80.00"), each slot
 ("Filled shoes: Paloma · €12.99. Best match for “elegant heeled sandals”.") and the result
-("Outfit ready: 4 pieces for €68.96 of a €80.00 budget."). A slot the budget cannot cover
+("Outfit ready: 4 pieces for €77.96 of a €80.00 budget."). A slot the budget cannot cover
 is shown as "Could not fill …" with its cheapest price, never dropped silently.
 
 The tool's audience is the one the shopper gave, else a wearer named in the occasion
