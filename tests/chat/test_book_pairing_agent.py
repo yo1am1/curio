@@ -247,6 +247,29 @@ def test_drinks_from_an_earlier_turn_are_not_evidence(agent):
     assert reply.grounding.issues == ["Manhattan was not returned by PairCocktail"]
 
 
+def test_titles_the_pairers_reasons_cite_count_as_evidence(agent, chat_model_replying):
+    """A lore line cites another book (The Long Goodbye in the real table); answers may too."""
+    from clothes_recommender.pairings.themes import Lore
+
+    books, cocktails = pairing_books(), pairing_cocktails()
+    lore = [Lore("Raymond Chandler", "Old Fashioned", "Marlowe orders one in Pride and Prejudice")]
+    pairer = BookCocktailPairer(books, cocktails, CocktailRecommender(cocktails), lore=lore)
+    answer = "As in **Pride and Prejudice**, an **Old Fashioned** (drink #1)."
+    assistant = BookAssistant(
+        chat_model_replying(action("PairCocktail", {"book_id": 1}), answer),
+        books,
+        BookRecommender(books, book_neighbours_frame()),
+        pairer=pairer,
+        cocktails=cocktails,
+    )
+    reply = assistant.reply("Pair The Big Sleep", [])
+    assert reply.cocktails[0].name == "Old Fashioned"
+    assert reply.grounding.status == "verified"
+    # Without the pairing, the same title is unverified.
+    plain = agent("**Pride and Prejudice** is great.", "**Pride and Prejudice** is great.")
+    assert plain.reply("Hi", []).grounding.status == "fallback"
+
+
 def test_places_and_book_titles_are_not_read_as_drinks(agent):
     """ "Manhattan" as a place is prose; a bold book title that is not a drink is a book."""
     assistant = agent(

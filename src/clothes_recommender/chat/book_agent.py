@@ -83,6 +83,9 @@ PAIR_READING_LIST = "Pair a cocktail with my reading list"
 # (the only drinks an answer may name).
 PAIRING = "pairing"
 PAIRED_DRINKS = "paired_drinks"
+# The pairer's profile and reasons this turn: titles they cite (a lore line names The Long
+# Goodbye) are tool output, so the answer may repeat them.
+PAIRED_TEXT = "paired_text"
 STARTERS = (
     "Fantasy like The Name of the Wind",
     "Short classic novels",
@@ -343,6 +346,9 @@ class BookToolkit:
         turn.extras[PAIRING] = result
         paired: dict[int, Cocktail] = turn.extras.setdefault(PAIRED_DRINKS, {})
         paired.update({p.cocktail.drink_id: p.cocktail for p in result.pairings})
+        turn.extras.setdefault(PAIRED_TEXT, []).extend(
+            [result.profile.summary, *(r for p in result.pairings for r in p.reasons)]
+        )
         names = ", ".join(p.cocktail.name for p in result.pairings)
         free = " alcohol-free" if result.profile.alcohol_free else ""
         step = AgentStep(
@@ -417,8 +423,9 @@ class BookToolkit:
     def check(self, turn: Turn[Book], text: str) -> GroundingReport:
         books = list(turn.evidence.values())
         drinks = list(turn.extras.get(PAIRED_DRINKS, {}).values())
+        tool_text = turn.extras.get(PAIRED_TEXT, [])
         report = self._grounding.check(
-            text, books, typed=turn.message, also_allowed=[c.name for c in drinks]
+            text, books, typed=turn.message, also_allowed=[*(c.name for c in drinks), *tool_text]
         )
         if self._drinks is None:
             return report
