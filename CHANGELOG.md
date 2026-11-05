@@ -102,6 +102,14 @@ All notable changes to Curio are recorded here. The format follows
 - `Services` holds the loaded domains (`services.fashion`, `services.cocktails`) instead of
   flat fashion and cocktail fields.
 
+### Fixed
+
+- Outfit builder: a wearer named in the occasion ("wedding outfit for my husband", "for
+  her") now sets the audience before the best-match guess, in `POST /outfits` and in chat,
+  where it also beats remembered section filters. A companion ("dinner with my wife") does
+  not set it. Previously such requests could get a women's outfit and a "from the best
+  match" note.
+
 ### Known limitations
 
 - Outfit coherence comes from per-slot CLIP queries, co-purchases and photo similarity; there
@@ -109,7 +117,8 @@ All notable changes to Curio are recorded here. The format follows
   the partial photo index has few men's (13) and children's (3) shoes.
 
 - Book genres and moods come from Goodreads reader shelves (crowd labels). A third of the
-  books have no cover in the dataset and 9 % no page count; a length filter leaves those out.
+  books have no cover in the dataset (141 of the 800 most popular) and 9 % no page count; a
+  length filter leaves those out. An Open Library cover fallback by ISBN is planned.
 - Book grounding does not check single-word titles shorter than six letters ("It", "Dune"),
   or plot, year and page claims in prose.
 - The book data's licence is CC BY-SA 4.0; covers and descriptions are the publishers' and

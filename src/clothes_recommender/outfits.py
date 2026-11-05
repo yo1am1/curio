@@ -458,8 +458,15 @@ def occasion_season(text: str) -> str:
     return detect(_SEASONS, text) or ("summer" if style == "beach" else "")
 
 
+# "dinner with my wife" names a companion, not the wearer: such phrases are ignored.
+_COMPANION = re.compile(
+    r"\bwith\s+(?:(?:my|our|her|his|their|a|the)\s+)?(?:(?:new|best)\s+)?\w+", re.IGNORECASE
+)
+
+
 def audience_in(text: str) -> Audience | None:
-    found = detect(_AUDIENCE_WORDS, text)
+    """The audience the occasion names ("for my husband", "kids' party"), if any."""
+    found = detect(_AUDIENCE_WORDS, _COMPANION.sub(" ", text))
     return found if found in AUDIENCE_SECTIONS else None  # type: ignore[return-value]
 
 
@@ -578,7 +585,7 @@ class OutfitPlanner:
     def build(self, request: OutfitRequest) -> Generator[OutfitProgress, None, Outfit]:
         """Plan and fill an outfit, yielding the plan (after each slot's candidates are
         searched) and then each filled or empty slot."""
-        audience, source = request.audience, "request"
+        audience, source = request.audience or audience_in(request.occasion), "request"
         if audience is None:
             audience = self._probe_audience(request)
             source = "best match" if audience else "none"

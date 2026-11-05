@@ -65,6 +65,10 @@ def test_occasion_words_choose_style_season_and_audience():
     assert audience_in("a wedding outfit for him") == "men"
     assert audience_in("for my girlfriend") == "women"
     assert audience_in("a party") is None
+    assert audience_in("wedding outfit for my husband") == "men"
+    assert audience_in("Party look for my son") is None  # no audience word
+    assert audience_in("first date dinner with my boyfriend") is None  # a companion
+    assert audience_in("dinner with my wife, for him") == "men"
 
 
 def test_each_occasion_plans_three_or_four_distinct_slots_per_audience():
@@ -194,6 +198,16 @@ def test_audience_comes_from_the_best_match_when_not_given(planner, outfit_searc
     assert outfit.notes == ["Planned for women from the best match; ask for another audience."]
     outfit_search.boost[8] = 0.1  # the Oxford Shirt becomes the best match
     assert build(planner, "summer wedding", 200).audience == "men"
+
+
+def test_the_audience_named_in_the_occasion_beats_the_best_match(planner, outfit_search):
+    # The women's dress is the best garment match, but the occasion names the wearer.
+    outfit = build(planner, "wedding outfit for my husband", 150)
+    assert outfit.audience == "men"
+    assert {slot.slot for slot in outfit.slots} == {"top", "bottom", "outerwear", "shoes"}
+    assert not any("best match" in note for note in outfit.notes)
+    # A companion is not the wearer: the best match still decides.
+    assert build(planner, "summer wedding with my boyfriend", 80).audience == "women"
 
 
 def test_bought_together_pieces_are_preferred_and_explained(outfit_search, outfit_catalog):

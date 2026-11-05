@@ -49,8 +49,9 @@ everyone else accessible, and offline evaluation scores all eligible customers.
    wedding is shirt, suit trousers, blazer and smart shoes. Winter and autumn swap the last
    slot for a coat or jacket (winter shoes become boots). Named slots replace the template
    and are filled in a fixed order (dress, top, bottom, outerwear, shoes, bag, accessory).
-   Without an audience, the section of the best garment match for the occasion decides it
-   and a note says so.
+   Without an audience, a wearer named in the occasion decides it ("for my husband", "for
+   her", "kids' party"; a companion such as "dinner with my wife" does not count), else the
+   section of the best garment match for the occasion, and a note says so.
 2. **Candidates.** Each slot runs two filtered CLIP searches: the 24 best matches under the
    whole budget and the 12 best under the slot's fair share (budget × weight / total
    weight), so a tight budget still has relevant, affordable options. Filters are the

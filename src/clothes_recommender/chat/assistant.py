@@ -69,6 +69,7 @@ from clothes_recommender.outfits import (
     OutfitPlanner,
     OutfitRequest,
     PlannedSlots,
+    audience_in,
 )
 from clothes_recommender.search import ProductSearch
 
@@ -227,7 +228,9 @@ class FashionToolkit:
         request = OutfitRequest(
             occasion=action.occasion.strip(),
             budget=action.budget,
-            audience=action.audience or _audience(turn.intent.sections),
+            audience=(
+                action.audience or audience_in(action.occasion) or _audience(turn.intent.sections)
+            ),
             slots=tuple(action.slots or ()),
             max_item_price=turn.context.preferences.max_price,
         )

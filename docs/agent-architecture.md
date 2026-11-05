@@ -104,8 +104,9 @@ or looking like, the ones already chosen. The trace shows the plan ("Planned 4 s
 ("Outfit ready: 4 pieces for €68.96 of a €80.00 budget."). A slot the budget cannot cover
 is shown as "Could not fill …" with its cheapest price, never dropped silently.
 
-The tool's audience is the one the shopper gave, else the one their section filters or
-remembered sections point to, else the section of the best match (the answer says so). A
+The tool's audience is the one the shopper gave, else a wearer named in the occasion
+("wedding outfit for my husband"), else the one their section filters or remembered
+sections point to, else the section of the best match (the answer says so). A
 remembered budget (`max_price`) caps every piece. The server keeps no outfit: the reply
 carries `outfit` with its `state`, the UI sends that back as `TurnContext.outfit`, and the
 toolkit re-reads every piece and price from the catalog. The session prompt lists the

@@ -56,6 +56,16 @@ def test_outfits_on_the_real_index_are_real_outfits(api, body, expected_type):
     assert {p["section"] for p in pieces} <= audience[body["audience"]]
 
 
+def test_a_wearer_named_in_the_occasion_sets_the_audience(api):
+    # Review repro: without an audience this used to plan a women's dress and heels.
+    body = {"occasion": "wedding outfit for my husband", "budget": 150}
+    outfit = api.post("/outfits", json=body).json()
+    assert outfit["audience"] == "men", outfit
+    sections = {slot["product"]["section"] for slot in outfit["slots"] if slot["product"]}
+    assert sections and sections <= {"Menswear", "Sport"}
+    assert not any("best match" in note for note in outfit["notes"])
+
+
 def test_a_tight_budget_reports_which_slot_does_not_fit(api):
     body = {"occasion": "wedding", "budget": 8, "audience": "women"}
     outfit = api.post("/outfits", json=body).json()

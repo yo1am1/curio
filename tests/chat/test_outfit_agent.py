@@ -211,6 +211,18 @@ def test_remembered_menswear_and_budget_shape_the_outfit(
     assert "at €40.00 or less" in reply.outfit.slots[2].issue
 
 
+def test_the_wearer_named_in_the_occasion_beats_remembered_sections(
+    chat_model_replying, outfit_search, outfit_catalog
+):
+    occasion = {"occasion": "wedding outfit for my husband"}
+    model = chat_model_replying(NO_SEARCH, action("BuildOutfit", occasion), "Here it is.")
+    context = TurnContext(preferences=ShopperPreferences(sections=["Ladieswear"]))
+    reply = assistant(model, outfit_search, outfit_catalog).reply("For my husband", [], context)
+
+    assert reply.outfit.audience == "men"
+    assert not reply.outfit.notes  # the audience was asked for, not guessed
+
+
 def test_invalid_outfit_calls_are_rejected(chat_model_replying, outfit_search, outfit_catalog):
     model = chat_model_replying(
         NO_SEARCH,
