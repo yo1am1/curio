@@ -1045,6 +1045,7 @@ BOOK_COPY = DomainCopy(
         "Fantasy like The Name of the Wind",
         "Short classic novels",
         "A cosy mystery",
+        "Pair a cocktail with my reading list",
     ),
     unavailable=(
         "The book assistant is currently unavailable. "
@@ -1688,7 +1689,12 @@ def show_chat_turn(turn: dict, index: int, context: str, latest: bool = False):
             products = [p for p in products if p["product_id"] not in worn]
         if products:
             show_chat_products(products, index, context)
-        if turn.get("cocktails"):
+        if turn.get("pairing"):
+            with st.container(key=f"chat_pairing_{context}_{index}", border=True):
+                pairing_card(
+                    turn["pairing"], key=f"chat_{context}_{index}", compact=context == "popup"
+                )
+        elif turn.get("cocktails"):
             show_chat_cocktails(turn["cocktails"], index, context)
         if turn.get("books"):
             show_chat_books(turn["books"], index, context)
@@ -1780,6 +1786,9 @@ def book_context() -> dict:
         context["book_preferences"] = memory
     if reading_list():
         context["book_shortlist"] = [b["book_id"] for b in reading_list()]
+    # Drink pairings honour the remembered cocktail tastes (alcohol-free, avoided ingredients).
+    if tastes := {key: value for key, value in cocktail_memory().items() if value}:
+        context["cocktail_preferences"] = tastes
     return context
 
 
@@ -1943,6 +1952,7 @@ def run_turn(
         "pending_action": reply.get("pending_action"),
         "suggestions": reply.get("suggestions", []),
         "outfit": reply.get("outfit"),
+        "pairing": reply.get("pairing"),
     }
     if reply.get("outfit"):
         # Follow-ups ("cheaper shoes", "save the outfit") refer to the latest outfit.
@@ -2625,6 +2635,8 @@ def pantry_panel(ingredients: list[str]) -> None:
 
 
 def cocktails_page() -> None:
+    if (drink_id := st.session_state.pop(OPEN_DRINK, None)) is not None:
+        cocktail_details(drink_id)  # handed over from a book's pairing
     st.title("Cocktails")
     count = st.session_state.get("service_health", {}).get("cocktail_count")
     st.caption(
@@ -3026,6 +3038,7 @@ def books_page() -> None:
         if count
         else "Search popular books, start from one you loved, or browse by mood."
     )
+    reading_list_pairing()
     mode = st.segmented_control(
         "Find books by",
         ["search", "because", "browse"],
@@ -3091,6 +3104,18 @@ def book_details(book_id: int) -> None:
                     )
                     st.rerun()
                 st.link_button("Goodreads", book["source_url"], icon=":material/open_in_new:")
+                if pairing_available():
+                    st.button(
+                        "Pair a drink",
+                        icon=":material/local_bar:",
+                        key=f"book_detail_pair_{book_id}",
+                        on_click=toggle_pairing,
+                        args=(book_id,),
+                    )
+    if pairing_available() and st.session_state.get(f"{PAIR_OPEN}{book_id}"):
+        with st.container(key="book_pairing", border=True):
+            st.markdown(":material/local_bar: **Pour me something to read with**")
+            pairing_panel({"book_id": book_id}, key=f"book_{book_id}", in_dialog=True)
     similar, by_author = st.columns(2, gap="large")
     # Buttons cannot open a second native dialog inside this one, so related books are text.
     with similar:
@@ -3124,6 +3149,143 @@ def related_books(hits: list[dict] | None, empty: str) -> None:
         reasons = [r for r in hit.get("reasons", []) if not r.startswith("By ")]
         reason = f" · {reasons[0]}" if reasons else ""
         st.text(f"{item['title']} · ★ {item['average_rating']:.2f}{reason}")
+
+
+# --- Book → cocktail pairing ----------------------------------------------------------------
+
+PAIR_OPEN = "pair_open_"  # + book id: the dialog's pairing section is open
+OPEN_DRINK = "open_drink"  # a drink the Cocktails page opens (handed over from a dialog)
+PAGE_ROUTES = "page_routes"  # url path -> registered page, for hand-offs
+PAIRINGS_PATH = "/pairings/book-cocktail"
+
+
+def pairing_available() -> bool:
+    """Pairing needs the API to serve both books and cocktails."""
+    served = served_domains(st.session_state.get("service_health", {}))
+    return all(served.get(domain, {}).get("enabled") for domain in (BOOKS, COCKTAILS))
+
+
+def toggle_pairing(book_id: int) -> None:
+    key = f"{PAIR_OPEN}{book_id}"
+    st.session_state[key] = not st.session_state.get(key, False)
+
+
+def next_pairing(seed_key: str, sets: int) -> None:
+    st.session_state[seed_key] = (st.session_state.get(seed_key, 0) + 1) % max(sets, 1)
+
+
+def open_drink(drink_id: int) -> None:
+    """Show a recipe from inside a dialog, which cannot open another dialog: switch to the
+    Cocktails page, which opens it."""
+    st.session_state[OPEN_DRINK] = drink_id
+    st.session_state["domain"] = COCKTAILS
+    page = st.session_state.get(PAGE_ROUTES, {}).get("cocktails")
+    if page is not None:
+        st.switch_page(page)
+    st.rerun()
+
+
+def pairing_tastes() -> dict:
+    """Remembered tastes that apply to pairings: avoided genres and the cocktail tastes."""
+    body: dict = {}
+    if avoided_genres := reading_memory().get("avoided_genres"):
+        body["avoided_genres"] = avoided_genres
+    if tastes := {key: value for key, value in cocktail_memory().items() if value}:
+        body["cocktail_preferences"] = tastes
+    return body
+
+
+def pairing_card(result: dict, *, key: str, compact: bool = False, in_dialog: bool = False) -> None:
+    """Drinks with photos, alcohol status and the pairer's reasons."""
+    st.caption(plain(result["profile"]["summary"]))
+    pairings = result["pairings"]
+    if not pairings:
+        free = result["profile"].get("alcohol_free")
+        st.info(
+            "No alcohol-free recipe fits this profile yet. Try another book."
+            if free
+            else "No recipe fits this profile yet. Try another book."
+        )
+        return
+    saved = {item["drink_id"] for item in cocktail_shortlist()}
+    columns = [st.container() for _ in pairings] if compact else st.columns(len(pairings))
+    for column, item in zip(columns, pairings, strict=True):
+        cocktail = item["cocktail"]
+        did = cocktail["drink_id"]
+        with column, st.container(key=f"pairing_drink_{key}_{did}"):
+            with st.container(horizontal=compact, vertical_alignment="center", gap="small"):
+                cocktail_image(
+                    cocktail, width=64 if compact else "stretch", key=f"pair_{key}_{did}"
+                )
+                with st.container(gap=None):
+                    st.text(cocktail["name"])
+                    alcohol_badge(cocktail)
+            for reason in item["reasons"]:
+                st.caption(plain(reason))
+            with st.container(horizontal=True, gap="small"):
+                if st.button(
+                    "Recipe",
+                    key=f"pairing_recipe_{key}_{did}",
+                    icon=":material/local_bar:",
+                    type="tertiary",
+                    help=f"Open the {cocktail['name']} recipe",
+                ):
+                    (open_drink if in_dialog else cocktail_details)(did)
+                st.button(
+                    "Saved" if did in saved else "Save",
+                    key=f"pairing_save_{key}_{did}",
+                    icon=":material/favorite:" if did in saved else ":material/favorite_border:",
+                    type="tertiary",
+                    disabled=did in saved,
+                    on_click=add_cocktail,
+                    args=(cocktail,),
+                )
+    st.caption(plain(result["note"]))
+
+
+def pairing_panel(body: dict, *, key: str, in_dialog: bool = False) -> None:
+    """Pairings for `body` (a book or a reading list) with an alcohol-free toggle and
+    "Another pairing", which cycles through the pairer's sets."""
+    seed_key = f"pair_seed_{key}"
+    alcohol_free = st.toggle(
+        "Alcohol-free only",
+        key=f"pair_alcohol_free_{key}",
+        help="Children's and young-adult books always get alcohol-free drinks.",
+    )
+    request = (
+        body
+        | pairing_tastes()
+        | {
+            "alcohol_free": alcohol_free,
+            "seed": st.session_state.get(seed_key, 0),
+        }
+    )
+    with st.spinner("Pouring…"):
+        result = call_api("POST", PAIRINGS_PATH, json=request)
+    if not result:
+        return
+    pairing_card(result, key=key, in_dialog=in_dialog)
+    st.button(
+        "Another pairing",
+        key=f"pair_another_{key}",
+        icon=":material/refresh:",
+        disabled=result.get("sets", 1) < 2,
+        help="Another set of drinks for the same profile",
+        on_click=next_pairing,
+        args=(seed_key, result.get("sets", 1)),
+    )
+
+
+def reading_list_pairing() -> None:
+    """The Books page card: drinks for the reading list and remembered reading tastes."""
+    memory = reading_memory()
+    books = [b["book_id"] for b in reading_list()][:MAX_SHORTLIST]
+    liked = memory.get("liked_genres", [])
+    if not pairing_available() or not (books or liked):
+        return
+    with st.container(key="pairing_reading_list", border=True):
+        st.subheader("Your reading list's cocktail", anchor=False)
+        pairing_panel({"book_ids": books, "liked_genres": liked}, key="reading_list")
 
 
 # --- App shell -----------------------------------------------------------------------------
@@ -3346,6 +3508,7 @@ def main() -> None:
         return
     domain = active_domain(available)
     pages = domain_pages(domain, available)
+    st.session_state[PAGE_ROUTES] = {p.url_path: p for p in pages if p.url_path}
     page = st.navigation(pages, position="top")
     owner = PAGE_DOMAINS.get(page.url_path)
     switched = st.session_state.pop("domain_switched", False)

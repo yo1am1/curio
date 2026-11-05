@@ -312,3 +312,20 @@ h1, h2, h3 { text-wrap: balance; }
         width: auto; min-width: 0;
     }
 }
+
+/* Book → cocktail pairing: square drink photos, the reasons under each, capped on phones. */
+[class*="st-key-pairing_drink_"] [data-testid="stImage"] img {
+    width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: .5rem;
+    max-height: min(14rem, 32dvh);
+}
+[class*="st-key-pairing_drink_"] [data-testid="stText"] { font-weight: 550; font-size: 1.05rem; }
+[class*="st-key-pairing_drink_"] [data-testid="stCaptionContainer"] { line-height: 1.45; }
+[class*="st-key-pairing_drink_"] button { min-height: 2.5rem; }
+[class*="st-key-chat_pairing_popup_"] [class*="st-key-pairing_drink_"] [data-testid="stImage"] img {
+    width: 64px; height: 64px;
+}
+.st-key-pairing_reading_list { margin-block-end: 1rem; }
+@media (max-width: 640px) {
+    [class*="st-key-pairing_drink_"] [data-testid="stImage"] img { max-height: 11rem; }
+    [class*="st-key-pairing_drink_"] { padding-block-end: .75rem; }
+}
