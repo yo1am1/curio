@@ -264,3 +264,35 @@ def test_alias_table_is_normalised() -> None:
     for key, values in PANTRY_ALIASES.items():
         assert key == key.strip().casefold()
         assert all(value == value.strip().casefold() for value in values)
+
+
+# --- Profile scoring hooks (book-cocktail pairing) -------------------------------------------
+
+
+def test_term_scores_rank_recipes_by_weighted_words(recommender: CocktailRecommender) -> None:
+    scores = recommender.term_scores({"espresso": 1.0, "vodka": 0.5, "unknown": 9.0})
+    assert max(scores, key=scores.get) == 7  # Espresso Martini uses both words
+    assert all(0 < score <= 1 for score in scores.values())
+    # Words are normalised like recipes ("Limes" -> lime); no known word scores nothing.
+    assert recommender.term_scores({"Limes": 1.0}) == recommender.term_scores({"lime": 1.0})
+    assert recommender.term_scores({"unicorn": 1.0}) == {}
+    assert recommender.term_scores({"lime": 0.0}) == {}
+
+
+def test_ingredients_using_cites_recipe_spelling(recommender: CocktailRecommender) -> None:
+    assert recommender.ingredients_using(7, ["espresso", "vodkas"]) == ["Vodka", "Espresso"]
+    assert recommender.ingredients_using(7, ["gin"]) == []
+    assert recommender.ingredients_using(999, ["vodka"]) == []
+
+
+def test_contains_any_uses_search_exclusion_matching(recommender: CocktailRecommender) -> None:
+    assert recommender.contains_any(7, ["vodka"])
+    assert not recommender.contains_any(7, ["gin", "egg"])
+    assert not recommender.contains_any(999, ["vodka"])
+
+
+def test_ingredient_similarity_matches_similar(recommender: CocktailRecommender) -> None:
+    hit = recommender.similar(1, top_k=1)[0]
+    assert recommender.ingredient_similarity(1, hit.cocktail.drink_id) == pytest.approx(hit.score)
+    assert recommender.ingredient_similarity(1, 1) == pytest.approx(1)
+    assert recommender.ingredient_similarity(1, 999) == 0.0

@@ -27,7 +27,7 @@ import math
 import re
 import unicodedata
 from collections import Counter
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -301,6 +301,53 @@ class CocktailRecommender:
             )
         )
         return matches[:top_k]
+
+    # --- Profile scoring (used by book-cocktail pairing) ---------------------------------
+
+    def term_scores(self, weights: Mapping[str, float]) -> dict[int, float]:
+        """TF-IDF cosine between every recipe and a weighted bag of words, by drink_id.
+
+        Words are normalised like recipe words ("whisky" -> "whiskey", "bitters" ->
+        "bitter"); words no recipe uses are ignored, and recipes using none of the words are
+        left out. This is the search index without the query parsing, so callers that build
+        a flavour profile (`pairings`) score recipes exactly as search does.
+        """
+        merged: Counter[str] = Counter()
+        for word, weight in weights.items():
+            for normalised in terms(word):
+                if normalised in self._vocabulary and weight > 0:
+                    merged[normalised] += weight
+        vector = self._query_vector(merged)
+        if vector is None:
+            return {}
+        similarity = self._documents @ vector
+        return {
+            self._row_id(row): round(float(similarity[row]), 9)
+            for row in np.flatnonzero(similarity > 1e-12).tolist()
+        }
+
+    def ingredients_using(self, drink_id: int, words: Iterable[str]) -> list[str]:
+        """The recipe's ingredient names (catalog spelling, recipe order) that use any of
+        `words` after normalisation ("bitters" finds "Angostura Bitters")."""
+        row = self._row.get(drink_id)
+        wanted = {normalised for word in words for normalised in terms(word)}
+        if row is None or not wanted:
+            return []
+        return [i.name for i in self._recipes[row] if i.words & wanted]
+
+    def contains_any(self, drink_id: int, ingredients: Sequence[str]) -> bool:
+        """Whether the recipe lists any of `ingredients`, with the broad matching of search
+        exclusions ("egg" also matches "Egg white"); never an allergen guarantee."""
+        row = self._row.get(drink_id)
+        filters = _filters(ingredients)
+        return row is not None and any(_filter_hits(f, self._recipes[row]) for f in filters)
+
+    def ingredient_similarity(self, drink_id: int, other_id: int) -> float:
+        """IDF-weighted overlap of two recipes' ingredient families (as `similar`), 0-1."""
+        row, other = self._row.get(drink_id), self._row.get(other_id)
+        if row is None or other is None or self._ingredient_vectors.shape[1] == 0:
+            return 0.0
+        return float(self._ingredient_vectors[row] @ self._ingredient_vectors[other])
 
     def _ingredients_ok(
         self, row: int, required: Sequence[_Filter], excluded: Sequence[_Filter]

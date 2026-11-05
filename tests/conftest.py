@@ -175,8 +175,9 @@ COCKTAIL_ROWS = [
 ]
 
 
-def cocktail_frame():
-    """The prepared cocktails.parquet layout for a tiny, varied recipe set."""
+def cocktail_frame(rows=None):
+    """The prepared cocktails.parquet layout for a tiny, varied recipe set (or for `rows`,
+    laid out like `COCKTAIL_ROWS`)."""
     import json as _json
 
     return pd.DataFrame(
@@ -191,7 +192,9 @@ def cocktail_frame():
                 "image_url": f"https://www.thecocktaildb.com/images/media/drink/{drink_id}.jpg",
                 "ingredients": _json.dumps([{"name": n, "measure": m} for n, m in ingredients]),
             }
-            for drink_id, name, alcoholic, category, glass, ingredients in COCKTAIL_ROWS
+            for drink_id, name, alcoholic, category, glass, ingredients in (
+                COCKTAIL_ROWS if rows is None else rows
+            )
         ]
     )
 
