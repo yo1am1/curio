@@ -161,7 +161,8 @@ scripts/quickstart.sh
 ```
 
 Both prepare the cocktail recipes on the first run (a checksum-verified ~400 KB download)
-and start the API and the UI. Open http://localhost:8501. Recipe search, similar drinks and
+and start the API and the UI. Open http://localhost:8501 (the quick start serves this
+computer only; `UI_HOST=0.0.0.0` opens the UI to your network). Recipe search, similar drinks and
 "What can I make?" work straight away. For books too, run
 `DEMO_BOOKS=1 docker compose --profile demo up --build` or `CURIO_BOOKS=1 scripts/quickstart.sh`:
 the first run also prepares goodbooks-10k (a checksum-verified ~150 MB download, under a

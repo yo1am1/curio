@@ -13,13 +13,17 @@
 # on a laptop; the result is ~9 MB). Books already prepared are always served.
 #
 # Environment: CURIO_BOOKS (0), ENABLED_DOMAINS (default: cocktails,books; a domain whose data
-# is not prepared is skipped), API_PORT (8000), UI_PORT (8501).
+# is not prepared is skipped), API_PORT (8000), UI_PORT (8501), UI_HOST (127.0.0.1).
+#
+# Both servers listen on this computer only. UI_HOST=0.0.0.0 opens the UI to your network:
+# anyone who can reach it can chat, on your LLM key. The API always stays on 127.0.0.1.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 API_PORT="${API_PORT:-8000}"
 UI_PORT="${UI_PORT:-8501}"
+UI_HOST="${UI_HOST:-127.0.0.1}"
 export ENABLED_DOMAINS="${ENABLED_DOMAINS:-cocktails,books}"
 export API_URL="http://127.0.0.1:${API_PORT}"
 # Local traffic between the UI and the API must not go through an HTTP proxy.
@@ -96,6 +100,14 @@ if not health["llm_configured"]:
     )
 PY
 
-say "Curio is ready: open http://localhost:${UI_PORT} (Ctrl+C stops both servers)"
+if [[ "$UI_HOST" != 127.0.0.1 && "$UI_HOST" != localhost ]]; then
+    echo "    Warning: UI_HOST=${UI_HOST} serves the UI beyond this computer; anyone who can" \
+        "reach it can use the chat and your LLM key." >&2
+fi
+
+ui_url_host="$UI_HOST"
+[[ "$UI_HOST" == 0.0.0.0 || "$UI_HOST" == localhost ]] && ui_url_host=127.0.0.1
+say "Curio is ready: open http://${ui_url_host}:${UI_PORT} (Ctrl+C stops both servers)"
 uv run --no-sync streamlit run src/clothes_recommender/ui.py \
-    --server.port "$UI_PORT" --server.headless true --browser.gatherUsageStats false
+    --server.address "$UI_HOST" --server.port "$UI_PORT" --server.headless true \
+    --browser.gatherUsageStats false

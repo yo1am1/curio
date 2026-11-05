@@ -110,6 +110,12 @@ All notable changes to Curio are recorded here. The format follows
   not set it. Previously such requests could get a women's outfit and a "from the best
   match" note.
 
+### Security
+
+- `scripts/quickstart.sh` binds the UI to 127.0.0.1 like the API; it previously listened on
+  every interface, so anyone on the network could use the chat and the configured LLM key.
+  `UI_HOST=0.0.0.0` opens it to the network on purpose and prints a warning.
+
 ### Known limitations
 
 - Outfit coherence comes from per-slot CLIP queries, co-purchases and photo similarity; there
@@ -119,6 +125,8 @@ All notable changes to Curio are recorded here. The format follows
 - Book genres and moods come from Goodreads reader shelves (crowd labels). A third of the
   books have no cover in the dataset (141 of the 800 most popular) and 9 % no page count; a
   length filter leaves those out. An Open Library cover fallback by ISBN is planned.
+- The Docker `demo` and `fashion` profiles still publish ports 8000 and 8501 on every host
+  interface (Docker's default); only the uv quick start is local-only.
 - Book grounding does not check single-word titles shorter than six letters ("It", "Dune"),
   or plot, year and page claims in prose.
 - The book data's licence is CC BY-SA 4.0; covers and descriptions are the publishers' and

@@ -418,7 +418,10 @@ fashion engine even though the demo never loads it), then seconds to start.
   the UI; Ctrl+C stops both. `ENABLED_DOMAINS` (default `cocktails,books`; a domain that is
   not prepared is skipped), `API_PORT` and `UI_PORT` change what it serves and where. With
   fashion prepared, `ENABLED_DOMAINS=fashion,cocktails,books scripts/quickstart.sh` serves
-  all three.
+  all three. Both servers listen on 127.0.0.1 only: the UI holds the chat, which spends the
+  configured LLM key. `UI_HOST=0.0.0.0` opens the UI to the network on purpose (the script
+  warns); the API never leaves 127.0.0.1. `tests/test_quickstart_script.py` runs the script
+  with a recording `uv` to check both bindings.
 
 Chat works when `LLM_*` is set in `.env` (see [LLM configuration](#llm-configuration));
 both ways read it. Without it, the assistant says chat is unavailable and how to enable
