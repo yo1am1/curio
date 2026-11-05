@@ -157,6 +157,8 @@ All notable changes to Curio are recorded here. The format follows
   Goodreads and descriptions stay local, while three committed README screenshots show
   covers and a description; they now say those screenshots show covers and a description
   excerpt for illustration only, not licensed by this repository.
+- The README said book titles in answers are checked; it now says titles from the catalog
+  are, and which are not (unknown titles, short or unmarked one-word titles, prose claims).
 
 ### Security
 
@@ -176,8 +178,10 @@ All notable changes to Curio are recorded here. The format follows
   no page count; a length filter leaves those out.
 - The Docker `demo` and `fashion` profiles still publish ports 8000 and 8501 on every host
   interface (Docker's default); only the uv quick start is local-only.
-- Book grounding does not check single-word titles shorter than six letters ("It", "Dune"),
-  or plot, year and page claims in prose.
+- Book grounding checks titles from the catalog only. It does not check titles that are
+  not in the catalog, single-word titles shorter than six letters ("It", "Dune"), one-word
+  titles the answer does not mark as titles (bold, italic, quoted, next to their ID or
+  followed by "by <author>"), or plot, year and page claims in prose.
 - The book data's licence is CC BY-SA 4.0; covers and descriptions are the publishers' and
   Goodreads' material (see README "Data and licences").
 - The first Docker build or `uv sync` still installs PyTorch, which only fashion uses.

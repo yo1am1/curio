@@ -26,9 +26,13 @@ picks from a linked shopping history. In cocktails it searches recipes, finds si
 drinks and matches what you have at home. In books it finds what readers of a book you
 loved also loved, lists an author's books and remembers genres or authors you avoid. Each
 answer shows the steps it took. Prices, product, drink and book IDs, drink names, recipe
-amounts, book titles and ratings are checked against the tool results before you see them. It asks a quick question when a request is vague, and asks
-before saving to your shortlist or remembering preferences. It is available from the
-conversation home and a floating panel on browsing pages.
+amounts and book ratings are checked against the tool results before you see them, and so
+are book titles from the catalog. A title that is not in the catalog is not checked, nor is
+a one-word title that is short ("It") or not marked as a title (bold, italic, quoted, next
+to its ID or followed by its author), since it reads as an ordinary word. It asks a quick
+question when a request is vague, and asks before saving to your shortlist or remembering
+preferences. It is available from the conversation home and a floating panel on browsing
+pages.
 [How the agent works](docs/agent-architecture.md).
 
 ![Curio answering "Black trousers under €30" with verified prices and product cards](docs/screenshots/curio-agent.jpg)
@@ -54,8 +58,9 @@ every search.
 
 ![Cocktail answer filtered by a remembered alcohol-free preference](docs/screenshots/curio-cocktail-agent.jpg)
 
-And for books: a remembered "no horror" applies to every search, and the titles and
-ratings in the answer are checked against the catalog.
+And for books: a remembered "no horror" applies to every search, and the ratings and the
+catalog titles in the answer are checked against what the tools returned. Plot, year and
+page claims in prose are not checked.
 
 ![Book answer for "Fantasy like The Name of the Wind" with a remembered taste](docs/screenshots/curio-book-agent.jpg)
 
