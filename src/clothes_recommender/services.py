@@ -1,18 +1,34 @@
-"""Composition root: wires settings, data, models and stores into ready-to-use services."""
+"""Composition root: loads every prepared domain into ready-to-use services.
+
+Each domain is optional at serving time. `DOMAINS` is the registry: one `DomainSpec` per
+domain, in display order, naming how to load it and how to prepare it when it is missing.
+`build_services` loads the specs whose data is prepared and skips the rest, so the API
+starts with any subset (fashion only, cocktails only, both, or none).
+
+Adding a domain: write a runtime (a dataclass with `assistant`, `item_count()` and
+`close()`), a loader that returns None while the domain's data is missing, and one
+`DomainSpec` entry in `DOMAINS`. `/health`, `/domains`, chat routing and the 503 for an
+unprepared domain follow from that entry.
+"""
 
 import logging
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
+from typing import Protocol, cast
 
 import pandas as pd
+from langchain_core.language_models import BaseChatModel
 
 from clothes_recommender.catalog import CustomerData, ProductCatalog, load_shopper_purchases
 from clothes_recommender.chat.assistant import ShoppingAssistant
 from clothes_recommender.chat.cocktail_agent import CocktailAssistant
+from clothes_recommender.chat.engine import AgentEngine
 from clothes_recommender.chat.guardrails import ActionSigner
 from clothes_recommender.chat.llm import build_chat_model
 from clothes_recommender.chat.navigator import RecommenderNavigator
+from clothes_recommender.chat.schemas import Domain
 from clothes_recommender.cocktails.catalog import CocktailCatalog
 from clothes_recommender.cocktails.recommend import CocktailRecommender
 from clothes_recommender.config import Settings
@@ -30,8 +46,34 @@ from clothes_recommender.vector_store import ProductVectorStore
 logger = logging.getLogger(__name__)
 
 
+class DomainRuntime(Protocol):
+    """What the API needs from every loaded domain, whatever it recommends."""
+
+    @property
+    def assistant(self) -> AgentEngine | None:
+        """The domain's agent; None when no LLM is configured."""
+        ...
+
+    def item_count(self) -> int:
+        """Catalog size, reported by /health and /domains."""
+        ...
+
+    def close(self) -> None:
+        """Release what the domain owns (stores, files) at shutdown."""
+        ...
+
+
 @dataclass(frozen=True)
-class Services:
+class AgentKit:
+    """Shared by every domain's assistant: one chat model and one proposal signer, so a
+    proposal is bound to its tool's domain but verifies on any of them."""
+
+    chat_model: BaseChatModel
+    signer: ActionSigner
+
+
+@dataclass(frozen=True)
+class FashionServices:
     catalog: ProductCatalog
     customers: CustomerData
     store: ProductVectorStore
@@ -47,17 +89,89 @@ class Services:
     query_photos_dir: Path | None = None
     evaluation_path: Path | None = None
     learned: LearnedRecommender | None = None
-    # The cocktail domain is optional: None until data/cocktails.parquet is prepared.
-    cocktail_catalog: CocktailCatalog | None = None
-    cocktail_recommender: CocktailRecommender | None = None
-    cocktail_assistant: CocktailAssistant | None = None
 
     @cached_property
     def demo_customers(self) -> list[DemoCustomer]:
         return select_demo_customers(self.customers, self.catalog, self.graph, self.collaborative)
 
+    def item_count(self) -> int:
+        return len(self.catalog)
 
-def build_services(settings: Settings) -> Services:
+    def close(self) -> None:
+        self.store.close()
+
+
+@dataclass(frozen=True)
+class CocktailServices:
+    catalog: CocktailCatalog
+    recommender: CocktailRecommender
+    assistant: CocktailAssistant | None = None
+
+    def item_count(self) -> int:
+        return len(self.catalog)
+
+    def close(self) -> None:
+        """Recipes live in memory; nothing to release."""
+
+
+@dataclass(frozen=True)
+class DomainSpec[R: DomainRuntime]:
+    id: Domain
+    label: str
+    # How to prepare the domain: the 503 detail of its endpoints and the hint in /domains.
+    setup_hint: str
+    runtime_type: type[R]
+    # Returns None while the domain's data is missing; raises when present but unusable,
+    # unless the loader itself decides a broken file should only disable the domain.
+    load: Callable[[Settings, AgentKit | None], R | None]
+
+    def of(self, services: "Services") -> R | None:
+        """This domain's runtime in `services`, or None when it is not served."""
+        runtime = services.domains.get(self.id)
+        return runtime if isinstance(runtime, self.runtime_type) else None
+
+
+@dataclass(frozen=True)
+class Services:
+    """The loaded domains, keyed by id in registry order; unprepared domains are absent."""
+
+    domains: Mapping[str, DomainRuntime] = field(default_factory=dict)
+    llm_configured: bool = False
+
+    @property
+    def fashion(self) -> FashionServices | None:
+        return FASHION.of(self)
+
+    @property
+    def cocktails(self) -> CocktailServices | None:
+        return COCKTAILS.of(self)
+
+    def close(self) -> None:
+        for runtime in self.domains.values():
+            runtime.close()
+
+
+FASHION_MISSING = (
+    "The fashion catalog is not prepared on this server: prepare the H&M data and image "
+    "index (docs/technical-guide.md#fashion-data), then restart the API."
+)
+COCKTAILS_MISSING = "Cocktail recipes are not prepared: run scripts.prepare_cocktails."
+
+
+def fashion_prepared(settings: Settings) -> bool:
+    """The files `scripts.prepare_data` writes and serving cannot do without."""
+    required = (settings.products_path, settings.users_path, settings.purchases_path)
+    return all(path.is_file() for path in required)
+
+
+def load_fashion(settings: Settings, kit: AgentKit | None) -> FashionServices | None:
+    if not fashion_prepared(settings):
+        logger.warning(
+            "No prepared H&M data in %s: the fashion domain is disabled. See "
+            "docs/technical-guide.md#fashion-data to enable it.",
+            settings.data_dir,
+        )
+        return None
     catalog = ProductCatalog.from_parquet(settings.products_path)
     customers = CustomerData.from_parquet(settings.users_path, settings.purchases_path)
     store = ProductVectorStore.from_settings(settings)
@@ -94,26 +208,17 @@ def build_services(settings: Settings) -> Services:
                 feature_version=model.feature_version,
             )
         graph = GraphRecommender(customers, catalog, popularity, links)
-        cocktails = _load_cocktails(settings.cocktails_path)
-        assistant = cocktail_assistant = None
-        if settings.llm_configured:
-            key = settings.agent_signing_key
-            chat_model = build_chat_model(settings)
-            # One signer for both domains; proposals are bound to their tool's domain.
-            signer = ActionSigner(key.get_secret_value().encode() if key else None)
+        assistant = None
+        if kit is not None:
             assistant = ShoppingAssistant(
-                chat_model,
+                kit.chat_model,
                 search,
                 catalog,
                 # The validated ranker when present; collaborative filtering otherwise.
                 navigator=RecommenderNavigator(graph, search, learned or collaborative),
-                signer=signer,
+                signer=kit.signer,
             )
-            if cocktails is not None:
-                cocktail_assistant = CocktailAssistant(chat_model, *cocktails, signer=signer)
-        else:
-            logger.warning("LLM_MODEL is not set: the shopping assistants are disabled.")
-        return Services(
+        return FashionServices(
             catalog=catalog,
             customers=customers,
             store=store,
@@ -127,17 +232,15 @@ def build_services(settings: Settings) -> Services:
             assistant=assistant,
             query_photos_dir=settings.query_photos_dir,
             evaluation_path=settings.evaluation_path,
-            cocktail_catalog=cocktails[0] if cocktails else None,
-            cocktail_recommender=cocktails[1] if cocktails else None,
-            cocktail_assistant=cocktail_assistant,
         )
     except BaseException:
         store.close()
         raise
 
 
-def _load_cocktails(path: Path) -> tuple[CocktailCatalog, CocktailRecommender] | None:
-    """The optional cocktail domain; a missing or broken file never stops fashion serving."""
+def load_cocktails(settings: Settings, kit: AgentKit | None) -> CocktailServices | None:
+    """A missing or broken recipe file disables the domain; it never stops the API."""
+    path = settings.cocktails_path
     if not path.exists():
         logger.warning(
             "No %s: the cocktail domain is disabled. Run `uv run python -m "
@@ -147,7 +250,76 @@ def _load_cocktails(path: Path) -> tuple[CocktailCatalog, CocktailRecommender] |
         return None
     try:
         catalog = CocktailCatalog.from_parquet(path)
-        return catalog, CocktailRecommender(catalog)
+        recommender = CocktailRecommender(catalog)
     except Exception:
         logger.exception("Could not load %s: the cocktail domain is disabled.", path)
         return None
+    assistant = None
+    if kit is not None:
+        assistant = CocktailAssistant(kit.chat_model, catalog, recommender, signer=kit.signer)
+    return CocktailServices(catalog=catalog, recommender=recommender, assistant=assistant)
+
+
+FASHION: DomainSpec[FashionServices] = DomainSpec(
+    id="fashion",
+    label="Fashion",
+    setup_hint=FASHION_MISSING,
+    runtime_type=FashionServices,
+    load=load_fashion,
+)
+COCKTAILS: DomainSpec[CocktailServices] = DomainSpec(
+    id="cocktails",
+    label="Cocktails",
+    setup_hint=COCKTAILS_MISSING,
+    runtime_type=CocktailServices,
+    load=load_cocktails,
+)
+# The registry, in display order: the UI defaults to the first domain that is served.
+DOMAINS: tuple[DomainSpec, ...] = (FASHION, COCKTAILS)
+
+
+def domain_spec(domain_id: str) -> DomainSpec | None:
+    return next((spec for spec in DOMAINS if spec.id == domain_id), None)
+
+
+def build_services(settings: Settings) -> Services:
+    """Load every prepared domain (limited to ENABLED_DOMAINS when that is set)."""
+    selected = _selected_domains(settings)
+    kit = None
+    if settings.llm_configured:
+        key = settings.agent_signing_key
+        kit = AgentKit(
+            chat_model=build_chat_model(settings),
+            signer=ActionSigner(key.get_secret_value().encode() if key else None),
+        )
+    else:
+        logger.warning("LLM_MODEL is not set: the assistants are disabled.")
+    loaded: dict[str, DomainRuntime] = {}
+    try:
+        for spec in selected:
+            runtime = spec.load(settings, kit)
+            if runtime is not None:
+                loaded[spec.id] = cast(DomainRuntime, runtime)
+    except BaseException:
+        Services(loaded).close()  # a later domain failed: release the earlier ones
+        raise
+    if not loaded:
+        logger.warning(
+            "No domain is prepared: the API serves /health and /domains only. Run "
+            "`uv run python -m scripts.prepare_cocktails` for the quickest start."
+        )
+    return Services(domains=loaded, llm_configured=kit is not None)
+
+
+def _selected_domains(settings: Settings) -> list[DomainSpec]:
+    if settings.enabled_domains is None:
+        return list(DOMAINS)
+    known = {spec.id for spec in DOMAINS}
+    if unknown := sorted(set(settings.enabled_domains) - known):
+        raise ValueError(
+            f"ENABLED_DOMAINS names unknown domains {unknown}; known: {', '.join(sorted(known))}."
+        )
+    skipped = [spec.id for spec in DOMAINS if spec.id not in settings.enabled_domains]
+    if skipped:
+        logger.info("ENABLED_DOMAINS skips %s.", ", ".join(skipped))
+    return [spec for spec in DOMAINS if spec.id in settings.enabled_domains]

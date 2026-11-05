@@ -24,6 +24,8 @@ def construction(monkeypatch, tmp_path, sample_catalog):
     )
     customers = CustomerData(pd.DataFrame({"user_id": [1], "age": [30]}), purchases)
     settings = SimpleNamespace(
+        data_dir=tmp_path,
+        enabled_domains=None,
         products_path=tmp_path / "products.parquet",
         users_path=tmp_path / "users.parquet",
         purchases_path=tmp_path / "purchases.parquet",
@@ -37,6 +39,9 @@ def construction(monkeypatch, tmp_path, sample_catalog):
         evaluation_path=tmp_path / "evaluation.json",
         cocktails_path=tmp_path / "cocktails.parquet",
     )
+    # Fashion is served once prepare_data's files exist; their loaders are faked below.
+    for path in (settings.products_path, settings.users_path, settings.purchases_path):
+        path.touch()
     encoder = Mock(dimension=2)
     encoder.encode_texts.return_value = np.array([[1.0, 0.0]], dtype=np.float32)
     client = QdrantClient(":memory:")
@@ -72,9 +77,9 @@ def test_compatible_collection_remains_open_and_searchable(construction, sample_
 
     services = service_module.build_services(construction.settings)
 
-    assert services.store is construction.store
-    assert [hit.product_id for hit in services.search.by_text("jeans")] == [1]
-    assert services.store.count() == 1
+    assert services.fashion.store is construction.store
+    assert [hit.product_id for hit in services.fashion.search.by_text("jeans")] == [1]
+    assert services.fashion.store.count() == 1
     construction.close.assert_not_called()
 
 
@@ -84,7 +89,7 @@ def test_missing_collection_is_not_created_and_search_stays_unavailable(construc
 
     services = service_module.build_services(construction.settings)
 
-    assert not services.store.exists()
+    assert not services.fashion.store.exists()
     ensure.assert_not_called()
     with TestClient(create_app(services)) as client:
         health = client.get("/health")
@@ -93,7 +98,7 @@ def test_missing_collection_is_not_created_and_search_stays_unavailable(construc
         response = client.post("/search/text", json={"query": "jeans"})
         assert response.status_code == 503
         assert "scripts.build_index" in response.json()["detail"]
-    assert not services.store.exists()
+    assert not services.fashion.store.exists()
     construction.close.assert_not_called()
 
 
@@ -130,8 +135,8 @@ def test_service_loads_versioned_ranker(construction, version, width):
     )
     construction.settings.ranker_path.write_text(model.model_dump_json())
     services = service_module.build_services(construction.settings)
-    assert services.learned is not None
-    assert services.learned.recommend(1)
+    assert services.fashion.learned is not None
+    assert services.fashion.learned.recommend(1)
 
 
 def test_prepared_cocktails_enable_the_cocktail_domain(construction):
@@ -141,15 +146,16 @@ def test_prepared_cocktails_enable_the_cocktail_domain(construction):
 
     services = service_module.build_services(construction.settings)
 
-    assert len(services.cocktail_catalog) == 8
-    assert services.cocktail_recommender.similar(1, top_k=1)
-    assert services.cocktail_assistant is None  # no LLM configured
+    assert len(services.cocktails.catalog) == 8
+    assert services.cocktails.recommender.similar(1, top_k=1)
+    assert services.cocktails.assistant is None  # no LLM configured
 
 
 def test_missing_cocktails_disable_only_that_domain(construction, caplog):
     services = service_module.build_services(construction.settings)
 
-    assert services.cocktail_catalog is None and services.cocktail_recommender is None
+    assert services.cocktails is None
+    assert services.fashion is not None
     assert "scripts.prepare_cocktails" in caplog.text
     with TestClient(create_app(services)) as client:
         assert client.get("/cocktails/categories").status_code == 503
@@ -161,9 +167,9 @@ def test_broken_cocktail_file_does_not_break_fashion(construction, caplog):
 
     services = service_module.build_services(construction.settings)
 
-    assert services.cocktail_catalog is None
+    assert services.cocktails is None
     assert "the cocktail domain is disabled" in caplog.text
-    assert services.catalog is not None
+    assert services.fashion is not None
     construction.close.assert_not_called()
 
 
@@ -182,5 +188,5 @@ def test_llm_builds_both_assistants_with_one_model_and_signer(construction, monk
     services = service_module.build_services(construction.settings)
 
     build_model.assert_called_once_with(construction.settings)
-    assert isinstance(services.cocktail_assistant, CocktailAssistant)
-    assert services.cocktail_assistant._signer is services.assistant._signer
+    assert isinstance(services.cocktails.assistant, CocktailAssistant)
+    assert services.cocktails.assistant._signer is services.fashion.assistant._signer

@@ -201,3 +201,30 @@ def cocktail_catalog():
     from clothes_recommender.cocktails.catalog import CocktailCatalog
 
     return CocktailCatalog(cocktail_frame())
+
+
+def serve(fashion=None, cocktails=None, *, llm_configured: bool = False):
+    """`Services` holding the given domain runtimes; a None domain is not served."""
+    from clothes_recommender.services import Services
+
+    domains = {"fashion": fashion, "cocktails": cocktails}
+    return Services(
+        domains={name: runtime for name, runtime in domains.items() if runtime is not None},
+        llm_configured=llm_configured,
+    )
+
+
+def with_fashion(services, **changes):
+    """`services` with fields of its fashion runtime replaced."""
+    import dataclasses
+
+    fashion = dataclasses.replace(services.fashion, **changes)
+    return serve(fashion, services.cocktails, llm_configured=services.llm_configured)
+
+
+def with_cocktails(services, **changes):
+    """`services` with fields of its cocktail runtime replaced."""
+    import dataclasses
+
+    cocktails = dataclasses.replace(services.cocktails, **changes)
+    return serve(services.fashion, cocktails, llm_configured=services.llm_configured)

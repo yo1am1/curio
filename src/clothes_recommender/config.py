@@ -2,9 +2,10 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
-from pydantic import SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import SecretStr, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -15,6 +16,9 @@ class Settings(BaseSettings):
 
     # --- Data -------------------------------------------------------------
     data_dir: Path = Path("data")
+    # Comma-separated domain ids to serve (e.g. "cocktails"). Unset: every domain whose data
+    # is prepared. Domains outside the list are not loaded, even when their data exists.
+    enabled_domains: Annotated[tuple[str, ...] | None, NoDecode] = None
 
     # --- Embeddings -------------------------------------------------------
     clip_model_name: str = "laion/CLIP-ViT-B-32-laion2B-s34B-b79K"
@@ -40,6 +44,13 @@ class Settings(BaseSettings):
 
     # --- UI ---------------------------------------------------------------
     api_url: str = "http://localhost:8000"
+
+    @field_validator("enabled_domains", mode="before")
+    @classmethod
+    def _split_domains(cls, value: object) -> object:
+        if isinstance(value, str):
+            return tuple(part.strip().lower() for part in value.split(",") if part.strip())
+        return value
 
     @property
     def products_path(self) -> Path:

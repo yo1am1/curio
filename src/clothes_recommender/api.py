@@ -21,7 +21,6 @@ from pydantic import BaseModel, Field
 from clothes_recommender.chat.engine import AgentEngine
 from clothes_recommender.chat.guardrails import InvalidActionError
 from clothes_recommender.chat.schemas import AssistantReply, ChatRequest, Domain, TurnContext
-from clothes_recommender.cocktails.catalog import CocktailCatalog
 from clothes_recommender.cocktails.domain import (
     AlcoholFilter,
     Cocktail,
@@ -29,12 +28,22 @@ from clothes_recommender.cocktails.domain import (
     CocktailQuery,
     PantryMatch,
 )
-from clothes_recommender.cocktails.recommend import CocktailRecommender
 from clothes_recommender.config import get_settings
 from clothes_recommender.demo import DemoCustomer
 from clothes_recommender.domain import Product, ProductFilter, ScoredProduct, User
 from clothes_recommender.recommenders.base import Recommender, UnknownUserError
-from clothes_recommender.services import Services, build_services
+from clothes_recommender.services import (
+    COCKTAILS,
+    DOMAINS,
+    FASHION,
+    CocktailServices,
+    DomainRuntime,
+    DomainSpec,
+    FashionServices,
+    Services,
+    build_services,
+    domain_spec,
+)
 from clothes_recommender.vector_store import IndexNotBuiltError
 
 logger = logging.getLogger(__name__)
@@ -44,7 +53,6 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 # Bounds decode memory: a small compressed file can still expand to gigabytes of pixels.
 MAX_IMAGE_PIXELS = 25_000_000
 MAX_FEEDBACK_RECORDS = 500
-COCKTAILS_MISSING = "Cocktail recipes are not prepared: run scripts.prepare_cocktails."
 CHAT_DISABLED = "Chat is disabled: set LLM_MODEL (and LLM_API_KEY / LLM_BASE_URL) in .env."
 
 TopK = Annotated[int, Query(ge=1, le=MAX_TOP_K)]
@@ -98,21 +106,30 @@ class FeedbackSummary(BaseModel):
     recent_down: list[ChatFeedback]
 
 
-class Health(BaseModel):
-    status: Literal["ok"] = "ok"
-    indexed_products: int
-    catalog_products: int
-    chat_enabled: bool
-    ranking_enabled: bool
-    cocktails_enabled: bool
-    cocktail_count: int
-
-
 class DomainInfo(BaseModel):
     id: Domain
     label: str
     enabled: bool
     chat_enabled: bool
+    item_count: int = 0
+    # How to prepare a disabled domain; how to enable chat for an enabled one without it.
+    hint: str | None = None
+
+
+class Health(BaseModel):
+    """Service status. The flat fashion and cocktail fields predate `domains` and stay for
+    existing clients; they read 0/False when that domain is not served."""
+
+    status: Literal["ok"] = "ok"
+    indexed_products: int
+    catalog_products: int
+    chat_enabled: bool
+    ranking_enabled: bool
+    fashion_enabled: bool
+    cocktails_enabled: bool
+    cocktail_count: int
+    llm_configured: bool
+    domains: list[DomainInfo]
 
 
 IngredientName = Annotated[str, Field(min_length=1, max_length=60)]
@@ -132,19 +149,54 @@ def get_services(request: Request) -> Services:
 ServicesDep = Annotated[Services, Depends(get_services)]
 
 
-def get_cocktails(services: ServicesDep) -> tuple[CocktailCatalog, CocktailRecommender]:
-    if services.cocktail_catalog is None or services.cocktail_recommender is None:
-        raise HTTPException(status_code=503, detail=COCKTAILS_MISSING)
-    return services.cocktail_catalog, services.cocktail_recommender
+def _require[R: DomainRuntime](spec: DomainSpec[R], services: Services) -> R:
+    """The domain's runtime, or 503 with how to prepare it."""
+    runtime = spec.of(services)
+    if runtime is None:
+        raise HTTPException(status_code=503, detail=spec.setup_hint)
+    return runtime
 
 
-CocktailsDep = Annotated[tuple[CocktailCatalog, CocktailRecommender], Depends(get_cocktails)]
+def get_fashion(services: ServicesDep) -> FashionServices:
+    return _require(FASHION, services)
 
 
-def _to_hits(services: Services, scored: Sequence[ScoredProduct]) -> list[ProductHit]:
+def get_cocktails(services: ServicesDep) -> CocktailServices:
+    return _require(COCKTAILS, services)
+
+
+FashionDep = Annotated[FashionServices, Depends(get_fashion)]
+CocktailsDep = Annotated[CocktailServices, Depends(get_cocktails)]
+
+
+def domain_infos(services: Services) -> list[DomainInfo]:
+    """Every registered domain in display order, served or not."""
+    infos = []
+    for spec in DOMAINS:
+        runtime = services.domains.get(spec.id)
+        chat = runtime is not None and runtime.assistant is not None
+        hint = None
+        if runtime is None:
+            hint = spec.setup_hint
+        elif not chat:
+            hint = CHAT_DISABLED
+        infos.append(
+            DomainInfo(
+                id=spec.id,
+                label=spec.label,
+                enabled=runtime is not None,
+                chat_enabled=chat,
+                item_count=runtime.item_count() if runtime is not None else 0,
+                hint=hint,
+            )
+        )
+    return infos
+
+
+def _to_hits(fashion: FashionServices, scored: Sequence[ScoredProduct]) -> list[ProductHit]:
     hits = []
     for item in scored:
-        product = services.catalog.get(item.product_id)
+        product = fashion.catalog.get(item.product_id)
         if product is not None:
             hits.append(ProductHit(product=product, score=item.score))
     return hits
@@ -175,12 +227,15 @@ def create_app(services: Services | None = None) -> FastAPI:
             app.state.services = services
             yield
             return
-        app.state.services = build_services(get_settings())
-        # Choosing the examples runs the recommenders for many customers (~10 s on the default
-        # sample); do it before serving so the UI's first page load stays fast.
-        _ = app.state.services.demo_customers
-        yield
-        app.state.services.store.close()
+        built = app.state.services = build_services(get_settings())
+        try:
+            if built.fashion is not None:
+                # Choosing the examples runs the recommenders for many customers (~10 s on the
+                # default sample); do it before serving so the UI's first page loads fast.
+                _ = built.fashion.demo_customers
+            yield
+        finally:
+            built.close()
 
     app = FastAPI(
         title="Curio Recommendation API",
@@ -198,49 +253,42 @@ def create_app(services: Services | None = None) -> FastAPI:
 
     @app.get("/health")
     def health(services: ServicesDep) -> Health:
-        indexed = services.store.count() if services.store.exists() else 0
+        fashion, cocktails = services.fashion, services.cocktails
+        indexed = 0
+        if fashion is not None and fashion.store.exists():
+            indexed = fashion.store.count()
         return Health(
             indexed_products=indexed,
-            catalog_products=len(services.catalog),
-            chat_enabled=services.assistant is not None,
-            ranking_enabled=services.learned is not None,
-            cocktails_enabled=services.cocktail_catalog is not None,
-            cocktail_count=len(services.cocktail_catalog or ()),
+            catalog_products=fashion.item_count() if fashion else 0,
+            chat_enabled=fashion is not None and fashion.assistant is not None,
+            ranking_enabled=fashion is not None and fashion.learned is not None,
+            fashion_enabled=fashion is not None,
+            cocktails_enabled=cocktails is not None,
+            cocktail_count=cocktails.item_count() if cocktails else 0,
+            llm_configured=services.llm_configured,
+            domains=domain_infos(services),
         )
 
     @app.get("/domains")
     def domains(services: ServicesDep) -> list[DomainInfo]:
-        return [
-            DomainInfo(
-                id="fashion",
-                label="Fashion",
-                enabled=True,
-                chat_enabled=services.assistant is not None,
-            ),
-            DomainInfo(
-                id="cocktails",
-                label="Cocktails",
-                enabled=services.cocktail_catalog is not None,
-                chat_enabled=services.cocktail_assistant is not None,
-            ),
-        ]
+        return domain_infos(services)
 
     # Static /cocktails/* paths are registered before /cocktails/{drink_id}.
     @app.get("/cocktails/ingredients")
     def cocktail_ingredients(cocktails: CocktailsDep) -> list[str]:
-        return cocktails[0].ingredients()
+        return cocktails.catalog.ingredients()
 
     @app.get("/cocktails/categories")
     def cocktail_categories(cocktails: CocktailsDep) -> list[str]:
-        return cocktails[0].categories()
+        return cocktails.catalog.categories()
 
     @app.post("/cocktails/search")
     def search_cocktails(query: CocktailQuery, cocktails: CocktailsDep) -> list[CocktailHit]:
-        return cocktails[1].search(query)
+        return cocktails.recommender.search(query)
 
     @app.post("/cocktails/pantry")
     def cocktail_pantry(request: PantryRequest, cocktails: CocktailsDep) -> list[PantryMatch]:
-        return cocktails[1].pantry(
+        return cocktails.recommender.pantry(
             request.ingredients,
             alcohol=request.alcohol,
             max_missing=request.max_missing,
@@ -249,7 +297,7 @@ def create_app(services: Services | None = None) -> FastAPI:
 
     @app.get("/cocktails/{drink_id}")
     def get_cocktail(drink_id: int, cocktails: CocktailsDep) -> Cocktail:
-        cocktail = cocktails[0].get(drink_id)
+        cocktail = cocktails.catalog.get(drink_id)
         if cocktail is None:
             raise HTTPException(status_code=404, detail=f"Drink {drink_id} not found.")
         return cocktail
@@ -259,19 +307,19 @@ def create_app(services: Services | None = None) -> FastAPI:
         drink_id: int, cocktails: CocktailsDep, top_k: TopK = 5, alcohol: AlcoholFilter = "any"
     ) -> list[CocktailHit]:
         get_cocktail(drink_id, cocktails)
-        return cocktails[1].similar(drink_id, top_k=top_k, alcohol=alcohol)
+        return cocktails.recommender.similar(drink_id, top_k=top_k, alcohol=alcohol)
 
     @app.get("/products/{product_id}")
-    def get_product(product_id: int, services: ServicesDep) -> Product:
-        product = services.catalog.get(product_id)
+    def get_product(product_id: int, fashion: FashionDep) -> Product:
+        product = fashion.catalog.get(product_id)
         if product is None:
             raise HTTPException(status_code=404, detail=f"Product {product_id} not found.")
         return product
 
     @app.get("/products/{product_id}/image", response_class=FileResponse)
-    def get_product_image(product_id: int, services: ServicesDep) -> FileResponse:
+    def get_product_image(product_id: int, fashion: FashionDep) -> FileResponse:
         # product_id is an int, so the path cannot escape images_dir.
-        path = services.images_dir / f"{product_id}.jpg"
+        path = fashion.images_dir / f"{product_id}.jpg"
         if not path.is_file():
             raise HTTPException(status_code=404, detail=f"No image for product {product_id}.")
         return FileResponse(path, media_type="image/jpeg")
@@ -279,12 +327,12 @@ def create_app(services: Services | None = None) -> FastAPI:
     @app.get("/products/{product_id}/related")
     def related_products(
         product_id: int,
-        services: ServicesDep,
+        fashion: FashionDep,
         kind: Literal["complement", "alternative"] = "complement",
         top_k: TopK = 10,
     ) -> list[ProductHit]:
-        product = get_product(product_id, services)
-        hits = _to_hits(services, services.graph.related(product_id, kind, top_k))
+        product = get_product(product_id, fashion)
+        hits = _to_hits(fashion, fashion.graph.related(product_id, kind, top_k))
         reason = (
             f"Bought on the same day by the same shoppers as {product.name}; "
             "different product group."
@@ -298,101 +346,101 @@ def create_app(services: Services | None = None) -> FastAPI:
 
     @app.get("/products/{product_id}/similar")
     def similar_products(
-        product_id: int, services: ServicesDep, top_k: TopK = 10
+        product_id: int, fashion: FashionDep, top_k: TopK = 10
     ) -> list[ProductHit]:
         """Products whose photos look most like this one's (CLIP item-to-item)."""
-        get_product(product_id, services)
-        similar = services.search.similar_to(product_id, top_k)
+        get_product(product_id, fashion)
+        similar = fashion.search.similar_to(product_id, top_k)
         if similar is None:
             raise HTTPException(
                 status_code=404, detail=f"Product {product_id} has no photo in the image index."
             )
-        return _to_hits(services, similar)
+        return _to_hits(fashion, similar)
 
     @app.get("/products/{product_id}/graph")
-    def product_graph(product_id: int, services: ServicesDep, top_k: TopK = 12) -> dict:
-        get_product(product_id, services)
-        return services.graph.neighborhood(product_id, top_k)
+    def product_graph(product_id: int, fashion: FashionDep, top_k: TopK = 12) -> dict:
+        get_product(product_id, fashion)
+        return fashion.graph.neighborhood(product_id, top_k)
 
     @app.get("/sections")
-    def sections(services: ServicesDep) -> list[str]:
-        return services.catalog.distinct("section")
+    def sections(fashion: FashionDep) -> list[str]:
+        return fashion.catalog.distinct("section")
 
     @app.post("/search/text")
-    def search_by_text(request: TextSearchRequest, services: ServicesDep) -> list[ProductHit]:
+    def search_by_text(request: TextSearchRequest, fashion: FashionDep) -> list[ProductHit]:
         product_filter = ProductFilter(sections=(request.section,) if request.section else ())
         return _to_hits(
-            services, services.search.by_text(request.query, request.top_k, product_filter)
+            fashion, fashion.search.by_text(request.query, request.top_k, product_filter)
         )
 
     @app.get("/search/examples")
-    def query_photos(services: ServicesDep) -> list[QueryPhoto]:
+    def query_photos(fashion: FashionDep) -> list[QueryPhoto]:
         """Example query photos; empty until scripts.fetch_query_photos has run."""
-        if services.query_photos_dir is None:
+        if fashion.query_photos_dir is None:
             return []
-        index = services.query_photos_dir / "query_photos.json"
+        index = fashion.query_photos_dir / "query_photos.json"
         if not index.is_file():
             return []
         return [QueryPhoto.model_validate(row) for row in json.loads(index.read_text())]
 
     @app.get("/search/examples/{photo_id}/image", response_class=FileResponse)
-    def query_photo_image(photo_id: int, services: ServicesDep) -> FileResponse:
+    def query_photo_image(photo_id: int, fashion: FashionDep) -> FileResponse:
         # photo_id is an int, so the path cannot escape query_photos_dir.
-        path = services.query_photos_dir / f"{photo_id}.jpg" if services.query_photos_dir else None
+        path = fashion.query_photos_dir / f"{photo_id}.jpg" if fashion.query_photos_dir else None
         if path is None or not path.is_file():
             raise HTTPException(status_code=404, detail=f"No example photo {photo_id}.")
         return FileResponse(path, media_type="image/jpeg")
 
     @app.post("/search/image")
     def search_by_image(
-        file: UploadFile, services: ServicesDep, top_k: TopK = 10
+        file: UploadFile, fashion: FashionDep, top_k: TopK = 10
     ) -> list[ProductHit]:
-        return _to_hits(services, services.search.by_image(_read_image(file), top_k))
+        return _to_hits(fashion, fashion.search.by_image(_read_image(file), top_k))
 
     @app.get("/users")
-    def list_users(services: ServicesDep) -> list[int]:
-        return services.customers.user_ids()
+    def list_users(fashion: FashionDep) -> list[int]:
+        return fashion.customers.user_ids()
 
     @app.get("/demo/customers")
-    def demo_customers(services: ServicesDep) -> list[DemoCustomer]:
-        return services.demo_customers
+    def demo_customers(fashion: FashionDep) -> list[DemoCustomer]:
+        return fashion.demo_customers
 
     @app.get("/users/{user_id}")
-    def get_user_profile(user_id: int, services: ServicesDep) -> UserProfile:
-        user = services.customers.get_user(user_id)
+    def get_user_profile(user_id: int, fashion: FashionDep) -> UserProfile:
+        user = fashion.customers.get_user(user_id)
         if user is None:
             raise UnknownUserError(user_id)
         purchases = [
             PurchasedProduct(purchase_date=p.purchase_date, product=product)
-            for p in services.customers.purchases_for(user_id)
-            if (product := services.catalog.get(p.product_id)) is not None
+            for p in fashion.customers.purchases_for(user_id)
+            if (product := fashion.catalog.get(p.product_id)) is not None
         ]
         return UserProfile(user=user, purchases=purchases)
 
     @app.get("/users/{user_id}/recommendations")
     def recommend(
         user_id: int,
-        services: ServicesDep,
+        fashion: FashionDep,
         strategy: Literal["content", "collaborative", "graph", "repeat", "learned"] = "content",
         top_k: TopK = 10,
     ) -> list[ProductHit]:
         recommender: Recommender | None = {
-            "content": services.content_based,
-            "collaborative": services.collaborative,
-            "graph": services.graph,
-            "repeat": services.repeat,
-            "learned": services.learned,
+            "content": fashion.content_based,
+            "collaborative": fashion.collaborative,
+            "graph": fashion.graph,
+            "repeat": fashion.repeat,
+            "learned": fashion.learned,
         }[strategy]
         if recommender is None:
             raise HTTPException(
                 status_code=503, detail="Personalized ranking is not available yet."
             )
-        hits = _to_hits(services, recommender.recommend(user_id, top_k))
+        hits = _to_hits(fashion, recommender.recommend(user_id, top_k))
         explainer = {
-            "graph": services.graph,
-            "collaborative": services.collaborative,
-            "repeat": services.repeat,
-            "learned": services.learned,
+            "graph": fashion.graph,
+            "collaborative": fashion.collaborative,
+            "repeat": fashion.repeat,
+            "learned": fashion.learned,
         }.get(strategy)
         if explainer is not None:
             for hit in hits:
@@ -400,9 +448,9 @@ def create_app(services: Services | None = None) -> FastAPI:
         return hits
 
     @app.get("/evaluation")
-    def evaluation(services: ServicesDep) -> dict:
+    def evaluation(fashion: FashionDep) -> dict:
         """Offline evaluation results written by `scripts.evaluate --output`."""
-        path = services.evaluation_path
+        path = fashion.evaluation_path
         if path is None or not path.is_file():
             raise HTTPException(
                 status_code=404,
@@ -413,15 +461,14 @@ def create_app(services: Services | None = None) -> FastAPI:
         return json.loads(path.read_text())
 
     def assistant_for(services: Services, domain: Domain) -> AgentEngine:
-        if domain == "cocktails":
-            if services.cocktail_catalog is None:
-                raise HTTPException(status_code=503, detail=COCKTAILS_MISSING)
-            assistant = services.cocktail_assistant
-        else:
-            assistant = services.assistant
-        if assistant is None:
+        spec = domain_spec(domain)
+        runtime = services.domains.get(domain)
+        if spec is None or runtime is None:
+            detail = spec.setup_hint if spec else f"Unknown domain {domain}."
+            raise HTTPException(status_code=503, detail=detail)
+        if runtime.assistant is None:
             raise HTTPException(status_code=503, detail=CHAT_DISABLED)
-        return assistant
+        return runtime.assistant
 
     @app.post("/chat")
     def chat(request: ChatRequest, services: ServicesDep) -> AssistantReply:

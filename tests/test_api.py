@@ -1,4 +1,3 @@
-import dataclasses
 import io
 import json
 from collections.abc import Iterator
@@ -19,7 +18,8 @@ from clothes_recommender.recommenders.graph import GraphRecommender
 from clothes_recommender.recommenders.popularity import PopularityRecommender
 from clothes_recommender.recommenders.repeat import RepeatPurchaseRecommender
 from clothes_recommender.search import ProductSearch
-from clothes_recommender.services import Services
+from clothes_recommender.services import FashionServices, Services
+from tests.conftest import serve, with_cocktails, with_fashion
 
 
 class EchoAssistant:
@@ -48,7 +48,7 @@ def services(sample_catalog, vector_store, fake_encoder, tmp_path) -> Services:
     # The sampled customers double as the whole crowd in this tiny fixture.
     crowd = purchases.rename(columns={"user_id": "shopper_id"})
     collaborative = CollaborativeRecommender(customers, sample_catalog, crowd, popularity)
-    return Services(
+    fashion = FashionServices(
         catalog=sample_catalog,
         customers=customers,
         store=vector_store,
@@ -65,6 +65,7 @@ def services(sample_catalog, vector_store, fake_encoder, tmp_path) -> Services:
         images_dir=tmp_path,
         assistant=None,
     )
+    return serve(fashion)
 
 
 @pytest.fixture
@@ -74,14 +75,37 @@ def client(services) -> Iterator[TestClient]:
 
 
 def test_health_reports_index_size_and_chat_status(client) -> None:
+    from clothes_recommender.api import CHAT_DISABLED
+    from clothes_recommender.services import COCKTAILS_MISSING
+
     assert client.get("/health").json() == {
         "status": "ok",
         "indexed_products": 6,
         "catalog_products": 6,
         "chat_enabled": False,
         "ranking_enabled": False,
+        "fashion_enabled": True,
         "cocktails_enabled": False,
         "cocktail_count": 0,
+        "llm_configured": False,
+        "domains": [
+            {
+                "id": "fashion",
+                "label": "Fashion",
+                "enabled": True,
+                "chat_enabled": False,
+                "item_count": 6,
+                "hint": CHAT_DISABLED,
+            },
+            {
+                "id": "cocktails",
+                "label": "Cocktails",
+                "enabled": False,
+                "chat_enabled": False,
+                "item_count": 0,
+                "hint": COCKTAILS_MISSING,
+            },
+        ],
     }
 
 
@@ -194,15 +218,13 @@ def test_chat_is_503_without_llm(client) -> None:
 
 
 def test_chat_returns_assistant_reply(services) -> None:
-    with TestClient(create_app(dataclasses.replace(services, assistant=EchoAssistant()))) as client:
+    with TestClient(create_app(with_fashion(services, assistant=EchoAssistant()))) as client:
         response = client.post("/chat", json={"message": "hi", "history": []})
         assert response.json()["text"] == "echo: hi"
 
 
 def test_chat_maps_provider_failure_to_502(services) -> None:
-    with TestClient(
-        create_app(dataclasses.replace(services, assistant=BrokenAssistant()))
-    ) as client:
+    with TestClient(create_app(with_fashion(services, assistant=BrokenAssistant()))) as client:
         response = client.post("/chat", json={"message": "hi"})
         assert response.status_code == 502
         assert "gateway down" not in response.json()["detail"]
@@ -219,7 +241,7 @@ def test_text_search_can_be_limited_to_a_section(client) -> None:
 def test_similar_products_exclude_the_product_itself(services, sample_products) -> None:
     unindexed = sample_products[0].model_copy(update={"product_id": 7})
     catalog = ProductCatalog(pd.DataFrame([p.model_dump() for p in [*sample_products, unindexed]]))
-    with TestClient(create_app(dataclasses.replace(services, catalog=catalog))) as client:
+    with TestClient(create_app(with_fashion(services, catalog=catalog))) as client:
         hits = client.get("/products/3/similar", params={"top_k": 3}).json()
         assert len(hits) == 3
         assert 3 not in {hit["product"]["product_id"] for hit in hits}
@@ -237,7 +259,7 @@ def test_query_photos_are_listed_and_served(services, tmp_path) -> None:
         {"photo_id": 900000001, "name": "Denim jacket", "product_type": "Jacket", "colour": "Blue"}
     ]
     (photos / "query_photos.json").write_text(json.dumps(labels))
-    with TestClient(create_app(dataclasses.replace(services, query_photos_dir=photos))) as client:
+    with TestClient(create_app(with_fashion(services, query_photos_dir=photos))) as client:
         assert client.get("/search/examples").json() == labels
         image = client.get("/search/examples/900000001/image")
         assert image.status_code == 200
@@ -252,7 +274,7 @@ def test_query_photos_are_empty_until_fetched(client) -> None:
 
 def test_evaluation_is_served_when_present(services, tmp_path) -> None:
     path = tmp_path / "evaluation.json"
-    with TestClient(create_app(dataclasses.replace(services, evaluation_path=path))) as client:
+    with TestClient(create_app(with_fashion(services, evaluation_path=path))) as client:
         missing = client.get("/evaluation")
         assert missing.status_code == 404
         assert "scripts.evaluate" in missing.json()["detail"]
@@ -281,14 +303,14 @@ def test_learned_strategy_requires_model_and_returns_grounded_hits(services):
             == 503
         )
     ranker = LearnedRecommender(
-        services.customers,
-        services.catalog,
-        services.collaborative,
-        PopularityRecommender(services.customers.purchases),
+        services.fashion.customers,
+        services.fashion.catalog,
+        services.fashion.collaborative,
+        PopularityRecommender(services.fashion.customers.purchases),
         np.zeros(len(FEATURES)),
         date(2020, 9, 4),
     )
-    with TestClient(create_app(dataclasses.replace(services, learned=ranker))) as client:
+    with TestClient(create_app(with_fashion(services, learned=ranker))) as client:
         assert client.get("/health").json()["ranking_enabled"]
         hits = client.get("/users/1/recommendations", params={"strategy": "learned"}).json()
         assert hits and all(hit["reasons"] for hit in hits)
@@ -306,9 +328,7 @@ def test_chat_returns_retryable_rate_limit_without_provider_details(services):
         def reply(self, message, history, context=None):
             raise RateLimitedError("private provider details")
 
-    with TestClient(
-        create_app(dataclasses.replace(services, assistant=RateLimitedAssistant()))
-    ) as client:
+    with TestClient(create_app(with_fashion(services, assistant=RateLimitedAssistant()))) as client:
         response = client.post("/chat", json={"message": "hi"})
     assert response.status_code == 429
     assert response.json() == {"detail": "The assistant is busy. Please try again shortly."}
@@ -321,8 +341,8 @@ def _agent_services(services, *replies):
     from tests.chat.conftest import FakeToolCallingChatModel
 
     model = FakeToolCallingChatModel(messages=iter([AIMessage(**reply) for reply in replies]))
-    assistant = ShoppingAssistant(model, services.search, services.catalog)
-    return dataclasses.replace(services, assistant=assistant)
+    assistant = ShoppingAssistant(model, services.fashion.search, services.fashion.catalog)
+    return with_fashion(services, assistant=assistant)
 
 
 def _intent(**args):
@@ -345,7 +365,7 @@ def test_chat_stream_sends_steps_then_reply(services):
 
 def test_chat_stream_reports_provider_errors_as_safe_events(services):
     with TestClient(
-        create_app(dataclasses.replace(services, assistant=BrokenStreamAssistant()))
+        create_app(with_fashion(services, assistant=BrokenStreamAssistant()))
     ) as client:
         response = client.post("/chat/stream", json={"message": "hi"})
     (event,) = [json.loads(line) for line in response.text.splitlines()]
@@ -401,12 +421,10 @@ COCKTAILS_MISSING = "Cocktail recipes are not prepared: run scripts.prepare_cock
 @pytest.fixture
 def cocktail_services(services, cocktail_catalog) -> Services:
     from clothes_recommender.cocktails.recommend import CocktailRecommender
+    from clothes_recommender.services import CocktailServices
 
-    return dataclasses.replace(
-        services,
-        cocktail_catalog=cocktail_catalog,
-        cocktail_recommender=CocktailRecommender(cocktail_catalog),
-    )
+    cocktails = CocktailServices(cocktail_catalog, CocktailRecommender(cocktail_catalog))
+    return serve(services.fashion, cocktails)
 
 
 @pytest.fixture
@@ -428,18 +446,18 @@ def _cocktail_agent_services(cocktail_services, *replies, signer=None):
     model = FakeToolCallingChatModel(messages=iter([AIMessage(**reply) for reply in replies]))
     assistant = CocktailAssistant(
         model,
-        cocktail_services.cocktail_catalog,
-        cocktail_services.cocktail_recommender,
+        cocktail_services.cocktails.catalog,
+        cocktail_services.cocktails.recommender,
         signer=signer,
     )
-    return dataclasses.replace(cocktail_services, cocktail_assistant=assistant)
+    return with_cocktails(cocktail_services, assistant=assistant)
 
 
 def test_domains_and_health_report_the_cocktail_domain(client, cocktail_services) -> None:
-    assert client.get("/domains").json() == [
-        {"id": "fashion", "label": "Fashion", "enabled": True, "chat_enabled": False},
-        {"id": "cocktails", "label": "Cocktails", "enabled": False, "chat_enabled": False},
-    ]
+    assert [
+        (d["id"], d["label"], d["enabled"], d["chat_enabled"])
+        for d in client.get("/domains").json()
+    ] == [("fashion", "Fashion", True, False), ("cocktails", "Cocktails", False, False)]
     agent = _cocktail_agent_services(cocktail_services)
     with TestClient(create_app(agent)) as cocktails:
         health = cocktails.get("/health").json()
@@ -449,7 +467,10 @@ def test_domains_and_health_report_the_cocktail_domain(client, cocktail_services
             "label": "Cocktails",
             "enabled": True,
             "chat_enabled": True,
+            "item_count": 8,
+            "hint": None,
         }
+        assert health["domains"] == cocktails.get("/domains").json()
 
 
 @pytest.mark.parametrize(
@@ -572,9 +593,11 @@ def test_cocktail_approval_round_trip_and_cross_domain_replay(cocktail_services)
         signer=signer,
     )
     fashion_model = FakeToolCallingChatModel(messages=iter([AIMessage(**_intent())]))
-    agent = dataclasses.replace(
+    agent = with_fashion(
         agent,
-        assistant=ShoppingAssistant(fashion_model, agent.search, agent.catalog, signer=signer),
+        assistant=ShoppingAssistant(
+            fashion_model, agent.fashion.search, agent.fashion.catalog, signer=signer
+        ),
     )
     with TestClient(create_app(agent)) as client:
         reply = client.post("/chat", json={"message": "save both", "domain": "cocktails"}).json()
@@ -612,7 +635,7 @@ def test_chat_accepts_cocktail_context_and_history(services) -> None:
             return AssistantReply(text="ok", products=[], intent=SearchIntent(query=message))
 
     assistant = RecordingAssistant()
-    with TestClient(create_app(dataclasses.replace(services, assistant=assistant))) as client:
+    with TestClient(create_app(with_fashion(services, assistant=assistant))) as client:
         body = {
             "message": "hi",
             "history": [{"role": "assistant", "content": "Here", "drink_ids": [1, 2]}],
