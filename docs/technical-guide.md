@@ -86,7 +86,11 @@ everyone else accessible, and offline evaluation scores all eligible customers.
    outfit comes back unchanged.
 
 The client holds the outfit as `OutfitState` (occasion, budget, audience, slot → product ID,
-skipped IDs) and sends it back as `TurnContext.outfit`; prices always come from the catalog.
+skipped IDs, and each piece's reason and the notes for display) and sends it back as
+`TurnContext.outfit`; prices always come from the catalog. After a swap the unchanged pieces
+keep their reasons and the outfit its notes. Those strings come from the client, so they are
+bounded (300 characters, four notes), marked `carried`, and only shown again: they are never
+sent to the model and are not grounding evidence.
 On the real sample a plan takes about 0.6-1 s with CLIP on CPU. Results on the real data
 look like outfits: a women's summer wedding under €80 is River Wrap Dress €29.99, Paloma
 heels €12.99, Sylvia Cross Bag €17.99 and Class Ziggy hoop earrings €7.99 (€68.96); a men's

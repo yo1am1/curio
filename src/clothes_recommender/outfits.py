@@ -21,10 +21,10 @@ import math
 import re
 from collections.abc import Generator, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from typing import Literal, Protocol
+from typing import Annotated, Literal, Protocol
 
 import numpy as np
-from pydantic import BaseModel, Field, PositiveInt
+from pydantic import BaseModel, Field, PositiveInt, StringConstraints
 
 from clothes_recommender.catalog import ProductCatalog
 from clothes_recommender.domain import Product, ProductFilter, ScoredProduct
@@ -173,16 +173,26 @@ VISUAL_REASON_THRESHOLD = 0.75
 # --- Client-held state and the reply ---------------------------------------------------------
 
 
+# A reason or note the client carries back for display only, bounded so a client cannot
+# send large strings.
+MAX_DISPLAY_TEXT = 300
+MAX_NOTES = 4
+DisplayText = Annotated[str, StringConstraints(max_length=MAX_DISPLAY_TEXT)]
+
+
 class OutfitPiece(BaseModel):
     slot: SlotName
     product_id: PositiveInt
+    # Why the piece was chosen, as the server said when it chose it. Client-supplied on the
+    # way back, so it is only ever shown again: never sent to the model, never evidence.
+    reason: DisplayText = ""
 
 
 class OutfitState(BaseModel):
     """What the client sends back to swap or save pieces of the current outfit.
 
     The server re-reads every product (and so every price) from the catalog; the client only
-    says which piece fills which slot.
+    says which piece fills which slot. The reasons and notes it carries are display-only.
     """
 
     occasion: str = Field(min_length=1, max_length=200)
@@ -191,6 +201,8 @@ class OutfitState(BaseModel):
     pieces: list[OutfitPiece] = Field(default_factory=list, max_length=MAX_SLOTS)
     # Pieces swapped out, so "another top" does not bring an earlier top back.
     skipped: list[PositiveInt] = Field(default_factory=list, max_length=MAX_SKIPPED)
+    # The outfit's notes, display-only like the pieces' reasons.
+    notes: list[DisplayText] = Field(default_factory=list, max_length=MAX_NOTES)
 
 
 class OutfitSlot(BaseModel):
@@ -198,6 +210,9 @@ class OutfitSlot(BaseModel):
     label: str
     product: Product | None = None
     reason: str = ""
+    # The reason came back from the client (an unchanged piece after a swap): shown in the
+    # UI, but never sent to the model or used as evidence.
+    carried: bool = False
     # Why the slot is empty (no match, or the budget cannot cover it).
     issue: str = ""
     # The cheapest matching piece of an empty slot, when one exists.
@@ -212,6 +227,8 @@ class Outfit(BaseModel):
     status: Literal["complete", "partial", "empty"]
     slots: list[OutfitSlot]
     notes: list[str] = Field(default_factory=list)
+    # The notes came back from the client: shown, never sent to the model.
+    notes_carried: bool = False
     # The cheapest complete outfit, reported when the budget cannot cover one.
     minimum: float | None = None
     state: OutfitState
@@ -219,6 +236,10 @@ class Outfit(BaseModel):
     @property
     def products(self) -> list[Product]:
         return [slot.product for slot in self.slots if slot.product is not None]
+
+    def server_notes(self) -> list[str]:
+        """The notes the server wrote, for the model; carried notes are display-only."""
+        return [] if self.notes_carried else list(self.notes)
 
     @property
     def left(self) -> float | None:
@@ -941,11 +962,21 @@ class OutfitPlanner:
             product = self._catalog.get(piece.product_id)
             if product is not None:
                 label = SLOT_LABELS[piece.slot]
-                slots.append(OutfitSlot(slot=piece.slot, label=label, product=product))
+                slots.append(
+                    OutfitSlot(
+                        slot=piece.slot,
+                        label=label,
+                        product=product,
+                        reason=piece.reason,
+                        carried=bool(piece.reason),
+                    )
+                )
         if not slots:
             return None
         request = OutfitRequest(state.occasion, state.budget, state.audience)
-        return self._outfit(request, state.audience, slots, [], None, skipped=state.skipped)
+        return self._outfit(
+            request, state.audience, slots, list(state.notes), None, skipped=state.skipped
+        ).model_copy(update={"notes_carried": bool(state.notes)})
 
     def swap(
         self,
@@ -986,10 +1017,12 @@ class OutfitPlanner:
         slots = []
         for item in outfit.slots:
             if item.slot == slot and pick is not None:
-                item = item.model_copy(update={"product": pick[0], "reason": pick[1]})
+                update = {"product": pick[0], "reason": pick[1], "carried": False}
+                item = item.model_copy(update=update)
             slots.append(item)
         request = OutfitRequest(state.occasion, state.budget, state.audience)
-        swapped = self._outfit(request, state.audience, slots, [], None, skipped=skipped)
+        swapped = self._outfit(request, state.audience, slots, outfit.notes, None, skipped=skipped)
+        swapped = swapped.model_copy(update={"notes_carried": outfit.notes_carried})
         return Swap(swapped, slot, old, pick[0] if pick else None)
 
     @staticmethod
@@ -1017,11 +1050,16 @@ class OutfitPlanner:
             budget=request.budget,
             audience=audience,
             pieces=[
-                OutfitPiece(slot=s.slot, product_id=s.product.product_id)
+                OutfitPiece(
+                    slot=s.slot,
+                    product_id=s.product.product_id,
+                    reason=s.reason[:MAX_DISPLAY_TEXT],
+                )
                 for s in filled
                 if s.product is not None
             ],
             skipped=list(dict.fromkeys(skipped))[-MAX_SKIPPED:],
+            notes=[note[:MAX_DISPLAY_TEXT] for note in notes[:MAX_NOTES]],
         )
         return Outfit(
             occasion=request.occasion,

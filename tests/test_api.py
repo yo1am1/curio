@@ -429,8 +429,12 @@ def test_outfit_is_planned_over_the_index_with_reasons_and_gaps(client) -> None:
         "occasion": "summer wedding",
         "budget": 200.0,
         "audience": "women",
-        "pieces": [{"slot": "dress", "product_id": 3}, {"slot": "shoes", "product_id": 6}],
+        "pieces": [
+            {"slot": "dress", "product_id": 3, "reason": dress["reason"]},
+            {"slot": "shoes", "product_id": 6, "reason": shoes["reason"]},
+        ],
         "skipped": [],
+        "notes": outfit["notes"],
     }
 
 
@@ -456,7 +460,9 @@ def test_outfit_swap_and_its_errors(client) -> None:
     }
     swapped = client.post("/outfits/swap", json={"outfit": state, "slot": "bottom"}).json()
     # No other menswear trousers exist, so the outfit is returned unchanged.
-    assert swapped["state"]["pieces"] == state["pieces"]
+    assert [(p["slot"], p["product_id"]) for p in swapped["state"]["pieces"]] == [
+        (p["slot"], p["product_id"]) for p in state["pieces"]
+    ]
     assert swapped["total"] == 47.98
     missing = client.post("/outfits/swap", json={"outfit": state, "slot": "shoes"})
     assert missing.status_code == 422
@@ -487,6 +493,13 @@ def test_chat_accepts_the_client_held_outfit(services) -> None:
         too_many = {**outfit, "pieces": [{"slot": "top", "product_id": 4}] * 6}
         response = client.post("/chat", json={"message": "hi", "outfit": too_many})
         assert response.status_code == 422
+        # Carried reasons and notes are display-only and bounded.
+        long_reason = {**outfit, "pieces": [{"slot": "top", "product_id": 4, "reason": "x" * 301}]}
+        for state in (long_reason, {**outfit, "notes": ["note"] * 5}):
+            response = client.post("/chat", json={"message": "hi", "outfit": state})
+            assert response.status_code == 422
+            swap = client.post("/outfits/swap", json={"outfit": state, "slot": "top"})
+            assert swap.status_code == 422
 
 
 def test_chat_feedback_is_recorded_and_summarized(client):

@@ -129,10 +129,8 @@ def test_outfit_fits_the_budget_with_one_piece_of_the_right_kind_per_slot(planne
         assert slot.product.product_type in SLOT_TYPES[slot.slot]
         assert slot.product.section == "Ladieswear"
     assert outfit.state.pieces == [
-        OutfitPiece(slot="dress", product_id=1),
-        OutfitPiece(slot="shoes", product_id=3),
-        OutfitPiece(slot="bag", product_id=5),
-        OutfitPiece(slot="accessory", product_id=6),
+        OutfitPiece(slot=s.slot, product_id=pid, reason=s.reason)
+        for s, pid in zip(outfit.slots, (1, 3, 5, 6), strict=True)
     ]
 
 
@@ -361,3 +359,36 @@ def test_a_piece_of_another_type_than_the_query_names_says_so():
         s for s in build(planner, "summer wedding", 80, "women").slots if s.slot == "shoes"
     )
     assert shoes.reason == "Best match for “elegant heeled sandals”."
+
+
+# --- Reasons and notes survive a swap, for display only ------------------------------------
+
+
+def test_a_swap_keeps_the_reasons_and_notes_of_unchanged_pieces(planner):
+    built = build(planner, "summer wedding", 90, "women")
+    reasons = {s.slot: s.reason for s in built.slots}
+    state = built.state.model_copy(update={"notes": ["Planned for women from the best match."]})
+    swap = planner.swap(state, "shoes")
+    after = {s.slot: s for s in swap.outfit.slots}
+    assert swap.new is not None and after["shoes"].reason and not after["shoes"].carried
+    for slot in ("dress", "bag", "accessory"):
+        assert after[slot].reason == reasons[slot] and after[slot].carried
+    assert swap.outfit.notes == ["Planned for women from the best match."]
+    assert swap.outfit.notes_carried and swap.outfit.server_notes() == []
+    # The new state carries them on to the next swap.
+    assert swap.outfit.state.pieces[0].reason == reasons["dress"]
+    assert swap.outfit.state.notes == state.notes
+
+
+def test_display_text_in_the_client_state_is_bounded():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        OutfitPiece(slot="dress", product_id=1, reason="x" * 301)
+    with pytest.raises(ValidationError):
+        OutfitState(occasion="wedding", notes=["note"] * 5)
+    with pytest.raises(ValidationError):
+        OutfitState(occasion="wedding", notes=["x" * 301])
+    # Long server reasons are cut to the bound when they go into the state.
+    piece = OutfitPiece(slot="dress", product_id=1, reason="x" * 300)
+    assert len(piece.reason) == 300

@@ -306,9 +306,14 @@ class FashionToolkit:
 
     def _show_outfit(self, turn: Turn[Product], outfit: Outfit) -> None:
         turn.extras[OUTFIT] = outfit
+        # Carried reasons came from the client: display-only, never evidence for the model.
         turn.show(
             outfit.products,
-            {s.product.product_id: [s.reason] for s in outfit.slots if s.product and s.reason},
+            {
+                s.product.product_id: [s.reason]
+                for s in outfit.slots
+                if s.product and s.reason and not s.carried
+            },
         )
 
     def _related(self, turn: Turn[Product], action: FindRelated) -> AgentStep:

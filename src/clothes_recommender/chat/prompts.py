@@ -110,9 +110,11 @@ def render_outfit(outfit: Outfit) -> str:
         if slot.product is None:
             lines.append(f"- {slot.label}: not filled. {slot.issue}")
             continue
-        line = render_products([slot.product], {slot.product.product_id: [slot.reason]})
+        # A carried reason came from the client (display-only), so the model never sees it.
+        reason = [] if slot.carried or not slot.reason else [slot.reason]
+        line = render_products([slot.product], {slot.product.product_id: reason})
         lines.append(f"- {slot.label}: {line.removeprefix('1. ')}")
-    lines += [f"Note: {note}" for note in outfit.notes]
+    lines += [f"Note: {note}" for note in outfit.server_notes()]
     return "\n".join(lines)
 
 

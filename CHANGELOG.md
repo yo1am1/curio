@@ -140,6 +140,11 @@ All notable changes to Curio are recorded here. The format follows
   left of the budget: a bracelet, not a belt.", and a fallback piece "Not the kind
   “elegant heeled sandals” asks for (sandals or heels): none is available within the budget,
   so this is the closest shoe instead."
+- Outfit builder: a swap kept only the new piece's reason and dropped the reasons of the
+  unchanged pieces and the outfit's notes. `OutfitPiece.reason` and `OutfitState.notes` now
+  carry them through the client-held state, bounded (300 characters, four notes). They are
+  client-supplied, so they are display-only: marked `carried`, never sent to the model and
+  never grounding evidence.
 
 ### Security
 
