@@ -38,6 +38,8 @@ def construction(monkeypatch, tmp_path, sample_catalog):
         query_photos_dir=tmp_path / "query_photos",
         evaluation_path=tmp_path / "evaluation.json",
         cocktails_path=tmp_path / "cocktails.parquet",
+        books_path=tmp_path / "books.parquet",
+        book_neighbours_path=tmp_path / "book_neighbours.parquet",
     )
     # Fashion is served once prepare_data's files exist; their loaders are faked below.
     for path in (settings.products_path, settings.users_path, settings.purchases_path):

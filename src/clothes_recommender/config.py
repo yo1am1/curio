@@ -96,6 +96,16 @@ class Settings(BaseSettings):
         return self.data_dir / "cocktails.parquet"
 
     @property
+    def books_path(self) -> Path:
+        """Books built by `scripts.prepare_books`; the book domain needs this file."""
+        return self.data_dir / "books.parquet"
+
+    @property
+    def book_neighbours_path(self) -> Path:
+        """Readers-also-liked links from `scripts.prepare_books`; also required."""
+        return self.data_dir / "book_neighbours.parquet"
+
+    @property
     def llm_configured(self) -> bool:
         return self.llm_model is not None
 

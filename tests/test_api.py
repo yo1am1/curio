@@ -76,7 +76,7 @@ def client(services) -> Iterator[TestClient]:
 
 def test_health_reports_index_size_and_chat_status(client) -> None:
     from clothes_recommender.api import CHAT_DISABLED
-    from clothes_recommender.services import COCKTAILS_MISSING
+    from clothes_recommender.services import BOOKS_MISSING, COCKTAILS_MISSING
 
     assert client.get("/health").json() == {
         "status": "ok",
@@ -87,6 +87,8 @@ def test_health_reports_index_size_and_chat_status(client) -> None:
         "fashion_enabled": True,
         "cocktails_enabled": False,
         "cocktail_count": 0,
+        "books_enabled": False,
+        "book_count": 0,
         "llm_configured": False,
         "domains": [
             {
@@ -104,6 +106,14 @@ def test_health_reports_index_size_and_chat_status(client) -> None:
                 "chat_enabled": False,
                 "item_count": 0,
                 "hint": COCKTAILS_MISSING,
+            },
+            {
+                "id": "books",
+                "label": "Books",
+                "enabled": False,
+                "chat_enabled": False,
+                "item_count": 0,
+                "hint": BOOKS_MISSING,
             },
         ],
     }
@@ -457,7 +467,11 @@ def test_domains_and_health_report_the_cocktail_domain(client, cocktail_services
     assert [
         (d["id"], d["label"], d["enabled"], d["chat_enabled"])
         for d in client.get("/domains").json()
-    ] == [("fashion", "Fashion", True, False), ("cocktails", "Cocktails", False, False)]
+    ] == [
+        ("fashion", "Fashion", True, False),
+        ("cocktails", "Cocktails", False, False),
+        ("books", "Books", False, False),
+    ]
     agent = _cocktail_agent_services(cocktail_services)
     with TestClient(create_app(agent)) as cocktails:
         health = cocktails.get("/health").json()

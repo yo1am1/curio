@@ -3,7 +3,7 @@
 Each domain is optional at serving time. `DOMAINS` is the registry: one `DomainSpec` per
 domain, in display order, naming how to load it and how to prepare it when it is missing.
 `build_services` loads the specs whose data is prepared and skips the rest, so the API
-starts with any subset (fashion only, cocktails only, both, or none).
+starts with any subset of fashion, cocktails and books, including none.
 
 Adding a domain: write a runtime (a dataclass with `assistant`, `item_count()` and
 `close()`), a loader that returns None while the domain's data is missing, and one
@@ -21,8 +21,11 @@ from typing import Protocol, cast
 import pandas as pd
 from langchain_core.language_models import BaseChatModel
 
+from clothes_recommender.books.catalog import BookCatalog
+from clothes_recommender.books.recommend import BookRecommender
 from clothes_recommender.catalog import CustomerData, ProductCatalog, load_shopper_purchases
 from clothes_recommender.chat.assistant import ShoppingAssistant
+from clothes_recommender.chat.book_agent import BookAssistant
 from clothes_recommender.chat.cocktail_agent import CocktailAssistant
 from clothes_recommender.chat.engine import AgentEngine
 from clothes_recommender.chat.guardrails import ActionSigner
@@ -115,6 +118,19 @@ class CocktailServices:
 
 
 @dataclass(frozen=True)
+class BookServices:
+    catalog: BookCatalog
+    recommender: BookRecommender
+    assistant: BookAssistant | None = None
+
+    def item_count(self) -> int:
+        return len(self.catalog)
+
+    def close(self) -> None:
+        """Books live in memory; nothing to release."""
+
+
+@dataclass(frozen=True)
 class DomainSpec[R: DomainRuntime]:
     id: Domain
     label: str
@@ -146,6 +162,10 @@ class Services:
     def cocktails(self) -> CocktailServices | None:
         return COCKTAILS.of(self)
 
+    @property
+    def books(self) -> BookServices | None:
+        return BOOKS.of(self)
+
     def close(self) -> None:
         for runtime in self.domains.values():
             runtime.close()
@@ -156,6 +176,7 @@ FASHION_MISSING = (
     "index (docs/technical-guide.md#fashion-data), then restart the API."
 )
 COCKTAILS_MISSING = "Cocktail recipes are not prepared: run scripts.prepare_cocktails."
+BOOKS_MISSING = "The book catalog is not prepared: run scripts.prepare_books."
 
 
 def fashion_prepared(settings: Settings) -> bool:
@@ -260,6 +281,28 @@ def load_cocktails(settings: Settings, kit: AgentKit | None) -> CocktailServices
     return CocktailServices(catalog=catalog, recommender=recommender, assistant=assistant)
 
 
+def load_books(settings: Settings, kit: AgentKit | None) -> BookServices | None:
+    """A missing or broken book file disables the domain; it never stops the API."""
+    paths = (settings.books_path, settings.book_neighbours_path)
+    if not all(path.exists() for path in paths):
+        logger.warning(
+            "No %s and %s: the book domain is disabled. Run `uv run python -m "
+            "scripts.prepare_books` to enable it.",
+            *paths,
+        )
+        return None
+    try:
+        catalog = BookCatalog.from_parquet(settings.books_path)
+        recommender = BookRecommender(catalog, pd.read_parquet(settings.book_neighbours_path))
+    except Exception:
+        logger.exception("Could not load the book catalog: the book domain is disabled.")
+        return None
+    assistant = None
+    if kit is not None:
+        assistant = BookAssistant(kit.chat_model, catalog, recommender, signer=kit.signer)
+    return BookServices(catalog=catalog, recommender=recommender, assistant=assistant)
+
+
 FASHION: DomainSpec[FashionServices] = DomainSpec(
     id="fashion",
     label="Fashion",
@@ -274,8 +317,15 @@ COCKTAILS: DomainSpec[CocktailServices] = DomainSpec(
     runtime_type=CocktailServices,
     load=load_cocktails,
 )
+BOOKS: DomainSpec[BookServices] = DomainSpec(
+    id="books",
+    label="Books",
+    setup_hint=BOOKS_MISSING,
+    runtime_type=BookServices,
+    load=load_books,
+)
 # The registry, in display order: the UI defaults to the first domain that is served.
-DOMAINS: tuple[DomainSpec, ...] = (FASHION, COCKTAILS)
+DOMAINS: tuple[DomainSpec, ...] = (FASHION, COCKTAILS, BOOKS)
 
 
 def domain_spec(domain_id: str) -> DomainSpec | None:

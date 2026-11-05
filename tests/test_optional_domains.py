@@ -18,6 +18,7 @@ from clothes_recommender import services as service_module
 from clothes_recommender.api import CHAT_DISABLED, create_app
 from clothes_recommender.config import Settings
 from clothes_recommender.services import (
+    BOOKS_MISSING,
     COCKTAILS_MISSING,
     DOMAINS,
     FASHION_MISSING,
@@ -148,8 +149,10 @@ def test_enabled_domains_parses_a_comma_separated_list(monkeypatch):
 
 
 def test_unknown_enabled_domain_fails_fast(tmp_path):
-    with pytest.raises(ValueError, match=r"unknown domains \['books'\]; known: cocktails, fashion"):
-        build_services(settings_for(tmp_path, enabled_domains="cocktails,books"))
+    with pytest.raises(
+        ValueError, match=r"unknown domains \['music'\]; known: books, cocktails, fashion"
+    ):
+        build_services(settings_for(tmp_path, enabled_domains="cocktails,music"))
 
 
 def test_a_failing_domain_closes_the_ones_already_loaded(cocktails_only, monkeypatch):
@@ -169,7 +172,7 @@ def test_a_failing_domain_closes_the_ones_already_loaded(cocktails_only, monkeyp
 
 def test_registry_is_ordered_and_unique():
     ids = [spec.id for spec in DOMAINS]
-    assert ids == ["fashion", "cocktails"]
+    assert ids == ["fashion", "cocktails", "books"]
     assert len(set(ids)) == len(ids)
     assert all(spec.setup_hint and spec.label for spec in DOMAINS)
 
@@ -209,6 +212,14 @@ def test_api_starts_with_only_cocktails_and_reports_each_domain(started):
                 "item_count": 8,
                 "hint": CHAT_DISABLED,
             },
+            {
+                "id": "books",
+                "label": "Books",
+                "enabled": False,
+                "chat_enabled": False,
+                "item_count": 0,
+                "hint": BOOKS_MISSING,
+            },
         ]
     )
 
@@ -245,6 +256,6 @@ def test_api_starts_with_no_domain_at_all(tmp_path, no_fashion_models, monkeypat
     monkeypatch.setattr(api_module, "get_settings", lambda: settings_for(tmp_path))
     with TestClient(create_app()) as client:
         health = client.get("/health").json()
-        assert [d["enabled"] for d in health["domains"]] == [False, False]
+        assert [d["enabled"] for d in health["domains"]] == [False, False, False]
         assert health["domains"][1]["hint"] == COCKTAILS_MISSING
         assert client.get("/cocktails/categories").status_code == 503

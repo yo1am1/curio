@@ -18,6 +18,14 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
+from clothes_recommender.books.domain import (
+    BecauseYouLiked,
+    Book,
+    BookHit,
+    BookQuery,
+    BookRef,
+)
+from clothes_recommender.books.taxonomy import MOODS
 from clothes_recommender.chat.engine import AgentEngine
 from clothes_recommender.chat.guardrails import InvalidActionError
 from clothes_recommender.chat.schemas import AssistantReply, ChatRequest, Domain, TurnContext
@@ -33,9 +41,11 @@ from clothes_recommender.demo import DemoCustomer
 from clothes_recommender.domain import Product, ProductFilter, ScoredProduct, User
 from clothes_recommender.recommenders.base import Recommender, UnknownUserError
 from clothes_recommender.services import (
+    BOOKS,
     COCKTAILS,
     DOMAINS,
     FASHION,
+    BookServices,
     CocktailServices,
     DomainRuntime,
     DomainSpec,
@@ -128,6 +138,8 @@ class Health(BaseModel):
     fashion_enabled: bool
     cocktails_enabled: bool
     cocktail_count: int
+    books_enabled: bool = False
+    book_count: int = 0
     llm_configured: bool
     domains: list[DomainInfo]
 
@@ -165,8 +177,13 @@ def get_cocktails(services: ServicesDep) -> CocktailServices:
     return _require(COCKTAILS, services)
 
 
+def get_books(services: ServicesDep) -> BookServices:
+    return _require(BOOKS, services)
+
+
 FashionDep = Annotated[FashionServices, Depends(get_fashion)]
 CocktailsDep = Annotated[CocktailServices, Depends(get_cocktails)]
+BooksDep = Annotated[BookServices, Depends(get_books)]
 
 
 def domain_infos(services: Services) -> list[DomainInfo]:
@@ -253,7 +270,7 @@ def create_app(services: Services | None = None) -> FastAPI:
 
     @app.get("/health")
     def health(services: ServicesDep) -> Health:
-        fashion, cocktails = services.fashion, services.cocktails
+        fashion, cocktails, books = services.fashion, services.cocktails, services.books
         indexed = 0
         if fashion is not None and fashion.store.exists():
             indexed = fashion.store.count()
@@ -265,6 +282,8 @@ def create_app(services: Services | None = None) -> FastAPI:
             fashion_enabled=fashion is not None,
             cocktails_enabled=cocktails is not None,
             cocktail_count=cocktails.item_count() if cocktails else 0,
+            books_enabled=books is not None,
+            book_count=books.item_count() if books else 0,
             llm_configured=services.llm_configured,
             domains=domain_infos(services),
         )
@@ -308,6 +327,57 @@ def create_app(services: Services | None = None) -> FastAPI:
     ) -> list[CocktailHit]:
         get_cocktail(drink_id, cocktails)
         return cocktails.recommender.similar(drink_id, top_k=top_k, alcohol=alcohol)
+
+    # Static /books/* paths are registered before /books/{book_id}.
+    @app.get("/books/genres")
+    def book_genres(books: BooksDep) -> list[str]:
+        """Genres in use, most common first."""
+        return books.catalog.genres()
+
+    @app.get("/books/moods")
+    def book_moods(books: BooksDep) -> list[str]:
+        return list(MOODS)
+
+    @app.get("/books/index")
+    def book_index(books: BooksDep) -> list[BookRef]:
+        """Every book's id, title and first author, most rated first (for pickers)."""
+        ordered = sorted(books.catalog, key=lambda b: (-b.ratings_count, b.book_id))
+        return [BookRef(book_id=b.book_id, title=b.title, author=b.author) for b in ordered]
+
+    @app.post("/books/search")
+    def search_books(query: BookQuery, books: BooksDep) -> list[BookHit]:
+        return books.recommender.search(query)
+
+    @app.post("/books/because")
+    def because_you_liked(request: BecauseYouLiked, books: BooksDep) -> list[BookHit]:
+        """Books readers of the liked books also liked, with which liked book led to each."""
+        return books.recommender.because(
+            request.liked,
+            request.top_k,
+            exclude_genres=request.exclude_genres,
+            exclude_authors=request.exclude_authors,
+        )
+
+    @app.get("/books/{book_id}")
+    def get_book(book_id: int, books: BooksDep) -> Book:
+        book = books.catalog.get(book_id)
+        if book is None:
+            raise HTTPException(status_code=404, detail=f"Book {book_id} not found.")
+        return book
+
+    @app.get("/books/{book_id}/similar")
+    def similar_books(
+        book_id: int, books: BooksDep, top_k: TopK = 5, other_authors_only: bool = False
+    ) -> list[BookHit]:
+        """Readers who liked this book also liked these."""
+        get_book(book_id, books)
+        return books.recommender.similar(book_id, top_k, other_authors_only=other_authors_only)
+
+    @app.get("/books/{book_id}/by-author")
+    def more_by_author(book_id: int, books: BooksDep, top_k: TopK = 5) -> list[BookHit]:
+        """More books by this book's first author."""
+        book = get_book(book_id, books)
+        return books.recommender.by_author(book.author, top_k, exclude_book_id=book_id)
 
     @app.get("/products/{product_id}")
     def get_product(product_id: int, fashion: FashionDep) -> Product:
