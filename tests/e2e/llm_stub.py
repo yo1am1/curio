@@ -13,7 +13,13 @@ deterministic rules keyed on the shopper's words, which makes every flow reprodu
   for the occasion first); "swap"/"cheaper" plus a slot of the current outfit call
   SwapOutfitItem, and "save ... outfit" proposes SaveToShortlist with every outfit piece;
 - the phrases "best deal" (fashion) and "highest rated" (books) first get an answer with an
-  invented price or rating, so the grounding check and self-correction can be seen end to end.
+  invented price or rating, so the grounding check and self-correction can be seen end to end;
+- book requests to drink, pour or pair ("What should I drink with Dune?", "Pair a cocktail
+  with my reading list") call PairCocktail with the title, the reading list or the book on
+  screen; "another pairing" repeats the last subject without the drinks shown, and
+  "alcohol-free" asks for alcohol-free drinks. Answers cite the drinks as "**Name** (drink
+  #N)" with the tool's first reason; "surprise me" invents a drink the pairing did not return,
+  twice, so the grounding fallback can be seen end to end.
 
 Run standalone: `python -m tests.e2e.llm_stub --port 8790`.
 """
@@ -44,6 +50,11 @@ OUTFIT_PIECE = re.compile(
 OUTFIT_GAP = re.compile(r"^- (\w+): not filled\. (.+)$", re.MULTILINE)
 OUTFIT_TOTAL = re.compile(r"total (€[\d.]+(?: of a €[\d.]+ budget)?(?: \(€[\d.]+ left\))?)")
 CURRENT_OUTFIT = re.compile(r"current outfit [^:]*: [^:]*: (.+?)\. (?:shortlist|the shortlist)")
+# "1. drink #269 Old Fashioned | contains alcohol | Cocktail | ... | why: reason; reason"
+PAIRED_LINE = re.compile(r"^\d+\. drink #(\d+) ([^|\n]+) \| ([^|\n]+) \|.*\| why: ([^;\n]+)", re.M)
+DRINKS_SHOWN = re.compile(r"Drinks shown \(an earlier pairing\): (.+)$", re.M)
+PAIR_WORDS = re.compile(r"\b(drink|drinks|cocktail|cocktails|pour|pair|pairing|sip)\b")
+INVENTED_DRINK = "**Negroni** (drink #257)"
 _ids = count(1)
 
 
@@ -305,6 +316,8 @@ class Script:
         last = messages[-1]
         user = self._last_user(messages)
         low = user.lower()
+        if last["role"] == "tool" and _text(last["content"]).startswith("Pairing:"):
+            return {"content": self._pairing_answer(_text(last["content"]), low)}
         if last["role"] == "tool":
             books = BOOK_LINE.findall(_text(last["content"]))
             if not books:
@@ -316,6 +329,8 @@ class Script:
             ]
             return {"content": "\n".join(lines)}
         if low.startswith("verification failed"):
+            if "surprise me" in self._request(messages):
+                return {"content": f"Trust me: pour a {INVENTED_DRINK}."}  # still invented
             return {"content": "Here are the books I could verify from the catalog."}
         if low.startswith("[decision on your proposal]"):
             if "approved" in low:
@@ -328,6 +343,10 @@ class Script:
                 break
             if message["role"] == "assistant":
                 current = BOOK_LINE.findall(_text(message.get("content")))
+        if PAIR_WORDS.search(low) or low in ("another pairing", "make it alcohol-free"):
+            return {
+                "tool_calls": [_tool_call("PairCocktail", self._pairing_args(messages, current))]
+            }
         if "highest rated" in low and current:
             _, title, _author, _rating = current[0]
             return {"content": f"**{title.strip()}** has the best rating here: ★ 4.99."}
@@ -366,6 +385,71 @@ class Script:
             query = earlier[-1][:150] if earlier else "novel"
             return {"tool_calls": [_tool_call("SearchBooks", {"query": query, "max_pages": 250})]}
         return {"tool_calls": [_tool_call("SearchBooks", {"query": user[:150]})]}
+
+    @staticmethod
+    def _request(messages: list[dict]) -> str:
+        """The shopper's request of this turn (the self-correction message is the stub's)."""
+        for message in reversed(messages):
+            text = _text(message.get("content")).lower()
+            if message["role"] == "user" and not text.startswith("verification failed"):
+                return text
+        return ""
+
+    def _pairing_args(self, messages: list[dict], current: list[tuple]) -> dict:
+        user = self._last_user(messages)
+        low = user.lower()
+        args: dict = {}
+        if low in ("another pairing", "make it alcohol-free"):
+            # Repeat the last pairing request, without the drinks already shown.
+            earlier = [
+                _text(m["content"])
+                for m in messages[1:-1]
+                if m["role"] == "user" and PAIR_WORDS.search(_text(m["content"]).lower())
+            ]
+            if earlier:
+                args = self._pairing_args(
+                    [messages[0], {"role": "user", "content": earlier[-1]}], current
+                )
+            if low == "another pairing":
+                for message in reversed(messages[1:-1]):
+                    if message["role"] == "assistant":
+                        shown = DRINKS_SHOWN.search(_text(message.get("content")))
+                        if shown:
+                            ids = [int(i) for i in re.findall(r"drink #(\d+)", shown.group(1))]
+                            args["exclude_drink_ids"] = ids[:15]
+                        break
+            else:
+                args["alcohol_free"] = True
+            return args or {"use_reading_list": True}
+        if "alcohol-free" in low or "alcohol free" in low or "no alcohol" in low:
+            args["alcohol_free"] = True
+        if "reading list" in low:
+            return args | {"use_reading_list": True}
+        if match := re.search(r".*\b(?:with|for)\s+(.+?)[?.!]*$", user):
+            title = re.sub(r"^(?:reading |my reading of )", "", match.group(1)).strip()
+            if title.lower() not in ("me", "it", "this", "this book"):
+                return args | {"title": title[:200]}
+        if current:
+            return args | {"book_id": int(current[0][0])}
+        return args | {"use_reading_list": True}
+
+    @staticmethod
+    def _pairing_answer(result: str, low: str) -> str:
+        """An answer built only from the PairCocktail result (or an invented drink)."""
+        drinks = PAIRED_LINE.findall(result)
+        if not drinks:
+            return "No recipe in the catalog fits that pairing. Try another book."
+        if "surprise me" in low:
+            return f"Forget the list: pour a {INVENTED_DRINK} tonight."
+        summary = result.split("\n", 1)[0].removeprefix("Pairing: ").rstrip(".")
+        lines = [f"{summary}. Here's what to pour:"]
+        for drink_id, name, label, reason in drinks[:3]:
+            lines.append(
+                f"- **{name.strip()}** (drink #{drink_id}, {label.strip()}): {reason.strip()}"
+            )
+        if "contains alcohol" in result:
+            lines.append("\nPlease drink responsibly.")
+        return "\n".join(lines)
 
 
 class _Handler(BaseHTTPRequestHandler):
