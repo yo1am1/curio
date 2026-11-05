@@ -4,7 +4,7 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.runnables import RunnableLambda
 
-from clothes_recommender.books.domain import BookPreferences
+from clothes_recommender.books.domain import Book, BookPreferences
 from clothes_recommender.chat.book_agent import STARTERS, BookAssistant
 from clothes_recommender.chat.cocktail_agent import CocktailAssistant
 from clothes_recommender.chat.guardrails import ActionSigner, BookGroundingCheck, InvalidActionError
@@ -329,9 +329,9 @@ class TestBookGroundingCheck:
     def test_titles_need_evidence_unless_typed(self, book_catalog):
         wind = book_catalog.get(1)
         assert self.check.check("Read The Name of the Wind.", [wind]).status == "verified"
-        report = self.check.check("Read Twilight.", [wind])
+        report = self.check.check("Read *Twilight*.", [wind])
         assert report.issues == ["Twilight was not returned by any tool"]
-        assert self.check.check("Read Twilight.", [wind], typed="like twilight").status == (
+        assert self.check.check("Read *Twilight*.", [wind], typed="like twilight").status == (
             "verified"
         )
 
@@ -348,6 +348,55 @@ class TestBookGroundingCheck:
             "verified"
         )
         assert self.check.check("an average of 3 books", [wind]).status == "not_applicable"
+
+
+class TestOneWordTitles:
+    """One-word titles are ordinary words too ("Beloved", "Remember", "Paradise"); they are
+    checked only where the answer marks them as titles."""
+
+    check = BookGroundingCheck(
+        ["Beloved", "Remember", "Paradise", "The Hitchhiker's Guide to the Galaxy"],
+        other_names=["Toni Morrison", "Douglas Adams", "Fantasy"],
+    )
+
+    @staticmethod
+    def book(book_id: int, title: str, author: str) -> Book:
+        return Book(
+            book_id=book_id,
+            title=title,
+            authors=[author],
+            average_rating=4.2,
+            ratings_count=1000,
+            source_url=f"https://www.goodreads.com/book/show/{book_id}",
+        )
+
+    def test_ordinary_capitalised_words_are_not_titles(self):
+        guide = self.book(54, "The Hitchhiker's Guide to the Galaxy", "Douglas Adams")
+        for text in (
+            "Beloved by fans, The Hitchhiker's Guide to the Galaxy [id 54] is a comic classic.",
+            "Remember that The Hitchhiker's Guide to the Galaxy [id 54] is short.",
+            "A trip to Paradise awaits in The Hitchhiker's Guide to the Galaxy [id 54].",
+        ):
+            report = self.check.check(text, [guide])
+            assert (report.status, report.issues) == ("verified", []), text
+        assert self.check.check("Remember: Paradise is near.", []).status == "not_applicable"
+
+    def test_marked_one_word_titles_are_checked(self):
+        beloved = self.book(3, "Beloved", "Toni Morrison")
+        for text in (
+            "Try **Beloved**.",
+            "Try *Beloved*.",
+            "Try _Beloved_.",
+            'Try "Beloved".',
+            "Try \u201cBeloved\u201d.",
+            "Try Beloved [id 3].",
+            "Try Beloved (book #3).",
+            "[id 3] Beloved: a ghost story.",
+            "Try Beloved by Toni Morrison.",
+        ):
+            assert self.check.check(text, [beloved]).status == "verified", text
+            report = self.check.check(text.replace("3", "4"), [])
+            assert "Beloved was not returned by any tool" in report.issues, text
 
 
 def test_book_effects_serialize_only_their_own_fields():

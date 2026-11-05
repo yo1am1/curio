@@ -127,6 +127,11 @@ All notable changes to Curio are recorded here. The format follows
   Harry Potter books in the top 10 and "fantasy like The Name of the Wind" five Sanderson
   books in the top 6, Mistborn #2 and #3 among them. A query that names the series or the
   author ("harry potter", "by Brandon Sanderson") keeps all its books.
+- Book grounding no longer rejects correct answers over ordinary words that are also one-word
+  catalog titles: "Beloved by fans, The Hitchhiker's Guide to the Galaxy [id 54]…",
+  "Remember that…" or a mid-sentence "Paradise" fell back to the plain list. A one-word title
+  is checked only where the answer marks it as a title: bold, italic or quoted, next to its
+  "[id N]", or followed by "by <author>". The answer prompt asks for bold titles.
 
 ### Security
 

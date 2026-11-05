@@ -244,6 +244,23 @@ _RATING = re.compile(
 )
 # Single-word titles shorter than this ("It", "Room", "Dune") read like ordinary words.
 _MIN_SINGLE_WORD_TITLE = 6
+# A one-word title ("Beloved", "Paradise", "Remember") is also an ordinary word, so it counts
+# as a title only where the answer marks it as one: bold, italic or quoted, next to its
+# "[id N]", or followed by "by <author>".
+_OPENERS = {
+    "**": "**",
+    "__": "__",
+    "*": "*",
+    "_": "_",
+    '"': '"',
+    "\u201c": "\u201d",  # curly double quotes
+    "'": "'",
+    "\u2018": "\u2019",  # curly single quotes
+}
+_DASHES = "\u2014\u2013-"  # em dash, en dash, hyphen
+_ID_AFTER = re.compile(rf"\s*[(,:{_DASHES}]?\s*(?:\[id \d+\]|\(id \d+\)|book #\d+)", re.IGNORECASE)
+_ID_BEFORE = re.compile(rf"(?:\[id \d+\]|book #\d+)\s*[):,{_DASHES}]?\s*$", re.IGNORECASE)
+_BY = re.compile(r"\s*,?\s+by\s+", re.IGNORECASE)
 
 
 class BookGroundingCheck:
@@ -251,9 +268,12 @@ class BookGroundingCheck:
 
     Titles are matched case-sensitively in catalog spelling and only when they are unlikely to
     be ordinary words: several words, or one word of at least six letters ("Twilight" counts,
-    "It" and "Room" do not). A title inside a longer title in the answer counts as the longer
-    one. Ratings must equal an evidence book's Goodreads average at the precision written
-    ("4.55", or "4.6" for 4.55) or a number the reader typed.
+    "It" and "Room" do not). A one-word title is checked only where the answer marks it as a
+    title (bold, italic, quoted, next to its "[id N]" or followed by "by <author>"), so
+    "Beloved by fans" or "Remember that" are not read as the novels. A title inside a longer
+    title in the answer counts as the longer one. Ratings must equal an evidence book's
+    Goodreads average at the precision written ("4.55", or "4.6" for 4.55) or a number the
+    reader typed.
     """
 
     def __init__(self, titles: Iterable[str], *, other_names: Iterable[str] = ()) -> None:
@@ -266,7 +286,13 @@ class BookGroundingCheck:
             {t for t in titles if _checkable_title(t) and t.casefold() not in folded},
             key=lambda name: (-len(name), name),
         )
-        self._titles = _any_of(names) if names else None
+        # Letters and digits bound a title, but "_" does not: "_Beloved_" is italic.
+        self._titles = (
+            re.compile(r"(?<![^\W_])(?:" + "|".join(map(re.escape, names)) + r")(?![^\W_])")
+            if names
+            else None
+        )
+        self._single = {name for name in names if len(name.split()) == 1}
         phrases = sorted(others, key=lambda name: (-len(name), name))
         self._others = _any_of(phrases, re.IGNORECASE) if phrases else None
 
@@ -306,9 +332,24 @@ class BookGroundingCheck:
         mentions = []
         for match in self._titles.finditer(text):
             start, end = match.span()
-            if not any(s <= start and end <= e and e - s > end - start for s, e in others):
-                mentions.append(match.group(0))
+            if any(s <= start and end <= e and e - s > end - start for s, e in others):
+                continue
+            if match.group(0) in self._single and not self._marked(text, start, end):
+                continue
+            mentions.append(match.group(0))
         return list(dict.fromkeys(mentions))
+
+    def _marked(self, text: str, start: int, end: int) -> bool:
+        """Whether the answer marks text[start:end] as a title: bold, italic or quoted, next
+        to a book ID, or followed by "by" and an author's name."""
+        before, after = text[:start], text[end:]
+        for opener, closer in _OPENERS.items():
+            if before.endswith(opener) and after.startswith(closer):
+                return True
+        if _ID_AFTER.match(after) or _ID_BEFORE.search(before):
+            return True
+        by = _BY.match(after)
+        return bool(by and self._others and self._others.match(after, by.end()))
 
 
 def _checkable_title(title: str) -> bool:

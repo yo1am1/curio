@@ -230,8 +230,11 @@ and the reading list:
 - Catalog titles, matched case-sensitively, must have been returned (or be the series of a
   returned book) or typed by the reader. Only titles unlikely to be ordinary words are
   checked: several words, or one word of at least six letters ("Twilight", not "It" or
-  "Room"). A title that is also an author, genre or mood name ("Mystery") is ignored, and
-  so is a title inside one ("George" in "George Orwell").
+  "Room"). A one-word title is checked only where the answer marks it as a title (bold,
+  italic or quoted, next to its "[id N]", or followed by "by <author>"), so "Beloved by
+  fans" or "Remember that" are ordinary words; the prompt asks for bold titles. A title that
+  is also an author, genre or mood name ("Mystery") is ignored, and so is a title inside
+  one ("George" in "George Orwell").
 - Ratings ("★ 4.55", "rated 4.6", "4.5/5", "4.3 stars") must match an evidence book's
   Goodreads average at the precision written (4.6 may round 4.55; 4.55 must be exact) or
   a number the reader typed.
