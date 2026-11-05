@@ -4,6 +4,8 @@ import json
 import math
 from bisect import bisect_right
 from collections import Counter, defaultdict
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Literal
 
 import pandas as pd
@@ -178,6 +180,10 @@ class GraphRecommender:
                 "Popularity fallback from recent purchases; no graph evidence from history."
             )
         return reasons
+
+    def bought_together(self, product_id: int) -> Mapping[int, tuple[int, float]]:
+        """Products bought with `product_id`: id -> (baskets, lift); empty when unknown."""
+        return MappingProxyType(self._adjacency.get(product_id, {}))
 
     def related(
         self,

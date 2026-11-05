@@ -327,3 +327,85 @@ def with_cocktails(services, **changes):
     return serve(
         services.fashion, cocktails, services.books, llm_configured=services.llm_configured
     )
+
+
+# --- Outfits -----------------------------------------------------------------------------------
+
+OUTFIT_ROWS = [
+    # product_id, name, product_type, product_group, section, colour, price
+    (1, "Linen Wrap Dress", "Dress", "Garment Full body", "Ladieswear", "Red", 34.99),
+    (2, "Silk Slip Dress", "Dress", "Garment Full body", "Ladieswear", "Black", 49.99),
+    (3, "Strappy Sandals", "Sandals", "Shoes", "Ladieswear", "Black", 19.99),
+    (4, "Block Heels", "Heels", "Shoes", "Ladieswear", "Beige", 24.99),
+    (5, "Mini Shoulder Bag", "Bag", "Accessories", "Ladieswear", "Black", 14.99),
+    (6, "Hoop Earrings", "Earring", "Accessories", "Ladieswear", "Gold", 5.99),
+    (7, "Laundry Mesh Bag", "Bag", "Accessories", "Ladieswear", "White", 3.99),
+    (8, "Oxford Shirt", "Shirt", "Garment Upper body", "Menswear", "White", 19.99),
+    (9, "Suit Trousers", "Trousers", "Garment Lower body", "Menswear", "Dark Blue", 29.99),
+    (10, "Slim Blazer", "Blazer", "Garment Upper body", "Menswear", "Dark Blue", 49.99),
+    (11, "Leather Loafers", "Other shoe", "Shoes", "Menswear", "Black", 34.99),
+    (12, "Wide Trousers", "Trousers", "Garment Lower body", "Ladieswear", "Black", 24.99),
+    (13, "Pearl Necklace", "Necklace", "Accessories", "Ladieswear", "White", 9.99),
+]
+
+
+def outfit_products() -> list[Product]:
+    return [
+        Product(
+            product_id=pid,
+            name=name,
+            product_type=product_type,
+            product_group=group,
+            section=section,
+            colour=colour,
+            description="Protective laundry bags for washing."
+            if pid == 7
+            else f"{name} in {colour.lower()}.",
+            price=price,
+        )
+        for pid, name, product_type, group, section, colour, price in OUTFIT_ROWS
+    ]
+
+
+class OutfitSearch:
+    """Duck-typed `ProductSearch` for outfits: honours every filter like the vector store.
+
+    Relevance is deterministic: 0.30 minus a small per-id step, plus 0.02 for each word of the
+    product name in the query, plus any `boost` set by a test.
+    """
+
+    def __init__(self, products: Sequence[Product]) -> None:
+        self.products = list(products)
+        self.boost: dict[int, float] = {}
+        self.queries: list[tuple[str, object]] = []
+
+    def by_text(self, query: str, top_k: int = 10, product_filter=None):
+        from clothes_recommender.domain import ScoredProduct
+
+        self.queries.append((query, product_filter))
+        words = set(query.lower().split())
+        found = []
+        for p in self.products:
+            f = product_filter
+            if f is not None and (
+                (f.product_types and p.product_type not in f.product_types)
+                or (f.sections and p.section not in f.sections)
+                or (f.max_price is not None and p.price > f.max_price)
+                or p.product_id in f.exclude_ids
+            ):
+                continue
+            score = 0.30 - 0.001 * p.product_id + self.boost.get(p.product_id, 0.0)
+            score += 0.02 * len(words & set(p.name.lower().split()))
+            found.append(ScoredProduct(p.product_id, score))
+        found.sort(key=lambda hit: (-hit.score, hit.product_id))
+        return found[:top_k]
+
+
+@pytest.fixture
+def outfit_catalog() -> ProductCatalog:
+    return ProductCatalog(pd.DataFrame([p.model_dump() for p in outfit_products()]))
+
+
+@pytest.fixture
+def outfit_search() -> OutfitSearch:
+    return OutfitSearch(outfit_products())
