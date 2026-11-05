@@ -203,11 +203,106 @@ def cocktail_catalog():
     return CocktailCatalog(cocktail_frame())
 
 
-def serve(fashion=None, cocktails=None, *, llm_configured: bool = False):
+# (book_id, title, authors, series, position, year, rating, ratings, pages, genres, tags, cover)
+BOOK_ROWS = [
+    (1, "The Name of the Wind", ["Patrick Rothfuss"], "The Kingkiller Chronicle", "1", 2007,
+     4.55, 400_000, 662, ["Fantasy"], ["epic fantasy", "magic", "high fantasy"], True),
+    (2, "The Wise Man's Fear", ["Patrick Rothfuss"], "The Kingkiller Chronicle", "2", 2011,
+     4.57, 245_000, 994, ["Fantasy"], ["epic fantasy", "magic"], True),
+    (3, "The Way of Kings", ["Brandon Sanderson"], "The Stormlight Archive", "1", 2010,
+     4.64, 145_000, 1007, ["Fantasy"], ["epic fantasy", "high fantasy"], True),
+    (4, "The Final Empire", ["Brandon Sanderson"], "Mistborn", "1", 2006,
+     4.43, 209_000, 541, ["Fantasy"], ["epic fantasy", "magic", "heist"], True),
+    (5, "Of Mice and Men", ["John Steinbeck"], None, None, 1937,
+     3.84, 1_500_000, 112, ["Classics"], ["classic", "american literature"], True),
+    (6, "Animal Farm", ["George Orwell", "Russell Baker"], None, None, 1945,
+     3.87, 1_880_000, 122, ["Classics", "Science fiction"], ["classic", "dystopia", "politics"],
+     True),
+    (7, "It", ["Stephen King"], None, None, 1986,
+     4.18, 600_000, 1093, ["Horror"], ["horror", "dark", "clowns"], True),
+    (8, "Gone Girl", ["Gillian Flynn"], None, None, 2012,
+     4.03, 1_600_000, 399, ["Mystery", "Thriller"], ["psychological thriller", "dark"], True),
+    (9, "Chocolate Chip Cookie Murder", ["Joanne Fluke"], "Hannah Swensen", "1", 2000,
+     3.72, 40_000, 436, ["Mystery"], ["cozy mystery", "baking"], False),
+    (10, "Twilight", ["Stephenie Meyer"], "Twilight", "1", 2005,
+     3.57, 3_800_000, None, ["Young adult", "Romance"], ["vampires", "paranormal romance"], True),
+]  # fmt: skip
+# (book_id, neighbour_id, score, co_readers): the readers-also-liked links prepare_books writes.
+BOOK_NEIGHBOURS = [
+    (1, 2, 0.8, 2400),
+    (1, 3, 0.44, 960),
+    (1, 4, 0.42, 1140),
+    (1, 7, 0.1, 20),
+    (2, 1, 0.75, 2400),
+    (3, 4, 0.5, 800),
+    (3, 1, 0.4, 960),
+    (4, 3, 0.45, 800),
+    (5, 6, 0.4, 3000),
+    (6, 5, 0.38, 3000),
+    (8, 7, 0.2, 300),
+    (8, 9, 0.1, 30),
+]
+
+
+def book_frame():
+    """The prepared books.parquet layout for a tiny, varied catalog."""
+    import json as _json
+
+    return pd.DataFrame(
+        [
+            {
+                "book_id": book_id,
+                "goodreads_book_id": 1000 + book_id,
+                "title": title,
+                "authors": _json.dumps(authors),
+                "series": series,
+                "series_position": position,
+                "year": year,
+                "language": "eng",
+                "average_rating": rating,
+                "ratings_count": ratings,
+                "pages": pages,
+                "description": f"{title} is a book by {authors[0]}.",
+                "genres": _json.dumps(genres),
+                "tags": _json.dumps(tags),
+                "image_url": (
+                    f"https://images.gr-assets.com/books/1{book_id}m/{book_id}.jpg"
+                    if cover
+                    else None
+                ),
+                "readers": ratings // 100,
+            }
+            for (
+                book_id, title, authors, series, position, year, rating, ratings, pages, genres,
+                tags, cover,
+            ) in BOOK_ROWS
+        ]
+    ).astype({"year": "Int64", "pages": "Int64"})  # fmt: skip
+
+
+def book_neighbours_frame():
+    return pd.DataFrame(BOOK_NEIGHBOURS, columns=["book_id", "neighbour_id", "score", "co_readers"])
+
+
+@pytest.fixture
+def book_catalog():
+    from clothes_recommender.books.catalog import BookCatalog
+
+    return BookCatalog(book_frame())
+
+
+@pytest.fixture
+def book_recommender(book_catalog):
+    from clothes_recommender.books.recommend import BookRecommender
+
+    return BookRecommender(book_catalog, book_neighbours_frame())
+
+
+def serve(fashion=None, cocktails=None, books=None, *, llm_configured: bool = False):
     """`Services` holding the given domain runtimes; a None domain is not served."""
     from clothes_recommender.services import Services
 
-    domains = {"fashion": fashion, "cocktails": cocktails}
+    domains = {"fashion": fashion, "cocktails": cocktails, "books": books}
     return Services(
         domains={name: runtime for name, runtime in domains.items() if runtime is not None},
         llm_configured=llm_configured,
@@ -219,7 +314,9 @@ def with_fashion(services, **changes):
     import dataclasses
 
     fashion = dataclasses.replace(services.fashion, **changes)
-    return serve(fashion, services.cocktails, llm_configured=services.llm_configured)
+    return serve(
+        fashion, services.cocktails, services.books, llm_configured=services.llm_configured
+    )
 
 
 def with_cocktails(services, **changes):
@@ -227,4 +324,6 @@ def with_cocktails(services, **changes):
     import dataclasses
 
     cocktails = dataclasses.replace(services.cocktails, **changes)
-    return serve(services.fashion, cocktails, llm_configured=services.llm_configured)
+    return serve(
+        services.fashion, cocktails, services.books, llm_configured=services.llm_configured
+    )
