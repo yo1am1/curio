@@ -8,6 +8,34 @@ All notable changes to Curio are recorded here. The format follows
 
 ### Added
 
+- **Outfit builder** (portfolio item 4), multi-step planning with human approval in fashion:
+  - `outfits.OutfitPlanner` plans 3-4 slots for an occasion (wedding, office, party, beach,
+    sport, casual; summer, winter, autumn and spring variants; women, men or kids, else the
+    audience of the best match) and fills each with a CLIP search restricted to the slot's
+    product types and the audience's sections, so an outfit is never four pairs of trousers.
+    Budget allocation is cheapest-feasible and deterministic: each slot may spend what the
+    later slots do not need at minimum, with a soft fair share by slot weight. Later pieces
+    prefer ones bought together with (co-purchase graph) or looking like (image embeddings)
+    the pieces already chosen, and each piece says why. A budget that cannot cover every
+    slot names the slot that does not fit, its cheapest price and the cheapest complete
+    outfit. Swaps ("other" or "cheaper", with refining words) stay within the budget and
+    never bring back a piece swapped out.
+  - Agent tools `BuildOutfit` and `SwapOutfitItem` (READ). The trace streams "Plan outfit",
+    one "Fill slot" step per slot and the result; "Save outfit" goes through the existing
+    `SaveToShortlist` approval, narrowable per piece. Grounding verifies every piece's price
+    and the outfit total (plus what is left of the budget and what a missing slot costs).
+  - The engine streams the steps of a staged READ tool (a tool returning a generator), and
+    `Turn.extras` holds domain results that are not catalog items.
+  - API: `POST /outfits` and `POST /outfits/swap`; `TurnContext.outfit` and
+    `AssistantReply.outfit`.
+  - UI: an outfit card (slots in a row with photos and reasons, the total against the
+    budget, "Swap" and "Cheaper" per slot, "Save outfit"), an "Outfit for an occasion"
+    starter chip, and the current outfit kept in the session for follow-ups.
+  - Tests: planner unit tests (plans, budget allocation, infeasible budgets, co-purchase and
+    visual preference, swaps), agent tests with a scripted model, API and UI tests, outfit
+    scenarios in the scripted LLM stub, and an E2E suite on the real index with screenshots
+    (`tests/e2e/test_outfit_e2e.py`); README screenshot `curio-outfit.jpg`
+    (`scripts.capture_readme --only outfit`).
 - **Book domain** (portfolio item 6), the third domain on the shared agent engine:
   - `scripts.prepare_books` downloads goodbooks-10k from a pinned commit, checks every
     file's SHA-256 and writes `data/books.parquet` (10,000 books with clean titles, series,
@@ -59,6 +87,9 @@ All notable changes to Curio are recorded here. The format follows
 
 ### Changed
 
+- The scripted E2E LLM stub answers "outfit" requests without an occasion with the occasion
+  question (options "Summer wedding under €80", "Office for women", "Weekend casual") and
+  builds the outfit from the answer.
 - `TurnContext.auto_approve` accepts up to six approval tools (two per domain).
 - `AppliedEffect` serializes each kind with its own domain's fields from a table, and the
   engine applies approved effects to the turn context from a table, so a domain adds
@@ -72,6 +103,10 @@ All notable changes to Curio are recorded here. The format follows
   flat fashion and cocktail fields.
 
 ### Known limitations
+
+- Outfit coherence comes from per-slot CLIP queries, co-purchases and photo similarity; there
+  is no colour-harmony or style model. Occasion detection is keyword-based (English), and
+  the partial photo index has few men's (13) and children's (3) shoes.
 
 - Book genres and moods come from Goodreads reader shelves (crowd labels). A third of the
   books have no cover in the dataset and 9 % no page count; a length filter leaves those out.

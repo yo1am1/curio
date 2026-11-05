@@ -9,8 +9,8 @@ the scripted stub in tests/e2e/llm_stub.py was used:
     uv run streamlit run src/clothes_recommender/ui.py
     uv run python -m scripts.capture_readme --out docs/screenshots
 
-`--only books` refreshes just the book screenshots. Example customer 3 is used because all of
-its default picks have photos in the partial index.
+`--only books` refreshes just the book screenshots, `--only outfit` the outfit builder.
+Example customer 3 is used because all of its default picks have photos in the partial index.
 """
 
 import argparse
@@ -27,7 +27,7 @@ parser.add_argument("--executable-path", help="Chromium binary (default: Playwri
 parser.add_argument(
     "--only",
     nargs="+",
-    choices=["fashion", "cocktails", "books", "phone"],
+    choices=["fashion", "cocktails", "books", "outfit", "phone"],
     help="Capture only these groups (default: all). Books need scripts.prepare_books.",
 )
 ARGS = parser.parse_args()
@@ -267,6 +267,18 @@ def books(b) -> None:
     save(p, "curio-book-agent")
 
 
+def outfit(b) -> None:
+    """The outfit builder: slots with photos and reasons, the budget bar and its actions."""
+    p = desk(b, 1150)
+    p.goto(UI)
+    settle(p)
+    send(p, "Build me a summer outfit for a wedding under €80")
+    card = p.locator('[class*="st-key-outfit_home_"]').last
+    card.evaluate("el => el.scrollIntoView({block: 'start'})")
+    scroll_main(p, 0)  # the card stays at the top of the chat panel; the page header returns
+    save(p, "curio-outfit")
+
+
 def phone(b) -> None:
     """Home and feed on a phone."""
     # Phone: home and feed.
@@ -281,7 +293,13 @@ def phone(b) -> None:
     save(m, "curio-mobile", width=780)
 
 
-GROUPS = {"fashion": fashion, "cocktails": cocktails, "books": books, "phone": phone}
+GROUPS = {
+    "fashion": fashion,
+    "cocktails": cocktails,
+    "books": books,
+    "outfit": outfit,
+    "phone": phone,
+}
 
 with sync_playwright() as pw:
     browser = pw.chromium.launch(executable_path=ARGS.executable_path)

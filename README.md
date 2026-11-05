@@ -33,6 +33,14 @@ conversation home and a floating panel on browsing pages.
 
 ![Curio answering "Black trousers under €30" with verified prices and product cards](docs/screenshots/curio-agent.jpg)
 
+Ask for an outfit ("a summer outfit for a wedding under €80") and Curio plans the pieces for
+the occasion (dress, shoes, bag, earrings), fills each from the photo index within the
+budget, prefers pieces real shoppers bought together, and says why it chose each one. The
+total is checked against the prices like any other figure. Swap a piece or ask for a cheaper
+one, or save the whole outfit through the same approval.
+
+![An outfit for a summer wedding: four pieces with photos and reasons, €68.96 of €80](docs/screenshots/curio-outfit.jpg)
+
 Saving to the shortlist or remembering a preference is only proposed. You approve it,
 untick what you don't want, or decline. Approved memory, such as a budget, applies to
 later searches, and the step trace shows where it came from.

@@ -1,8 +1,9 @@
 # Multi-domain contract (fashion, cocktails, books)
 
-Shared interfaces for the cocktail domain (v1.0) and the book domain (unreleased). Every
-teammate codes against this file; change it only together with every consumer. The
-[books](#books) section follows the cocktail sections.
+Shared interfaces for the cocktail domain (v1.0), the book domain and the fashion outfit
+builder (unreleased). Every teammate codes against this file; change it only together with
+every consumer. The [books](#books) and [fashion outfits](#fashion-outfits) sections follow
+the cocktail sections.
 
 ## Data
 
@@ -150,8 +151,8 @@ in `ui.DOMAIN_VIEWS`. Books (`BookServices`) are served when `books.parquet` and
   `{"id": "fashion", "label": "Fashion", "enabled": bool, "chat_enabled": bool,
   "item_count": int, "hint": str | null}`, then the same for `cocktails`. `hint` says how to
   prepare a domain that is not served, or how to enable chat for a served one without it.
-- Fashion endpoints (`/products/*`, `/sections`, `/search/*`, `/users*`, `/demo/customers`,
-  `/evaluation`) return 503 with the fashion setup hint when fashion is not served.
+- Fashion endpoints (`/products/*`, `/sections`, `/search/*`, `/outfits*`, `/users*`,
+  `/demo/customers`, `/evaluation`) return 503 with the fashion setup hint when fashion is not served.
 - `GET /cocktails/ingredients` -> `list[str]`; `GET /cocktails/categories` -> `list[str]`.
 - `GET /cocktails/{id}` -> `Cocktail` (404 unknown).
 - `POST /cocktails/search` body `CocktailQuery` -> `list[CocktailHit]`.
@@ -346,3 +347,60 @@ the reading list or typed), and ratings must match an evidence book's Goodreads 
 - Book pages credit "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.0)" and say ratings
   are Goodreads averages. Covers load directly from Goodreads (the 318 px variant of the
   dataset's link on cards and dialogs).
+
+## Fashion outfits
+
+The outfit builder is fashion-only and adds fields; nothing existing changes shape.
+
+### Python interfaces (`clothes_recommender.outfits`)
+
+- `SlotName = Literal["top", "bottom", "dress", "outerwear", "shoes", "bag", "accessory"]`,
+  `Audience = Literal["women", "men", "kids"]`, `SwapMode = Literal["other", "cheaper"]`.
+- `OutfitState(occasion: str (1-200), budget: float | None (0 < b ≤ 10,000), audience,
+  pieces: list[OutfitPiece(slot, product_id)] (≤ 5), skipped: list[int] (≤ 20))`: what a
+  client holds and sends back. The server re-reads every piece from the catalog.
+- `Outfit(occasion, audience, budget, total, status: "complete" | "partial" | "empty",
+  slots: list[OutfitSlot], notes: list[str], minimum: float | None, state: OutfitState)`;
+  `OutfitSlot(slot, label, product: Product | None, reason, issue, cheapest)`. An empty slot
+  has an `issue` and, when the budget is what kept it out, its `cheapest` price. `minimum`
+  is the cheapest complete outfit when the budget cannot cover one. `Outfit.amounts()`
+  lists the euro figures an answer may state besides piece prices.
+- `OutfitPlanner(search, catalog, *, vectors=None, links=None)`: `search.by_text` as
+  `ProductSearch`, `vectors.get_vectors(ids)` as `ProductVectorStore`, and
+  `links.bought_together(product_id) -> Mapping[int, (baskets, lift)]` as
+  `GraphRecommender`. `build(OutfitRequest) -> Generator[PlannedSlots | FilledSlot, None,
+  Outfit]`, `outfit(request) -> Outfit`, `swap(state, slot, mode, refine, *,
+  max_item_price) -> Swap(outfit, slot, old, new | None)` (raises `OutfitError` for a slot
+  the outfit lacks or an outfit with no known piece), `restore(state) -> Outfit | None`.
+
+### Agent
+
+| Tool | Policy | Args |
+|---|---|---|
+| BuildOutfit | read | occasion (2-200), budget (total, optional), audience (optional), slots (2-5 distinct, optional) |
+| SwapOutfitItem | read | slot, mode (`other` default, `cheaper`), refine (≤ 100) |
+
+`SaveToShortlist` (up to five IDs) saves an outfit through the existing approval flow.
+A READ tool may now return a generator: the engine streams each yielded `AgentStep` and
+records the returned `(result, step)` last. `BuildOutfit` streams "Plan outfit", one "Fill
+slot" per slot, then "BuildOutfit". `Turn.extras` holds domain results that are not catalog
+items (the fashion toolkit keeps the outfit there). Fashion grounding also allows the
+outfit's `amounts()`, for the outfit built this turn and the one the client sent.
+
+### API
+
+- `TurnContext.outfit: OutfitState | None`; `AssistantReply.outfit: Outfit | None` (set when
+  the turn built or changed an outfit).
+- `POST /outfits` body `OutfitQuery(occasion, budget, audience, slots, max_item_price)` ->
+  `Outfit`; `POST /outfits/swap` body `OutfitSwap(outfit: OutfitState, slot, mode, refine)` ->
+  `Outfit` (422 for a slot the outfit does not have). Both return 503 without fashion.
+
+### UI
+
+- Session key `chat_outfit`: the latest reply's `outfit.state`, sent as `outfit` with every
+  fashion chat request and cleared by "New conversation".
+- A turn with an outfit shows an outfit card (one column per slot with photo, name, price,
+  colour and reason; the total against the budget; notes), and product cards only for
+  products outside the outfit. On the latest turn each filled slot has "Swap" and "Cheaper"
+  and the card has "Save outfit"; all three send follow-up messages to the agent.
+- Fashion starters add "Outfit for an occasion".

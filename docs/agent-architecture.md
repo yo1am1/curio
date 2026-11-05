@@ -15,7 +15,7 @@ fields.
 |---|---|---|---|
 | Toolkit | `chat/assistant.py`, `chat/tools.py` | `chat/cocktail_agent.py`, `chat/cocktail_tools.py` | `chat/book_agent.py`, `chat/book_tools.py` |
 | Planning | Structured `SearchIntent` from the LLM, then an initial catalog search | The message is the query; no extra model call before the tool loop | As cocktails |
-| Grounding | Euro amounts and product IDs | Drink IDs, catalog drink names and recipe amounts | Book IDs, catalog titles and Goodreads ratings |
+| Grounding | Euro amounts (including outfit totals) and product IDs | Drink IDs, catalog drink names and recipe amounts | Book IDs, catalog titles and Goodreads ratings |
 | Reply items | `products` | `cocktails` | `books` |
 
 The engine owns everything shared: the tool-call and time budgets, policy enforcement,
@@ -44,7 +44,7 @@ flowchart TD
     M[Shopper message] --> P[Plan: structured intent + approved memory]
     P --> S[Initial catalog search]
     S --> L{Tool loop<br/>max 5 calls, 90 s}
-    L -- READ --> R[Domain READ tools<br/>fashion: SearchCatalog · InspectProducts · FindRelated · PersonalPicks<br/>cocktails: SearchCocktails · InspectCocktails · SimilarCocktails · WhatCanIMake<br/>books: SearchBooks · InspectBooks · ReadersAlsoLiked · BooksByAuthor]
+    L -- READ --> R[Domain READ tools<br/>fashion: SearchCatalog · InspectProducts · FindRelated · PersonalPicks · BuildOutfit · SwapOutfitItem<br/>cocktails: SearchCocktails · InspectCocktails · SimilarCocktails · WhatCanIMake<br/>books: SearchBooks · InspectBooks · ReadersAlsoLiked · BooksByAuthor]
     R --> L
     L -- ASK --> Q[AskShopper: question + quick replies]
     L -- APPROVE --> A{Auto-approve<br/>allowed?}
@@ -61,7 +61,10 @@ flowchart TD
 
 Every phase emits an `AgentStep` (kind, tool, summary, status, duration). The UI
 streams them from `POST /chat/stream` as NDJSON, shows live progress, then keeps a
-collapsed "How Curio worked" trace on each answer.
+collapsed "How Curio worked" trace on each answer. A READ tool that works in stages returns
+a generator instead of a `(result, step)` pair: the engine streams each step it yields as it
+happens and records the returned step last. A `ToolError` raised midway keeps the steps
+already streamed and ends with an error step. `BuildOutfit` uses this for one step per slot.
 
 ## Tools and policies
 
@@ -77,6 +80,8 @@ model, decides what a valid call may do.
 | InspectProducts | read | Exact catalog rows for up to five IDs |
 | FindRelated | read | Graph recommender (complement, alternative) or CLIP item-to-item (similar) |
 | PersonalPicks | read | Learned ranker when deployed, collaborative filtering otherwise, with their reasons |
+| BuildOutfit | read | `OutfitPlanner`: plans 3-4 slots for the occasion and fills each under one total budget; streams a step per slot |
+| SwapOutfitItem | read | Replaces one slot of the current outfit ("other" or "cheaper", optional refining words) within the budget |
 | AskShopper | ask | Ends the turn with a question and 2–4 quick replies |
 | SaveToShortlist | approve | Validated product IDs; the shopper approves, narrows or declines |
 | RememberPreferences | approve | Values mapped to catalog vocabulary; unknown values are a tool error |
@@ -84,6 +89,30 @@ model, decides what a valid call may do.
 `FindRelated` and `PersonalPicks` reach the recommendation system through
 `RecommenderNavigator`. The agent sees ranked IDs plus the same evidence the browsing
 pages show ("3 shoppers who bought … also bought this"), so explanations stay grounded.
+
+#### Outfits: multi-step planning with human approval
+
+"Build me a summer outfit for a wedding under €80" is one `BuildOutfit` call. The planner
+(`outfits.py`, described in the [technical guide](technical-guide.md#outfit-builder)) plans
+slots from the occasion (a women's wedding: dress, shoes, bag, accessory), searches each
+slot's candidates with CLIP restricted to its product types and the audience's sections,
+checks that the cheapest pieces fit the budget, then fills the slots in order. Each slot may
+spend what the later slots do not need at minimum, and prefers pieces bought together with,
+or looking like, the ones already chosen. The trace shows the plan ("Planned 4 slots for
+“summer wedding”: dress, shoes, bag, accessory · for women · budget €80.00"), each slot
+("Filled shoes: Paloma · €12.99. Best match for “elegant heeled sandals”.") and the result
+("Outfit ready: 4 pieces for €68.96 of a €80.00 budget."). A slot the budget cannot cover
+is shown as "Could not fill …" with its cheapest price, never dropped silently.
+
+The tool's audience is the one the shopper gave, else the one their section filters or
+remembered sections point to, else the section of the best match (the answer says so). A
+remembered budget (`max_price`) caps every piece. The server keeps no outfit: the reply
+carries `outfit` with its `state`, the UI sends that back as `TurnContext.outfit`, and the
+toolkit re-reads every piece and price from the catalog. The session prompt lists the
+current outfit, so "cheaper shoes" or "another top" become `SwapOutfitItem` calls, and
+"Save outfit" becomes a `SaveToShortlist` proposal with every piece, which the shopper can
+narrow in the approval card. The model is told to quote the tool's total and never add
+prices up itself.
 
 ### Cocktails
 
@@ -161,7 +190,11 @@ so pending proposals expire on restart. Set it when running several API workers.
 After drafting, every euro amount and product ID in the answer is checked against
 products returned by tools this turn, products referenced in history and the shortlist.
 Allowed amounts are evidence prices, differences between two evidence prices, numbers
-the shopper typed and active budget filters. A whole-euro mention within €1 of a real
+the shopper typed and active budget filters. For an outfit built or swapped this turn, and
+for the outfit the client sent, they also include its total, its budget, what is left, the
+cheapest complete outfit, the shortfall and the cheapest price of a slot that did not fit;
+a piece swapped out stays evidence. A wrong total ("€73.50" for a €75.96 outfit) is an
+unverified claim like a wrong price, so it is rewritten or replaced. A whole-euro mention within €1 of a real
 price ("about €35" for €34.99) is accepted. Negative amounts are always rejected.
 
 An unverified draft gets one rewrite request listing the issues. If the rewrite still
@@ -272,3 +305,7 @@ actions. Gaps addressed here:
 - Feedback stays in memory and resets when the API restarts.
 - The live behaviour of a real LLM with the new tools has not been evaluated at scale;
   unit and UI tests use scripted models.
+- Outfit coherence is a CLIP query per slot plus co-purchase and photo similarity; there is
+  no colour-harmony or style model, so a dress and earrings can clash. Occasion templates
+  are keyword-based and English-only, and the photo index has few men's and children's
+  shoes. The outfit lives in the client session only.

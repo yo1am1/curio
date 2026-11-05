@@ -23,7 +23,8 @@ Recommendations use historical H&M transactions. Photo search has its own image 
 | Graph recommendations | Past purchases seed an in-memory graph of co-purchases, Shopify categories and attributes. Shared attributes are weighted by inverse degree; each result includes its evidence. |
 | Knowledge graph | Explore a product's category, attributes and co-purchased neighbors, with complementary products and higher-priced alternatives. |
 | Offline evaluation | Every strategy is trained on purchases before a cutoff and scored on the following week (MAP@12, catalog coverage); the Model quality page compares them. |
-| Tool-using shopping agent | The LLM plans a structured search, then uses policy-gated tools: catalog search, exact inspection, related pieces from the graph/CLIP index and personal picks from the ranker. It can ask a clarifying question, and proposes shortlist or memory changes for the shopper to approve. Answers are checked against tool evidence, with a streamed step trace. See [agent architecture](agent-architecture.md). |
+| Tool-using shopping agent | The LLM plans a structured search, then uses policy-gated tools: catalog search, exact inspection, related pieces from the graph/CLIP index, personal picks from the ranker and the outfit builder. It can ask a clarifying question, and proposes shortlist or memory changes for the shopper to approve. Answers are checked against tool evidence, with a streamed step trace. See [agent architecture](agent-architecture.md). |
+| Outfit builder | `outfits.OutfitPlanner` turns an occasion ("summer wedding"), a total budget and an audience into 3-4 slots from a per-occasion template, then fills each with a CLIP text search restricted to the slot's product types and the audience's sections. The budget is allocated cheapest-feasible, later pieces prefer co-purchased or visually coherent ones, and slots the budget cannot cover are reported. See [Outfit builder](#outfit-builder). |
 
 Users without usable purchase history get the products all shoppers bought most in the last
 week of data, which also fill lists that come up short.
@@ -35,6 +36,58 @@ all backed by co-purchases (no best-seller filler) that stay in their sections a
 their main product group, and a purchase with co-purchased complements for the graph. The checks only read the
 recommenders' output; nothing is tuned for these customers. "Browse all customers" keeps
 everyone else accessible, and offline evaluation scores all eligible customers.
+
+### Outfit builder
+
+`src/clothes_recommender/outfits.py` holds the planner, used by the agent's `BuildOutfit` and
+`SwapOutfitItem` tools and by `POST /outfits` and `POST /outfits/swap`.
+
+1. **Plan.** The occasion text picks a template by keyword (wedding, office, party, beach,
+   sport, otherwise casual) and a season (summer, winter, autumn, spring). Each template
+   lists, per audience, 3-4 slots with a CLIP query, the allowed H&M product types and a
+   budget weight: a women's wedding is dress, heeled sandals, bag and earrings; a men's
+   wedding is shirt, suit trousers, blazer and smart shoes. Winter and autumn swap the last
+   slot for a coat or jacket (winter shoes become boots). Named slots replace the template
+   and are filled in a fixed order (dress, top, bottom, outerwear, shoes, bag, accessory).
+   Without an audience, the section of the best garment match for the occasion decides it
+   and a note says so.
+2. **Candidates.** Each slot runs two filtered CLIP searches: the 24 best matches under the
+   whole budget and the 12 best under the slot's fair share (budget × weight / total
+   weight), so a tight budget still has relevant, affordable options. Filters are the
+   slot's product types plus the audience's sections (women: Ladieswear, Divided; men:
+   Menswear; kids: Baby/Children; sportswear also Sport); if the types find nothing, any
+   type of that slot is tried. A remembered per-piece price limit caps every search.
+   Products that are not worn (laundry bags, phone cases) are skipped.
+3. **Feasibility.** The cheapest candidate of each slot is known before anything is chosen.
+   Slots are kept in order while their minimums fit; a slot that would exceed the budget
+   is reported ("The budget cannot cover the bag: the cheapest match costs €5.99, more than
+   is left after the cheapest dress and shoes.") with the cheapest complete outfit.
+4. **Allocation.** Slots are filled in order. A slot may spend what is left after
+   reserving the minimums of the slots still to fill, so the outfit always fits when any
+   outfit does; spending beyond the slot's fair share of what is left costs a small score
+   penalty. All money is handled in cents.
+5. **Coherence.** Score = CLIP relevance + 0.08 × the mean photo similarity to the pieces
+   already chosen + (0.02 + 0.03 × co-purchase strength) when real shoppers bought it with
+   one of them − the over-share penalty. Ties break on price, then product ID, so equal
+   input gives the same outfit. Each slot carries its reason: "Bought together with the
+   Manson slim trs TVP J in 4 baskets.", "Its photo matches the look of the Lennox." or
+   "Best match for “elegant heeled sandals”." ("within what is left of the budget" when a
+   better match was priced out).
+6. **Swap.** `swap(state, slot, mode, refine)` re-reads the client's outfit from the
+   catalog, searches that slot again with `refine` added to its query, excludes the
+   current piece and every piece swapped out before (`state.skipped`), and keeps the total
+   within the budget; `cheaper` also requires a lower price. When nothing qualifies the
+   outfit comes back unchanged.
+
+The client holds the outfit as `OutfitState` (occasion, budget, audience, slot → product ID,
+skipped IDs) and sends it back as `TurnContext.outfit`; prices always come from the catalog.
+On the real sample a plan takes about 0.6-1 s with CLIP on CPU. Results on the real data
+look like outfits: a women's summer wedding under €80 is River Wrap Dress €29.99, Paloma
+heels €12.99, Sylvia Cross Bag €17.99 and Class Ziggy hoop earrings €7.99 (€68.96); a men's
+is a white linen shirt, slim suit trousers and the slim blazer bought with them, plus
+loafers (€73.96). The photo index covers a quarter of the catalog and has few men's (13)
+and children's (3) shoes, so those slots have little choice or fall back to another shoe
+type.
 
 ## Cocktail engine
 
@@ -267,6 +320,7 @@ src/clothes_recommender/
 ├── embeddings.py      # CLIP encoder (lazy-loaded)
 ├── vector_store.py    # Qdrant wrapper: upsert, filtered search, vector lookup
 ├── search.py          # Text and image search
+├── outfits.py         # Outfit builder: occasion templates, budget allocation, swaps
 ├── recommenders/      # learned, repeat, content_based, collaborative, graph, popularity
 ├── cocktails/         # domain (types), catalog, recommend (search, similar, pantry)
 ├── books/             # domain (types), catalog, taxonomy (genres, moods, shelves),
@@ -502,6 +556,8 @@ string when running several API workers, so approval proposals verify on any wor
 | GET | `/products/{id}/related?kind=complement\|alternative` | Co-purchased complements or higher-priced alternatives |
 | GET | `/products/{id}/similar` | Products whose photos look most alike (CLIP item-to-item) |
 | GET | `/sections` | Catalog sections, for filtering text search |
+| POST | `/outfits` | `{"occasion": "summer wedding", "budget": 80, "audience": "women\|men\|kids", "slots": ["dress", "shoes"], "max_item_price": null}` (all but `occasion` optional): a planned outfit with per-slot pieces, reasons and gaps, `total`, `status` (`complete`, `partial`, `empty`), `notes`, `minimum` and the `state` to send back |
+| POST | `/outfits/swap` | `{"outfit": <state>, "slot": "shoes", "mode": "other\|cheaper", "refine": "in black"}`: the outfit with that slot replaced within the budget (unchanged when nothing qualifies); 422 for a slot the outfit does not have |
 | POST | `/search/text` | `{"query": "red floral dress", "top_k": 10, "section": "Ladieswear"}` (section optional) |
 | POST | `/search/image` | Multipart image upload |
 | GET | `/search/examples`, `/search/examples/{id}/image` | Example query photos of garments outside the catalog |
@@ -520,15 +576,15 @@ string when running several API workers, so approval proposals verify on any wor
 | GET | `/books/{id}` | Book details (404 for an unknown ID) |
 | GET | `/books/{id}/similar?top_k=5&other_authors_only=false` | Readers who liked this book also liked |
 | GET | `/books/{id}/by-author?top_k=5` | More by its first author |
-| POST | `/chat` | One agent turn: `{"domain": "fashion\|cocktails\|books", "message", "history", "preferences", "shopper_id", "shortlist", "cocktail_preferences", "cocktail_shortlist", "book_preferences", "book_shortlist", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal. `domain` defaults to `fashion` |
+| POST | `/chat` | One agent turn: `{"domain": "fashion\|cocktails\|books", "message", "history", "preferences", "shopper_id", "shortlist", "outfit", "cocktail_preferences", "cocktail_shortlist", "book_preferences", "book_shortlist", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal. `domain` defaults to `fashion`; a fashion reply carries `outfit` when the turn built or changed one |
 | POST | `/chat/stream` | The same turn as NDJSON: `step` events, then `reply` (or `error`) |
 | POST, GET | `/chat/feedback` | Rate an answer; summary of ratings and recent negative feedback |
 | GET | `/evaluation` | Offline evaluation results saved by `scripts.evaluate --output` |
 
 Every `/cocktails` endpoint returns 503 until `scripts.prepare_cocktails` has been run,
 every `/books` endpoint until `scripts.prepare_books` has, and
-every fashion endpoint (`/products`, `/sections`, `/search`, `/users`, `/demo/customers`,
-`/evaluation`) returns 503 with how to prepare the H&M data when fashion is not served.
+every fashion endpoint (`/products`, `/sections`, `/search`, `/outfits`, `/users`,
+`/demo/customers`, `/evaluation`) returns 503 with how to prepare the H&M data when fashion is not served.
 `/chat` returns 503 when the requested domain is not served or has no assistant (no LLM);
 the detail says which. The flat `chat_enabled`, `ranking_enabled` and catalog counts in
 `/health` describe fashion and read `false`/`0` without it. The API title and
@@ -674,7 +730,14 @@ trace, a clarifying question) and phone layouts. API scenarios check CLIP retrie
 quality, image search finding the photographed product, every strategy's evidence, signed
 approvals (including cross-domain replay), the cocktail endpoints and the book probes on
 the real catalog ("fantasy like The Name of the Wind", "short classic novels").
-`test_books_e2e.py` skips when the book files are not prepared.
+`test_books_e2e.py` skips when the book files are not prepared. `test_outfit_e2e.py` plans
+outfits for six occasions on the real index and checks that each is a real outfit (one piece
+of the slot's kind per slot, at least three product groups, no repeated type, the audience's
+sections, the total within the budget), that a €8 wedding budget names the slot that does
+not fit, that swaps never exceed the budget or bring a piece back, and that the agent streams
+a step per slot with a verified total. In the browser it follows the "Outfit for an
+occasion" starter: the clarifying question, the outfit card, "Cheaper" shoes, and "Save
+outfit" narrowed to three pieces in the approval card (screenshots 36-40).
 
 The chat model is `tests/e2e/llm_stub.py`, a scripted OpenAI-compatible server: the app
 reaches it through `LLM_PROVIDER=openai` and `LLM_BASE_URL`, so the real provider path runs
@@ -708,7 +771,11 @@ have their own offline tests over a ten-book fixture (`tests/conftest.py`): the 
 taxonomy and recommender in `tests/books/`, `scripts.prepare_books` over a miniature
 goodbooks-10k checkout in `tests/test_prepare_books.py`, the agent and its grounding in
 `tests/chat/test_book_agent.py`, loading and endpoints in `tests/test_books_api.py`, and
-the UI in `tests/test_ui_books.py`. CI does not download goodbooks-10k.
+the UI in `tests/test_ui_books.py`. CI does not download goodbooks-10k. The outfit builder is
+covered by planner tests over a 13-product fixture (`tests/test_outfits.py`: plans, budget
+allocation, infeasible budgets, co-purchase and visual preference, swaps), agent tests with
+a scripted model (`tests/chat/test_outfit_agent.py`), API tests in `tests/test_api.py` and
+UI tests in `tests/test_ui_agent.py`.
 
 ### Release scope and compatibility
 
@@ -723,4 +790,6 @@ service), and Python code that read fields from `Services` reads them from
 only: `/health` gains `books_enabled` and `book_count`, `/domains` a third entry,
 `ChatRequest` the `books` domain with `book_preferences` and `book_shortlist`, and
 `TurnContext.auto_approve` accepts up to six tools. A client that lists `/domains` and only
-knows fashion and cocktails ignores the new entry.
+knows fashion and cocktails ignores the new entry. The outfit builder adds fields only:
+`TurnContext.outfit` (optional) and `AssistantReply.outfit` (null unless the turn built or
+changed an outfit), plus the `/outfits` endpoints.
