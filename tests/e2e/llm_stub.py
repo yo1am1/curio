@@ -6,10 +6,11 @@ tool-call parsing, the agent engine, guardrails, the API and the UI. Replies fol
 deterministic rules keyed on the shopper's words, which makes every flow reproducible:
 
 - the intent extractor (forced SearchIntent tool) gets keywords, colours, audience, budget;
-- the fashion and cocktail agents get tool calls for searches, related pieces, pantry,
-  clarifying questions and approval proposals, then answers built only from tool results;
-- the phrase "best deal" first gets an answer with an invented price, so the grounding
-  check and self-correction can be seen end to end.
+- the fashion, cocktail and book agents get tool calls for searches, related pieces, pantry,
+  readers-also-liked, clarifying questions and approval proposals, then answers built only
+  from tool results;
+- the phrases "best deal" (fashion) and "highest rated" (books) first get an answer with an
+  invented price or rating, so the grounding check and self-correction can be seen end to end.
 
 Run standalone: `python -m tests.e2e.llm_stub --port 8790`.
 """
@@ -23,6 +24,7 @@ from itertools import count
 
 PRODUCT_LINE = re.compile(r"\[id (\d+)\] ([^|\n]+) \| [^|\n]+ \| [^|\n]+ \| ([^|\n]+) \| €([\d.]+)")
 DRINK_LINE = re.compile(r"\[id (\d+)\] ([^|\n]+) \| ([^|\n]+) \|")
+BOOK_LINE = re.compile(r"\[id (\d+)\] ([^|\n]+) \| ([^|\n]+) \| ★ ([\d.]+)")
 BUDGET = re.compile(r"(?:under|below|less than|up to|budget(?: is| of)?)\s*€?\s*(\d+)")
 COLOURS = ("black", "white", "blue", "red", "beige", "grey", "pink", "green", "brown")
 _ids = count(1)
@@ -52,6 +54,8 @@ class Script:
             return {"tool_calls": [_tool_call("SearchIntent", self._intent(messages))]}
         if "SearchCocktails" in tools:
             return self._bartender(messages)
+        if "SearchBooks" in tools:
+            return self._librarian(messages)
         return self._stylist(messages)
 
     # --- Fashion ----------------------------------------------------------------------------
@@ -216,6 +220,74 @@ class Script:
             }
             return {"tool_calls": [_tool_call("SearchCocktails", args)]}
         return {"tool_calls": [_tool_call("SearchCocktails", {"query": user[:150]})]}
+
+    # --- Books --------------------------------------------------------------------------------
+
+    def _librarian(self, messages: list[dict]) -> dict:
+        last = messages[-1]
+        user = self._last_user(messages)
+        low = user.lower()
+        if last["role"] == "tool":
+            books = BOOK_LINE.findall(_text(last["content"]))
+            if not books:
+                return {"content": _text(last["content"])[:200] or "Nothing matched."}
+            lines = ["Here are books from the catalog:"]
+            lines += [
+                f"- **{title.strip()}** by {author.strip()} · ★ {rating}"
+                for _, title, author, rating in books[:4]
+            ]
+            return {"content": "\n".join(lines)}
+        if low.startswith("verification failed"):
+            return {"content": "Here are the books I could verify from the catalog."}
+        if low.startswith("[decision on your proposal]"):
+            if "approved" in low:
+                return {"content": "Done, it's on your reading list under **Your session**."}
+            return {"content": "No problem, nothing was saved."}
+        # The books on screen: this turn's list, else the cards of the latest answer.
+        current = BOOK_LINE.findall(_text(messages[0]["content"]))
+        for message in reversed(messages[1:]):
+            if current:
+                break
+            if message["role"] == "assistant":
+                current = BOOK_LINE.findall(_text(message.get("content")))
+        if "highest rated" in low and current:
+            _, title, _author, _rating = current[0]
+            return {"content": f"**{title.strip()}** has the best rating here: ★ 4.99."}
+        if re.search(r"\b(remember|always|never|hate|can't stand)\b", low):
+            args: dict = {}
+            if match := re.search(
+                r"(?:no|never(?: read)?|hate|don't like|avoid)\s+([a-z -]+?)(?:[,.]|$)", low
+            ):
+                args["avoided_genres"] = [match.group(1).strip().removesuffix(" books")]
+            if match := re.search(r"(?:i love|i like|always)\s+([a-z -]+?)(?:[,.]|$)", low):
+                args["liked_genres"] = [match.group(1).strip().removesuffix(" books")]
+            return {
+                "tool_calls": [
+                    _tool_call("RememberReadingTastes", args or {"liked_genres": ["Fantasy"]})
+                ]
+            }
+        if re.search(r"\b(save|keep|add)\b", low) and current:
+            return {"tool_calls": [_tool_call("SaveBooks", {"book_ids": [int(current[0][0])]})]}
+        if "also liked" in low and current:
+            args = {"book_id": int(current[0][0])}
+            return {"tool_calls": [_tool_call("ReadersAlsoLiked", args)]}
+        if match := re.match(r"more by (.+?)[.…]*$", user, re.IGNORECASE):
+            return {"tool_calls": [_tool_call("BooksByAuthor", {"author": match.group(1)})]}
+        if re.fullmatch(r"(recommend|suggest) (me )?(a book|something)[.!?]*", low):
+            question = {
+                "question": "Happy to. What are you in the mood for?",
+                "options": ["Fantasy", "A gripping thriller", "Something funny"],
+            }
+            return {"tool_calls": [_tool_call("AskShopper", question)]}
+        if "shorter" in low:
+            earlier = [
+                _text(m["content"])
+                for m in messages[1:-1]
+                if m["role"] == "user" and "shorter" not in _text(m["content"]).lower()
+            ]
+            query = earlier[-1][:150] if earlier else "novel"
+            return {"tool_calls": [_tool_call("SearchBooks", {"query": query, "max_pages": 250})]}
+        return {"tool_calls": [_tool_call("SearchBooks", {"query": user[:150]})]}
 
 
 class _Handler(BaseHTTPRequestHandler):
