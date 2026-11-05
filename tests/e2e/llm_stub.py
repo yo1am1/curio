@@ -9,6 +9,9 @@ deterministic rules keyed on the shopper's words, which makes every flow reprodu
 - the fashion, cocktail and book agents get tool calls for searches, related pieces, pantry,
   readers-also-liked, clarifying questions and approval proposals, then answers built only
   from tool results;
+- fashion "outfit" requests with an occasion call BuildOutfit (without one, AskShopper asks
+  for the occasion first); "swap"/"cheaper" plus a slot of the current outfit call
+  SwapOutfitItem, and "save ... outfit" proposes SaveToShortlist with every outfit piece;
 - the phrases "best deal" (fashion) and "highest rated" (books) first get an answer with an
   invented price or rating, so the grounding check and self-correction can be seen end to end.
 
@@ -27,6 +30,20 @@ DRINK_LINE = re.compile(r"\[id (\d+)\] ([^|\n]+) \| ([^|\n]+) \|")
 BOOK_LINE = re.compile(r"\[id (\d+)\] ([^|\n]+) \| ([^|\n]+) \| ★ ([\d.]+)")
 BUDGET = re.compile(r"(?:under|below|less than|up to|budget(?: is| of)?)\s*€?\s*(\d+)")
 COLOURS = ("black", "white", "blue", "red", "beige", "grey", "pink", "green", "brown")
+OCCASION_WORDS = re.compile(
+    r"\b(summer|winter|autumn|spring|wedding|office|work|party|beach|holiday|gym|casual|weekend"
+    r"|interview|dinner|date|night out)\b"
+)
+OUTFIT_SLOTS = ("top", "bottom", "dress", "outerwear", "shoes", "bag", "accessory")
+# "- Dress: [id 1] River Wrap Dress | Dress | Ladieswear | Light Red | €29.99 | ... | evidence: …"
+OUTFIT_PIECE = re.compile(
+    r"^- (\w+): \[id \d+\] ([^|\n]+) \| [^|\n]+ \| [^|\n]+ \| ([^|\n]+) \| €([\d.]+)"
+    r"(?:.*\| evidence: (.+))?$",
+    re.MULTILINE,
+)
+OUTFIT_GAP = re.compile(r"^- (\w+): not filled\. (.+)$", re.MULTILINE)
+OUTFIT_TOTAL = re.compile(r"total (€[\d.]+(?: of a €[\d.]+ budget)?(?: \(€[\d.]+ left\))?)")
+CURRENT_OUTFIT = re.compile(r"current outfit [^:]*: [^:]*: (.+?)\. (?:shortlist|the shortlist)")
 _ids = count(1)
 
 
@@ -66,6 +83,8 @@ class Script:
 
     def _intent(self, messages: list[dict]) -> dict:
         text = self._last_user(messages).lower()
+        if self._last_assistant(messages).endswith("What's the occasion?"):
+            return {"query": "", "wants_products": False}  # the answer is an outfit occasion
         if re.search(
             r"\b(save|shortlist|keep|remember|always|compare|goes with|outfit|thanks|picks)\b",
             text,
@@ -93,6 +112,8 @@ class Script:
         low = user.lower()
         if last["role"] == "tool":
             result = _text(last["content"])
+            if "Outfit for “" in result:
+                return {"content": self._outfit_answer(result)}
             hinted = re.search(r"Try relation '(\w+)'", result)
             target = re.findall(r'"product_id": ?(\d+)', json.dumps(messages[-2].get("tool_calls")))
             if hinted and target:
@@ -112,6 +133,17 @@ class Script:
             }
         products = self._products(messages)
         ids = [int(p[0]) for p in products]
+        outfit = self._current_outfit(system)
+        if outfit and re.search(r"\b(save|shortlist|keep)\b", low) and "outfit" in low:
+            pieces = {"product_ids": [pid for _, pid in outfit][:5]}
+            return {"tool_calls": [_tool_call("SaveToShortlist", pieces)]}
+        slot = next((name for name, _ in outfit if re.search(rf"\b{name}\b", low)), None)
+        if slot and re.search(r"\b(swap|another|cheaper|different)\b", low):
+            args = {"slot": slot, "mode": "cheaper" if "cheaper" in low else "other"}
+            return {"tool_calls": [_tool_call("SwapOutfitItem", args)]}
+        asked = self._last_assistant(messages).endswith("What's the occasion?")
+        if ("outfit" in low and OCCASION_WORDS.search(low)) or asked:
+            return {"tool_calls": [_tool_call("BuildOutfit", self._outfit_request(low))]}
         if "outfit" in low:
             return {
                 "tool_calls": [
@@ -119,7 +151,11 @@ class Script:
                         "AskShopper",
                         {
                             "question": "Happy to help. What's the occasion?",
-                            "options": ["Weekend casual", "Office", "Summer party"],
+                            "options": [
+                                "Summer wedding under €80",
+                                "Office for women",
+                                "Weekend casual",
+                            ],
                         },
                     )
                 ]
@@ -151,6 +187,48 @@ class Script:
             return {"content": f"The **{name.strip()}** is on offer at just €{invented:.2f} today."}
         current = PRODUCT_LINE.findall(system)
         return {"content": self._list(current, "Here are a few pieces that match:")}
+
+    @staticmethod
+    def _last_assistant(messages: list[dict]) -> str:
+        for message in reversed(messages[1:-1]):
+            if message["role"] == "assistant":
+                return _text(message.get("content")).split("\nReferenced catalog items:")[0].strip()
+        return ""
+
+    @staticmethod
+    def _current_outfit(system: str) -> list[tuple[str, int]]:
+        """(slot, product id) of the outfit the session holds, from the system prompt."""
+        match = CURRENT_OUTFIT.search(system)
+        if not match:
+            return []
+        pieces = re.findall(r"(\w+) \[id (\d+)\]", match.group(1))
+        return [(slot, int(pid)) for slot, pid in pieces if slot in OUTFIT_SLOTS]
+
+    @staticmethod
+    def _outfit_request(low: str) -> dict:
+        words = [m.group(0) for m in OCCASION_WORDS.finditer(low)]
+        args: dict = {"occasion": " ".join(dict.fromkeys(words)) or "casual"}
+        if match := BUDGET.search(low):
+            args["budget"] = float(match.group(1))
+        if re.search(r"\b(for women|for her|ladies)\b", low):
+            args["audience"] = "women"
+        elif re.search(r"\b(for men|for him)\b", low):
+            args["audience"] = "men"
+        return args
+
+    @staticmethod
+    def _outfit_answer(result: str) -> str:
+        """An answer built only from the BuildOutfit / SwapOutfitItem result."""
+        intro = result.split("\n", 1)[0] if not result.startswith("Outfit for") else ""
+        lines = [intro or "Here's the outfit I put together:"]
+        for slot, name, colour, price, reason in OUTFIT_PIECE.findall(result):
+            line = f"- **{slot}**: {name.strip()} · {colour.strip()} · €{float(price):.2f}"
+            lines.append(line + (f" (_{reason.strip()}_)" if reason else ""))
+        for slot, issue in OUTFIT_GAP.findall(result):
+            lines.append(f"- **{slot}**: not filled. {issue.strip()}")
+        if total := OUTFIT_TOTAL.search(result):
+            lines.append(f"\nTotal: {total.group(1)}.")
+        return "\n".join(lines)
 
     @staticmethod
     def _products(messages: list[dict]) -> list[tuple]:
