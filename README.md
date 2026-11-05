@@ -9,7 +9,7 @@ domains, switched in the header:
   from historical H&M purchases and product photos.
 - **Cocktails**: search, similar drinks and "What can I make?" over 425 recipes from
   TheCocktailDB, served offline from a prepared file.
-- **Books** (new, unreleased): search, "readers who liked this also liked", "Because you
+- **Books**: search, "readers who liked this also liked", "Because you
   liked…" and mood browsing over the 10,000 most-rated Goodreads books of goodbooks-10k,
   learned from about 6 million real ratings.
 
@@ -231,8 +231,12 @@ available. Search, recommendations and the cocktail pages work without an LLM.
 
 ## Data and licences
 
-The code is under the [MIT licence](LICENSE). The data is not part of this repository
-and is not covered by that licence:
+The code is under the [Apache License 2.0](LICENSE). If you redistribute Curio or a work
+based on it, keep the [NOTICE](NOTICE) file's credit ("Based on Curio by Yehor Trepalin",
+with a link to this repository) in your documentation or credits, as section 4(d) of the
+licence requires. To cite the project, use [CITATION.cff](CITATION.cff). Versions up to
+1.0.0 were released under MIT. The data is not part of this repository and is not covered
+by that licence:
 
 - **H&M data**: the [H&M Personalized Fashion Recommendations](https://www.kaggle.com/competitions/h-and-m-personalized-fashion-recommendations)
   dataset, licensed by H&M for non-commercial research use. You download it yourself.
@@ -257,7 +261,7 @@ and is not covered by that licence:
   `prepare_cocktails` reads them from a CSV in
   [yo1am1/cocktail_advisor](https://github.com/yo1am1/cocktail_advisor), whose code is
   Apache-2.0. The recipe data and images remain subject to TheCocktailDB's own terms;
-  Curio does not relicense them, and neither the MIT nor the Apache-2.0 licence covers
+  Curio does not relicense them, and neither Curio's licence nor cocktail_advisor's covers
   them. Check TheCocktailDB's terms before any commercial use. Drink photos are loaded
   directly from thecocktaildb.com, and the cocktail pages credit "Recipe data: TheCocktailDB".
 

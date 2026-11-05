@@ -6,6 +6,8 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-05
+
 ### Added
 
 - **Outfit builder** (portfolio item 4), multi-step planning with human approval in fashion:
@@ -87,6 +89,9 @@ All notable changes to Curio are recorded here. The format follows
 
 ### Changed
 
+- **Licence:** the code is now under the Apache License 2.0 with a `NOTICE` file, so
+  redistributions must credit "Curio by Yehor Trepalin" and link the repository. Versions up
+  to 1.0.0 remain available under MIT. Added `CITATION.cff`.
 - The scripted E2E LLM stub answers "outfit" requests without an occasion with the occasion
   question (options "Summer wedding under €80", "Office for women", "Weekend casual") and
   builds the outfit from the answer.
@@ -294,6 +299,7 @@ tool-using shopping assistant with a conversation home and floating panel. Earli
 development is recorded in [docs/engineering-workflow.md](docs/engineering-workflow.md)
 and [docs/session-handoff.md](docs/session-handoff.md).
 
-[Unreleased]: https://github.com/yo1am1/curio/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/yo1am1/curio/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/yo1am1/curio/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/yo1am1/curio/compare/release/fashion-mvp...release/v1.0
 [0.2.0]: https://github.com/yo1am1/curio/tree/release/fashion-mvp

@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use or build on Curio, please credit it as below."
+title: "Curio: agentic recommendations for fashion, cocktails and books"
+type: software
+authors:
+  - family-names: Trepalin
+    given-names: Yehor
+    alias: yo1am1
+repository-code: "https://github.com/yo1am1/curio"
+url: "https://github.com/yo1am1/curio"
+license: Apache-2.0
+version: 1.1.0
+date-released: "2026-11-05"
+keywords:
+  - recommendations
+  - agent
+  - llm
+  - human-in-the-loop

@@ -1,7 +1,7 @@
 # Multi-domain contract (fashion, cocktails, books)
 
 Shared interfaces for the cocktail domain (v1.0), the book domain and the fashion outfit
-builder (unreleased). Every teammate codes against this file; change it only together with
+builder (1.1.0). Every teammate codes against this file; change it only together with
 every consumer. The [books](#books) and [fashion outfits](#fashion-outfits) sections follow
 the cocktail sections.
 

@@ -225,7 +225,7 @@ restart it after preparing.
 
 **Terms.** The recipes and photos come from [TheCocktailDB](https://www.thecocktaildb.com/).
 The cocktail_advisor code is Apache-2.0, but the recipe data and images remain subject to
-TheCocktailDB's own terms; Curio does not relicense them, and this repository's MIT licence
+TheCocktailDB's own terms; Curio does not relicense them, and this repository's Apache-2.0 licence
 covers the code only. Check TheCocktailDB's terms before commercial use. The file is not
 committed; photos are loaded directly from thecocktaildb.com by the browser, and the UI
 credits "Recipe data: TheCocktailDB".
@@ -273,7 +273,7 @@ written atomically; restart the API after preparing.
 [Creative Commons Attribution-ShareAlike 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
 licence (its `LICENSE` file). Its metadata, shelves and ratings were collected from
 Goodreads, so Goodreads' own terms may also apply to that content; Curio does not
-relicense it, and the MIT licence covers this repository's code only. Covers stay on
+relicense it, and the Apache-2.0 licence covers this repository's code only. Covers stay on
 Goodreads' (or Open Library's) servers and are loaded by the browser; they and the book
 descriptions are the publishers' and Goodreads' material, not covered by CC BY-SA. The
 prepared files stay on your machine. The only copies in this repository are three README
@@ -815,7 +815,7 @@ UI tests in `tests/test_ui_agent.py`.
 Version 1.0.0 covers fashion and cocktails; see the [changelog](../CHANGELOG.md). The
 installable distribution is `curio-recommendations`; the `clothes_recommender` import path
 remains stable for existing scripts. `ChatRequest.domain` defaults to `fashion`, so fashion
-clients written for 0.2.0 keep working. Unreleased changes: `/health` and `/domains` only
+clients written for 0.2.0 keep working. Changes in 1.1.0: `/health` and `/domains` only
 gain fields; the UI still reads an older API's `/health`. In Docker the full stack now
 starts with `docker compose --profile fashion up` (plain `docker compose up` selects no
 service), and Python code that read fields from `Services` reads them from

@@ -1,0 +1,19 @@
+Curio: agentic recommendations for fashion, cocktails and books
+Copyright 2026 Yehor Trepalin
+https://github.com/yo1am1/curio
+
+This product includes software developed by Yehor Trepalin as part of the
+Curio project (https://github.com/yo1am1/curio), licensed under the Apache
+License, Version 2.0.
+
+Under section 4(d) of the Apache License, any redistribution of this work or of
+a derivative work must include a readable copy of the attribution notices in
+this NOTICE file, for example in the documentation, an "About" or credits
+screen, or alongside the source. Please credit:
+
+    Based on Curio by Yehor Trepalin - https://github.com/yo1am1/curio
+
+Third-party data used by Curio (H&M Personalized Fashion Recommendations,
+goodbooks-10k, TheCocktailDB, Open Library covers) is not part of this
+repository and is not covered by this licence; see "Data and licences" in
+README.md.
