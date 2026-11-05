@@ -104,6 +104,41 @@ SLOT_PRIORITY: tuple[str, ...] = (
     "bag",
     "accessory",
 )
+# Types that never suit an occasion. They stay out of the fallback search (every type of a
+# slot, used when the occasion's own types find nothing) and of slots the shopper names, so a
+# wedding never ends in flip flops.
+_FORMAL_OFF = (
+    "Flip flop",
+    "Weekend/Gym bag",
+    "Backpack",
+    "Cap/peaked",
+    "Bucket hat",
+    "Hat/beanie",
+    "Beanie",
+    "Hoodie",
+)
+OFF_OCCASION: dict[str, frozenset[str]] = {
+    "wedding": frozenset({*_FORMAL_OFF, "Sneakers", "Shorts", "Leggings/Tights", "Vest top"}),
+    "office": frozenset({*_FORMAL_OFF, "Shorts", "Leggings/Tights", "Vest top"}),
+    "party": frozenset(_FORMAL_OFF),
+    "beach": frozenset({"Boots", "Pumps", "Heels", "Blazer", "Coat", "Tie", "Beanie"}),
+    "sport": frozenset(
+        {"Heels", "Pumps", "Wedge", "Ballerinas", "Flip flop", "Blazer", "Coat", "Tie"}
+    ),
+    "casual": frozenset(),
+}
+# What a slot's piece is called in a reason ("the closest other pair of shoes").
+_SLOT_NOUNS: dict[str, str] = {
+    "top": "top",
+    "bottom": "bottom",
+    "dress": "dress",
+    "outerwear": "layer",
+    "shoes": "pair of shoes",
+    "bag": "bag",
+    "accessory": "accessory",
+}
+# Query words that name the whole slot ("smart leather shoes"), not one of its types.
+_SLOT_WORDS = frozenset({"shoe", "bag", "accessory", "outfit", "piece"})
 AUDIENCE_SECTIONS: dict[str, tuple[str, ...]] = {
     "women": ("Ladieswear", "Divided"),
     "men": ("Menswear",),
@@ -257,6 +292,11 @@ class SlotSpec:
     types: tuple[str, ...]
     # Relative share of the budget the slot may spend without a penalty.
     weight: float
+    # Searched when `types` find nothing: the slot's other types that suit the occasion.
+    fallback: tuple[str, ...] = ()
+    # The types the query names ("leather belt" -> Belt); empty when it names none, or the
+    # whole slot ("shoes"). A pick of another type says so in its reason.
+    named: tuple[str, ...] = ()
 
     @property
     def label(self) -> str:
@@ -480,8 +520,9 @@ def plan_slots(
     """
     style = occasion_style(occasion)
     season = occasion_season(occasion)
+    off = OFF_OCCASION[style]
     if audience == "kids":
-        rows = list(_KIDS)
+        rows = [(slot, query, _suited(types, off), weight) for slot, query, types, weight in _KIDS]
     else:
         rows = list((_MEN if audience == "men" else _WOMEN)[style])
     if season in ("winter", "autumn") and style not in ("beach", "sport"):
@@ -496,14 +537,67 @@ def plan_slots(
         by_slot = {row[0]: row for row in rows}
         rows = [
             by_slot.get(slot)
-            or (slot, _GENERIC_QUERIES[slot], SLOT_TYPES[slot], _GENERIC_WEIGHTS[slot])
+            or (
+                slot,
+                _GENERIC_QUERIES[slot],
+                _suited(SLOT_TYPES[slot], off),
+                _GENERIC_WEIGHTS[slot],
+            )
             for slot in sorted(dict.fromkeys(slots), key=SLOT_PRIORITY.index)
         ]
     words = {"season": season, "style": _STYLE_WORDS[style]}
-    return [
-        SlotSpec(slot, _clean(query.format(**words)), types, weight)
-        for slot, query, types, weight in rows
-    ]
+    specs = []
+    for slot, query, types, weight in rows:
+        text = _clean(query.format(**words))
+        fallback = tuple(t for t in _suited(SLOT_TYPES[slot], off) if t not in types)
+        specs.append(SlotSpec(slot, text, types, weight, fallback, named_types(text, types)))
+    return specs
+
+
+def _suited(types: Iterable[str], off: frozenset[str]) -> tuple[str, ...]:
+    return tuple(t for t in types if t not in off)
+
+
+def _stem(word: str) -> str:
+    """ "sandals" -> sandal, "heeled" -> heel, "earrings" -> earring."""
+    for suffix in ("ed", "es", "s"):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3 and not word.endswith("ss"):
+            stem = word[: -len(suffix)]
+            if suffix == "es" and not stem.endswith(("sh", "ch", "x")):
+                continue
+            return stem
+    return word
+
+
+def named_types(query: str, types: Sequence[str]) -> tuple[str, ...]:
+    """The types among `types` a query names by their head noun ("leather belt" -> Belt,
+    "elegant heeled sandals" -> Sandals, Heels; "small elegant handbag" -> every bag).
+    Empty when the query names none of them or the whole slot ("smart leather shoes")."""
+    words = [_stem(w) for w in re.findall(r"[a-z]+", query.lower())]
+    if any(w in _SLOT_WORDS for w in words):
+        return ()
+    named = []
+    for kind in types:
+        head = _stem(re.split(r"[/ ]", kind.lower())[-1])
+        if any(w == head or (len(head) >= 3 and w.endswith(head)) for w in words):
+            named.append(kind)
+    return tuple(named)
+
+
+def _noun(kind: str) -> str:
+    """A product type as a noun with its article: "a bracelet", "heels", "an earring"."""
+    word = kind.lower().split("/")[0]
+    if word.endswith("s") and not word.endswith("ss"):
+        return word
+    return f"{'an' if word[0] in 'aeiou' else 'a'} {word}"
+
+
+def _nouns(kinds: Sequence[str]) -> str:
+    """Up to two types as nouns, without repeating one ("an earring or a necklace")."""
+    seen: dict[str, str] = {}
+    for kind in kinds:
+        seen.setdefault(_stem(kind.lower().split("/")[0]), _noun(kind))
+    return " or ".join(list(seen.values())[:2])
 
 
 def _clean(text: str) -> str:
@@ -543,6 +637,8 @@ class _Candidate:
 class _Pool:
     spec: SlotSpec
     candidates: list[_Candidate] = field(default_factory=list)
+    # Whether the candidates come from the fallback types, not the occasion's own.
+    fallback: bool = False
 
     @property
     def cheapest(self) -> int | None:
@@ -680,7 +776,9 @@ class OutfitPlanner:
         self, spec: SlotSpec, sections: Sequence[str], cap: int | None, share: float | None
     ) -> _Pool:
         pool = _Pool(spec)
-        for types in dict.fromkeys((spec.types, SLOT_TYPES[spec.slot])):
+        for types in (spec.types, spec.fallback):
+            if not types:
+                continue
             searches = [(POOL_SIZE, cap)]
             if share is not None:
                 searches.append((CHEAP_POOL_SIZE, math.floor(share)))
@@ -690,6 +788,7 @@ class OutfitPlanner:
                     found.setdefault(candidate.product.product_id, candidate)
             if found:
                 pool.candidates = sorted(found.values(), key=_by_relevance)
+                pool.fallback = types is spec.fallback
                 return pool
         return pool
 
@@ -780,9 +879,10 @@ class OutfitPlanner:
             for c in pool.candidates
             if limit is not None and c.cents > limit
         )
+        within = " within what is left of the budget" if priced_out else ""
         if priced_out and reason.startswith("Best match"):
-            reason = f"Best match for “{pool.spec.query}” within what is left of the budget."
-        return best.product, reason
+            reason = f"Best match for “{pool.spec.query}”{within}."
+        return best.product, _honest(reason, best.product, pool, within, limit is not None)
 
     def _fit(
         self,
@@ -934,6 +1034,26 @@ class OutfitPlanner:
             minimum=None if minimum is None else _euros(minimum),
             state=state,
         )
+
+
+def _honest(reason: str, product: Product, pool: _Pool, within: str, capped: bool) -> str:
+    """The reason, saying so when the piece is not the kind the slot's query names: it came
+    from the fallback types, or it is another of the slot's types ("a bracelet, not a
+    belt")."""
+    spec, kind = pool.spec, product.product_type
+    if pool.fallback:
+        where = " within the budget" if capped else " in the photo index"
+        wanted = _nouns(spec.named or spec.types).replace("a ", "").replace("an ", "")
+        note = (
+            f"Not the kind “{spec.query}” asks for ({wanted}): none is available{where}, so "
+            f"this is the closest {kind.lower().removeprefix('other ')} instead."
+        )
+    elif spec.named and kind not in spec.named:
+        noun = _SLOT_NOUNS[spec.slot]
+        note = f"Closest {noun} to “{spec.query}”{within}: {_noun(kind)}, not {_nouns(spec.named)}."
+    else:
+        return reason
+    return note if reason.startswith("Best match") else f"{note} {reason}"
 
 
 def audience_sections(audience: Audience | None, style: str) -> tuple[str, ...]:

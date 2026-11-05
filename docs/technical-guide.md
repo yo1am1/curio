@@ -56,8 +56,10 @@ everyone else accessible, and offline evaluation scores all eligible customers.
    whole budget and the 12 best under the slot's fair share (budget × weight / total
    weight), so a tight budget still has relevant, affordable options. Filters are the
    slot's product types plus the audience's sections (women: Ladieswear, Divided; men:
-   Menswear; kids: Baby/Children; sportswear also Sport); if the types find nothing, any
-   type of that slot is tried. A remembered per-piece price limit caps every search.
+   Menswear; kids: Baby/Children; sportswear also Sport); if the types find nothing, the
+   slot's other types are tried, except those that do not suit the occasion
+   (`OFF_OCCASION`: no flip flops, gym bags or caps for a wedding, the office or a party
+   or dinner; no heels for sport). A remembered per-piece price limit caps every search.
    Products that are not worn (laundry bags, phone cases) are skipped.
 3. **Feasibility.** The cheapest candidate of each slot is known before anything is chosen.
    Slots are kept in order while their minimums fit; a slot that would exceed the budget
@@ -73,7 +75,10 @@ everyone else accessible, and offline evaluation scores all eligible customers.
    input gives the same outfit. Each slot carries its reason: "Bought together with the
    Manson slim trs TVP J in 4 baskets.", "Its photo matches the look of the Lennox." or
    "Best match for “elegant heeled sandals”." ("within what is left of the budget" when a
-   better match was priced out).
+   better match was priced out). A piece of another type than the query names says so:
+   "Closest accessory to “leather belt”: a bracelet, not a belt.", or, from the fallback
+   types, "Not the kind “elegant heeled sandals” asks for (sandals or heels): none is
+   available within the budget, so this is the closest shoe instead."
 6. **Swap.** `swap(state, slot, mode, refine)` re-reads the client's outfit from the
    catalog, searches that slot again with `refine` added to its query, excludes the
    current piece and every piece swapped out before (`state.skipped`), and keeps the total

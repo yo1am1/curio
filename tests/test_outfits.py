@@ -13,6 +13,7 @@ from clothes_recommender.outfits import (
     OutfitState,
     PlannedSlots,
     audience_in,
+    named_types,
     occasion_season,
     occasion_style,
     plan_slots,
@@ -103,7 +104,8 @@ def test_wedding_plans_differ_by_audience_and_season():
 def test_named_slots_are_filled_in_priority_order_with_generic_specs():
     specs = plan_slots("wedding", "women", ["accessory", "top", "shoes"])
     assert [s.slot for s in specs] == ["top", "shoes", "accessory"]
-    assert specs[0].types == SLOT_TYPES["top"]  # the wedding template has no top
+    # The wedding template has no top: every top that suits a wedding.
+    assert specs[0].types == tuple(t for t in SLOT_TYPES["top"] if t not in ("Vest top", "Hoodie"))
     assert specs[1].query == "elegant heeled sandals"  # the template's shoes
 
 
@@ -275,3 +277,87 @@ def test_restore_rereads_prices_and_drops_unknown_pieces(planner):
     outfit = planner.restore(state(dress=1, shoes=999))
     assert picked(outfit) == {"dress": 1} and outfit.total == 34.99
     assert planner.restore(state(dress=999)) is None
+
+
+# --- Off-occasion pieces and honest reasons ------------------------------------------------
+
+
+def test_fallback_types_leave_out_what_does_not_suit_the_occasion():
+    for occasion in ("summer wedding", "office", "party", "first date dinner"):
+        for audience in ("women", "men", "kids"):
+            for spec in plan_slots(occasion, audience):
+                assert "Flip flop" not in spec.types + spec.fallback, (occasion, spec)
+    wedding = {s.slot: s for s in plan_slots("summer wedding", "women")}
+    assert "Sneakers" not in wedding["shoes"].fallback
+    assert {"Boots", "Flat shoes", "Other shoe"} <= set(wedding["shoes"].fallback)
+    beach = {s.slot: s for s in plan_slots("beach holiday", "women")}
+    assert "Flip flop" in beach["shoes"].types
+
+
+def test_queries_name_the_types_they_ask_for():
+    assert named_types("leather belt", ("Belt", "Bracelet", "Watch")) == ("Belt",)
+    shoes = ("Sandals", "Heels", "Pumps", "Wedge", "Ballerinas", "Flat shoe")
+    assert named_types("elegant heeled sandals", shoes) == ("Sandals", "Heels")
+    assert named_types("elegant earrings", ("Earring", "Earrings", "Necklace")) == (
+        "Earring",
+        "Earrings",
+    )
+    assert named_types("small elegant handbag", ("Bag", "Shoulder bag")) == ("Bag", "Shoulder bag")
+    # A query that names the whole slot, or no type, accepts every type.
+    assert named_types("smart leather shoes", ("Boots", "Other shoe")) == ()
+    assert named_types("tailored blazer", ("Cardigan",)) == ()
+
+
+def _with(*rows):
+    import pandas as pd
+
+    from clothes_recommender.catalog import ProductCatalog
+    from clothes_recommender.domain import Product
+    from tests.conftest import OutfitSearch, outfit_products
+
+    extra = [
+        Product(
+            product_id=pid,
+            name=name,
+            product_type=kind,
+            product_group=group,
+            section=section,
+            colour="Black",
+            description=f"{name}.",
+            price=price,
+        )
+        for pid, name, kind, group, section, price in rows
+    ]
+    products = [*outfit_products(), *extra]
+    catalog = ProductCatalog(pd.DataFrame([p.model_dump() for p in products]))
+    return OutfitPlanner(OutfitSearch(products), catalog)
+
+
+def test_cheaper_wedding_shoes_never_end_in_flip_flops_and_say_what_they_are():
+    planner = _with(
+        (20, "Yaz flip flop", "Flip flop", "Shoes", "Ladieswear", 1.99),
+        (21, "Canvas sneaker", "Sneakers", "Shoes", "Ladieswear", 2.99),
+        (22, "Soft loafer", "Other shoe", "Shoes", "Ladieswear", 3.49),
+    )
+    swap = planner.swap(state(80, dress=1, shoes=3), "shoes", "cheaper")
+    assert swap.new.product_id == 22  # no wedding-type shoe is cheaper than €19.99
+    reason = next(s.reason for s in swap.outfit.slots if s.slot == "shoes")
+    assert reason == (
+        "Not the kind “elegant heeled sandals” asks for (sandals or heels): none is "
+        "available within the budget, so this is the closest shoe instead."
+    )
+    # Nothing cheaper suits a wedding: the flip flops and sneakers stay out.
+    assert planner.swap(swap.outfit.state, "shoes", "cheaper").new is None
+
+
+def test_a_piece_of_another_type_than_the_query_names_says_so():
+    planner = _with((23, "Bracelet Lincoln", "Bracelet", "Accessories", "Menswear", 2.93))
+    outfit = build(planner, "first date dinner", audience="men")
+    accessory = next(s for s in outfit.slots if s.slot == "accessory")
+    assert accessory.product.product_id == 23
+    assert accessory.reason == "Closest accessory to “leather belt”: a bracelet, not a belt."
+    # A piece of a named type keeps the plain reason.
+    shoes = next(
+        s for s in build(planner, "summer wedding", 80, "women").slots if s.slot == "shoes"
+    )
+    assert shoes.reason == "Best match for “elegant heeled sandals”."

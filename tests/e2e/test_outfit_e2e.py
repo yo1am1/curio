@@ -75,6 +75,33 @@ def test_a_tight_budget_reports_which_slot_does_not_fit(api):
     assert outfit["minimum"] > 8
 
 
+def test_cheaper_wedding_shoes_stay_wedding_shoes_and_say_what_they_are(api):
+    # Review repro: three "cheaper shoes" swaps ended at "Yaz flip flop (1)" for €1.99, with
+    # the reason "Best match for “elegant heeled sandals”".
+    body = {"occasion": "summer wedding", "budget": 80, "audience": "women"}
+    outfit = api.post("/outfits", json=body).json()
+    for _ in range(6):
+        swap = {"outfit": outfit["state"], "slot": "shoes", "mode": "cheaper"}
+        swapped = api.post("/outfits/swap", json=swap).json()
+        shoes = next(s for s in swapped["slots"] if s["slot"] == "shoes")
+        assert shoes["product"]["product_type"] not in ("Flip flop", "Sneakers"), shoes
+        if shoes["product"]["product_type"] not in ("Sandals", "Heels"):
+            assert not shoes["reason"].startswith("Best match"), shoes
+        if swapped["state"] == outfit["state"]:
+            break  # nothing cheaper suits a wedding
+        outfit = swapped
+
+
+def test_a_piece_of_another_type_than_asked_says_so(api):
+    # Review repro: a men's "first date dinner" got a bracelet "Best match for “leather belt”".
+    body = {"occasion": "first date dinner", "budget": 60, "audience": "men"}
+    outfit = api.post("/outfits", json=body).json()
+    accessory = next(s for s in outfit["slots"] if s["slot"] == "accessory")
+    if accessory["product"] and accessory["product"]["product_type"] != "Belt":
+        kind = accessory["product"]["product_type"].lower()
+        assert re.search(rf"\b{re.escape(kind)}\b.*not a belt", accessory["reason"]), accessory
+
+
 def test_swaps_stay_within_the_budget_and_never_repeat(api):
     body = {"occasion": "summer wedding", "budget": 80, "audience": "women"}
     outfit = api.post("/outfits", json=body).json()

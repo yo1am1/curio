@@ -132,6 +132,14 @@ All notable changes to Curio are recorded here. The format follows
   "Remember that…" or a mid-sentence "Paradise" fell back to the plain list. A one-word title
   is checked only where the answer marks it as a title: bold, italic or quoted, next to its
   "[id N]", or followed by "by <author>". The answer prompt asks for bold titles.
+- Outfit builder: the fallback search (a slot's other types, used when the occasion's own find
+  nothing) leaves out types that do not suit the occasion (`OFF_OCCASION`): three "cheaper
+  shoes" swaps on a €80 summer wedding ended at "Yaz flip flop (1)" for €1.99. A piece that is
+  not the type its slot's query names now says so instead of "Best match for …": a men's
+  "first date dinner" accessory reads "Closest accessory to “leather belt” within what is
+  left of the budget: a bracelet, not a belt.", and a fallback piece "Not the kind
+  “elegant heeled sandals” asks for (sandals or heels): none is available within the budget,
+  so this is the closest shoe instead."
 
 ### Security
 
