@@ -934,6 +934,10 @@ def discovery_page() -> None:
 # Which domains a server actually serves comes from /health (`domains`).
 FASHION = "fashion"
 COCKTAILS = "cocktails"
+BOOKS = "books"
+BOOKS_UNAVAILABLE = (
+    "The book catalog is not prepared on this server yet (run scripts.prepare_books)."
+)
 COCKTAILS_UNAVAILABLE = (
     "Cocktail recipes are not prepared on this server yet (run scripts.prepare_cocktails)."
 )
@@ -943,6 +947,9 @@ FASHION_UNAVAILABLE = (
 )
 LLM_HINT = "set LLM_MODEL (and LLM_API_KEY / LLM_BASE_URL) in .env, then restart the API."
 RECIPE_CREDIT = "Recipe data: TheCocktailDB · Please drink responsibly."
+BOOK_SOURCE = "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.0)"
+BOOK_RATINGS = "Ratings are Goodreads averages, not Curio's."
+BOOK_CREDIT = f"{BOOK_SOURCE} · {BOOK_RATINGS}"
 
 
 @dataclass(frozen=True)
@@ -959,6 +966,7 @@ class DomainCopy:
     shortlist_hint: str
     compare_prompt: str
     ask_memory: str
+    ask_shortlist: str = "Ask before saving to my shortlist"
 
 
 FASHION_COPY = DomainCopy(
@@ -1013,6 +1021,35 @@ COCKTAIL_COPY = DomainCopy(
 )
 
 
+BOOK_COPY = DomainCopy(
+    title="Find your next great read.",
+    intro=(
+        "Tell Curio a book you loved, a genre or a mood. It finds what similar readers "
+        "enjoyed, explains why and asks before changing your reading list."
+    ),
+    placeholder="Describe a book or ask a follow-up…",
+    welcome=(
+        "Tell me a book you loved, a genre or a mood. Try **fantasy like The Name of the Wind**."
+    ),
+    starters=(
+        "Fantasy like The Name of the Wind",
+        "Short classic novels",
+        "A cosy mystery",
+    ),
+    unavailable=(
+        "The book assistant is currently unavailable. "
+        "You can still search and browse on the Books page."
+    ),
+    popup_caption="Find books. Refine by genre, mood or a book you loved.",
+    popup_note=BOOK_CREDIT,
+    memory_hint="Nothing yet. Say “I love fantasy, but no horror” and Curio will ask to remember.",
+    shortlist_hint="Save books from answers, or ask Curio to add them to your reading list.",
+    compare_prompt="Compare the books on my reading list and tell me which to read first.",
+    ask_memory="Ask before remembering reading tastes",
+    ask_shortlist="Ask before adding to my reading list",
+)
+
+
 def current_domain() -> str:
     """The selected domain; `main` moves it to the first served one when needed."""
     domain = st.session_state.get("domain")
@@ -1051,11 +1088,17 @@ STEP_LABELS = {
     "InspectCocktails": "Inspect recipes",
     "SimilarCocktails": "Find similar drinks",
     "WhatCanIMake": "Check your ingredients",
+    "SearchBooks": "Search books",
+    "InspectBooks": "Inspect books",
+    "ReadersAlsoLiked": "Readers also liked",
+    "BooksByAuthor": "More by the author",
     "AskShopper": "Question for you",
     "SaveToShortlist": "Shortlist proposal",
     "RememberPreferences": "Memory proposal",
     "SaveCocktails": "Shortlist proposal",
     "RememberTastes": "Memory proposal",
+    "SaveBooks": "Reading list proposal",
+    "RememberReadingTastes": "Memory proposal",
     "Draft answer": "Draft answer",
     "Grounding check": "Grounding check",
     "Self-correction": "Self-correction",
@@ -1081,6 +1124,11 @@ COCKTAIL_BADGES: Badges = {
     "repaired": ("Self-corrected to match the recipes", "orange", ":material/auto_fix_high:"),
     "fallback": ("Unverified answer replaced with recipe facts", "red", ":material/shield:"),
 }
+BOOK_BADGES: Badges = {
+    "verified": ("Titles and ratings checked against the catalog", "green", ":material/verified:"),
+    "repaired": ("Self-corrected to match the catalog", "orange", ":material/auto_fix_high:"),
+    "fallback": ("Unverified answer replaced with catalog facts", "red", ":material/shield:"),
+}
 # Proposal arguments the shopper may narrow: list values can be dropped one by one.
 APPROVAL_LIST_FIELDS = (
     "product_ids",
@@ -1089,6 +1137,10 @@ APPROVAL_LIST_FIELDS = (
     "drink_ids",
     "liked_ingredients",
     "avoided_ingredients",
+    "book_ids",
+    "liked_genres",
+    "avoided_genres",
+    "avoided_authors",
 )
 _MARKDOWN_SPECIAL = re.compile(r"([\\`*_{}\[\]<>#|~$])")
 
@@ -1208,6 +1260,53 @@ def remember_tastes(tastes: dict) -> list:
         memory["alcohol_free"] = True
     dropped = []
     for field in ("liked_ingredients", "avoided_ingredients"):
+        memory[field], lost = merge_newest(memory.get(field, []), tastes.get(field, []), MAX_TASTES)
+        dropped += lost
+    return dropped
+
+
+READING_LIST_FULL = f"Your reading list holds up to {MAX_SHORTLIST} books."
+
+
+def reading_list() -> list[dict]:
+    return st.session_state.setdefault("book_shortlist", [])
+
+
+def add_book(book: dict, announce: bool = True) -> bool:
+    """Add a book unless it is listed already or the list is full; return whether it was added."""
+    items = reading_list()
+    if any(item["book_id"] == book["book_id"] for item in items):
+        return False
+    if len(items) >= MAX_SHORTLIST:
+        if announce:
+            st.toast(
+                f"Your reading list holds up to {MAX_SHORTLIST} books.", icon=":material/info:"
+            )
+        return False
+    items.append(book)
+    if announce:
+        st.toast(f"Added {book['title']} to your reading list.", icon=":material/bookmark:")
+    return True
+
+
+def remove_book(book_id: int) -> None:
+    st.session_state["book_shortlist"] = [b for b in reading_list() if b["book_id"] != book_id]
+
+
+def reading_memory() -> dict:
+    return st.session_state.setdefault("book_preferences", {})
+
+
+def forget_reading_taste(field: str, value: object) -> None:
+    memory = reading_memory()
+    memory[field] = [item for item in memory.get(field, []) if item != value]
+
+
+def remember_reading_tastes(tastes: dict) -> list:
+    """Store approved reading tastes; return older values dropped to stay within the limits."""
+    memory = reading_memory()
+    dropped = []
+    for field in ("liked_genres", "avoided_genres", "avoided_authors"):
         memory[field], lost = merge_newest(memory.get(field, []), tastes.get(field, []), MAX_TASTES)
         dropped += lost
     return dropped
@@ -1350,11 +1449,49 @@ def show_chat_cocktails(cocktails: list[dict], index: int, context: str) -> None
                 )
 
 
+def show_chat_books(books: list[dict], index: int, context: str) -> None:
+    saved = {item["book_id"] for item in reading_list()}
+    compact = context == "popup"
+    columns = None if compact else st.columns(min(5, max(3, len(books))))
+    for position, book in enumerate(books):
+        bid = book["book_id"]
+        slot = st.container() if compact else columns[position % len(columns)]
+        with (
+            slot,
+            st.container(
+                key=f"chat_book_{context}_{index}_{bid}",
+                horizontal=compact,
+                vertical_alignment="center" if compact else "top",
+            ),
+        ):
+            book_cover(
+                book,
+                width=56 if compact else "stretch",
+                key="" if compact else f"chat_{context}_{index}_{bid}",
+            )
+            with st.container(gap=None):
+                st.text(book["title"])
+                st.caption(f"{book['authors'][0]} · ★ {book['average_rating']:.2f}")
+            with st.container(horizontal=True, gap="small"):
+                if st.button("View", key=f"chat_book_view_{context}_{index}_{bid}"):
+                    book_details(bid)
+                st.button(
+                    "Saved" if bid in saved else "Save",
+                    key=f"chat_book_save_{context}_{index}_{bid}",
+                    icon=":material/bookmark:" if bid in saved else ":material/bookmark_border:",
+                    type="tertiary",
+                    disabled=bid in saved,
+                    on_click=add_book,
+                    args=(book,),
+                )
+
+
 def approval_options(action: dict) -> list[tuple[str, object, str]]:
     """Checkbox rows (field, value, label) for every value the shopper may drop."""
     args = action["args"]
     products = {p["product_id"]: p for p in action.get("products") or []}
     cocktails = {c["drink_id"]: c for c in action.get("cocktails") or []}
+    books = {b["book_id"]: b for b in action.get("books") or []}
     options: list[tuple[str, object, str]] = []
     for field in APPROVAL_LIST_FIELDS:
         for value in args.get(field) or []:
@@ -1366,8 +1503,16 @@ def approval_options(action: dict) -> list[tuple[str, object, str]]:
                 if value not in cocktails:
                     continue
                 label = f"{cocktails[value]['name']} · {alcohol_label(cocktails[value])}"
-            elif field == "liked_ingredients":
+            elif field == "book_ids":
+                if value not in books:
+                    continue
+                label = f"{books[value]['title']} · {books[value]['authors'][0]}"
+            elif field in ("liked_ingredients", "liked_genres"):
                 label = f"Likes {value}"
+            elif field == "avoided_genres":
+                label = f"No {value}"
+            elif field == "avoided_authors":
+                label = f"No books by {value}"
             elif field == "avoided_ingredients":
                 label = f"Avoids {value}"
             else:
@@ -1431,6 +1576,8 @@ def show_chat_turn(turn: dict, index: int, context: str, latest: bool = False):
             show_chat_products(turn["products"], index, context)
         if turn.get("cocktails"):
             show_chat_cocktails(turn["cocktails"], index, context)
+        if turn.get("books"):
+            show_chat_books(turn["books"], index, context)
         if turn.get("pending_action"):
             status = approval_card(
                 turn, index, context, active=latest and not turn.get("resolution")
@@ -1481,6 +1628,8 @@ def history_item(turn: dict) -> dict:
         item["product_ids"] = [p["product_id"] for p in turn["products"][:5]]
     if turn.get("cocktails"):
         item["drink_ids"] = [c["drink_id"] for c in turn["cocktails"][:5]]
+    if turn.get("books"):
+        item["book_ids"] = [b["book_id"] for b in turn["books"][:5]]
     return item
 
 
@@ -1503,6 +1652,16 @@ def cocktail_context() -> dict:
         context["cocktail_preferences"] = memory
     if cocktail_shortlist():
         context["cocktail_shortlist"] = [c["drink_id"] for c in cocktail_shortlist()]
+    return context
+
+
+def book_context() -> dict:
+    context: dict = {"domain": BOOKS}
+    memory = {key: value for key, value in reading_memory().items() if value}
+    if memory:
+        context["book_preferences"] = memory
+    if reading_list():
+        context["book_shortlist"] = [b["book_id"] for b in reading_list()]
     return context
 
 
@@ -1565,6 +1724,14 @@ def announce_shortlist(added: int, requested: int, noun: str, size: int) -> None
         st.toast(f"Your shortlist holds up to {MAX_SHORTLIST} {noun}s.", icon=":material/info:")
 
 
+def announce_reading_list(added: int, requested: int, size: int) -> None:
+    if added:
+        noun = "book" if added == 1 else "books"
+        st.toast(f"Added {added} {noun} to your reading list.", icon=":material/bookmark:")
+    if added < requested and size >= MAX_SHORTLIST:
+        st.toast(READING_LIST_FULL, icon=":material/info:")
+
+
 def announce_memory(dropped: list) -> None:
     st.toast("Curio will remember that for this session.", icon=":material/memory:")
     if dropped:
@@ -1577,6 +1744,7 @@ def announce_memory(dropped: list) -> None:
 def apply_effects(reply: dict) -> None:
     products = {p["product_id"]: p for p in reply.get("products", [])}
     cocktails = {c["drink_id"]: c for c in reply.get("cocktails", [])}
+    books = {b["book_id"]: b for b in reply.get("books", [])}
     for effect in reply.get("applied", []):
         kind = effect["kind"]
         if kind == "shortlist":
@@ -1608,6 +1776,16 @@ def apply_effects(reply: dict) -> None:
             announce_memory(dropped)
         elif kind == "cocktail_preferences" and effect.get("cocktail_preferences"):
             announce_memory(remember_tastes(effect["cocktail_preferences"]))
+        elif kind == "book_shortlist":
+            ids = effect.get("book_ids", [])
+            added = 0
+            for bid in ids:
+                book = books.get(bid) or call_api("GET", f"/books/{bid}")
+                if book:
+                    added += add_book(book, announce=False)
+            announce_reading_list(added, len(ids), len(reading_list()))
+        elif kind == "book_preferences" and effect.get("book_preferences"):
+            announce_memory(remember_reading_tastes(effect["book_preferences"]))
 
 
 def run_turn(
@@ -1639,6 +1817,7 @@ def run_turn(
         "content": reply["text"],
         "products": reply.get("products", []),
         "cocktails": reply.get("cocktails", []),
+        "books": reply.get("books", []),
         "steps": reply.get("steps", []),
         "status": reply.get("status", "complete"),
         "grounding": reply.get("grounding"),
@@ -1804,7 +1983,7 @@ def approval_toggles() -> None:
     st.markdown("**Approvals**")
     policy = st.session_state.setdefault("approval_policy", {})
     policy["ask_shortlist"] = st.toggle(
-        "Ask before saving to my shortlist",
+        domain_copy().ask_shortlist,
         value=policy.get("ask_shortlist", True),
         key="session_ask_shortlist",
     )
@@ -1963,6 +2142,69 @@ def cocktail_session_panel() -> None:
                     on_click=queue_message,
                     args=(copy.compare_prompt,),
                 )
+
+
+def reading_taste_chips(memory: dict) -> list[tuple[str, object, str]]:
+    """Remembered reading tastes as (field, value, label) rows."""
+    return [
+        *(("liked_genres", v, f"Likes {v}") for v in memory.get("liked_genres", [])),
+        *(("avoided_genres", v, f"No {v}") for v in memory.get("avoided_genres", [])),
+        *(("avoided_authors", v, f"No {v}") for v in memory.get("avoided_authors", [])),
+    ]
+
+
+def book_session_panel() -> None:
+    copy = BOOK_COPY
+    with st.container(key="agent_session", border=True):
+        st.subheader("Your session", anchor=False)
+        approval_toggles()
+
+        st.markdown("**Memory**")
+        chips = reading_taste_chips(reading_memory())
+        if not chips:
+            st.caption(copy.memory_hint)
+        with st.container(horizontal=True, key="session_memory"):
+            for field, value, label in chips:
+                st.button(
+                    label,
+                    key=f"forget_book_{field}_{value}",
+                    icon=":material/close:",
+                    help="Forget this taste",
+                    on_click=forget_reading_taste,
+                    args=(field, value),
+                )
+
+        items = reading_list()
+        st.markdown(f"**Reading list · {len(items)}**")
+        if not items:
+            st.caption(copy.shortlist_hint)
+        for book in items:
+            with st.container(
+                key=f"reading_list_{book['book_id']}",
+                horizontal=True,
+                vertical_alignment="center",
+            ):
+                book_cover(book, width=40)
+                with st.container(gap=None, width="stretch"):
+                    st.text(book["title"])
+                    st.caption(book["authors"][0])
+                st.button(
+                    "Remove",
+                    icon=":material/close:",
+                    key=f"reading_list_remove_{book['book_id']}",
+                    help=f"Remove {book['title']}",
+                    type="tertiary",
+                    on_click=remove_book,
+                    args=(book["book_id"],),
+                )
+        if len(items) >= 2:
+            st.button(
+                "Ask Curio which to read first",
+                icon=":material/chat_bubble:",
+                key="reading_list_ask",
+                on_click=queue_message,
+                args=(copy.compare_prompt,),
+            )
 
 
 def session_panel() -> None:
@@ -2360,6 +2602,369 @@ def compare_cocktails_dialog(drink_ids: list[int]) -> None:
     st.caption(RECIPE_CREDIT)
 
 
+# --- Books ---------------------------------------------------------------------------------
+
+BOOK_EXAMPLES = [
+    "Fantasy like The Name of the Wind",
+    "Short classic novels",
+    "A cosy mystery",
+]
+BOOK_LENGTHS = {None: "Any length", 200: "Up to 200 pages", 300: "Up to 300", 400: "Up to 400"}
+BOOK_TOP_K = 12
+BOOK_COLUMNS = 4
+_MEDIUM_COVER = re.compile(r"(/books/\d+)m/")
+BOOKMARK = {True: ":material/bookmark:", False: ":material/bookmark_border:"}
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def book_index() -> list[dict]:
+    """Every book's id, title and author (most rated first), for the "books you loved" picker."""
+    return call_api("GET", "/books/index") or []
+
+
+def book_cover(book: dict, width: int | str = "stretch", *, key: str = "") -> None:
+    """The browser loads covers straight from Goodreads; only https is shown.
+
+    Full-width slots without a cover get a `missing_photo_<key>` placeholder with the title.
+    """
+    url = book.get("image_url")
+    if url and url.startswith("https://"):
+        if width == "stretch":  # the dataset links 98 px covers; Goodreads serves 318 px too
+            url = _MEDIUM_COVER.sub(r"\1l/", url)
+        # The caption names the cover for screen readers; ui.css hides it visually.
+        st.image(url, caption=book["title"], width=width)
+    elif key:
+        with st.container(key=f"missing_photo_{key}"):
+            st.caption(plain(book["title"]), text_alignment="center")
+
+
+def rating_line(book: dict) -> str:
+    return f"{book['average_rating']:.2f} · {book['ratings_count']:,} Goodreads ratings"
+
+
+def book_facts(book: dict) -> str:
+    """Year, length and series, as a caption."""
+    facts = []
+    if (year := book.get("year")) is not None:
+        facts.append(str(year) if year > 0 else f"{-year} BC")
+    if book.get("pages"):
+        facts.append(f"{book['pages']} pages")
+    if book.get("series"):
+        position = f" #{book['series_position']}" if book.get("series_position") else ""
+        facts.append(f"{book['series']}{position}")
+    return " · ".join(plain(fact) for fact in facts)
+
+
+def show_books(
+    books: list[dict],
+    *,
+    context: str,
+    annotate: Callable[[int], None] | None = None,
+) -> None:
+    saved = {item["book_id"] for item in reading_list()}
+    for start in range(0, len(books), BOOK_COLUMNS):
+        columns = st.columns(BOOK_COLUMNS)
+        for offset, book in enumerate(books[start : start + BOOK_COLUMNS]):
+            i = start + offset
+            bid = book["book_id"]
+            with (
+                columns[offset],
+                st.container(key=f"book_card_{context}_{bid}_{i}", height="stretch"),
+            ):
+                book_cover(book, key=f"{context}_book_{bid}_{i}")
+                with st.container(key=f"book_info_{context}_{bid}_{i}", gap=None):
+                    st.text(book["title"])
+                    st.caption(plain(", ".join(book["authors"][:2])))
+                with st.container(
+                    horizontal=True,
+                    vertical_alignment="center",
+                    horizontal_alignment="distribute",
+                ):
+                    st.badge(
+                        f"★ {book['average_rating']:.2f}",
+                        color="violet",
+                        help=f"Goodreads average of {book['ratings_count']:,} ratings",
+                    )
+                    st.button(
+                        "Saved" if bid in saved else "Save",
+                        key=f"book_save_{context}_{bid}_{i}",
+                        icon=":material/bookmark:"
+                        if bid in saved
+                        else ":material/bookmark_border:",
+                        type="tertiary",
+                        disabled=bid in saved,
+                        on_click=add_book,
+                        args=(book,),
+                    )
+                if annotate is not None:
+                    annotate(i)
+                st.space("stretch")
+                if st.button(
+                    f"View {book['title']}", key=f"book_view_{context}_{bid}_{i}", width="stretch"
+                ):
+                    book_details(bid)
+
+
+def show_book_hits(hits: list[dict] | None, *, context: str, empty: str) -> None:
+    if not hits:
+        if hits is not None:
+            st.info(empty)
+        return
+
+    def reason(i: int) -> None:
+        if hits[i].get("reasons"):
+            st.caption(plain(hits[i]["reasons"][0]))
+
+    show_books([hit["book"] for hit in hits], context=context, annotate=reason)
+
+
+def use_book_example(query: str) -> None:
+    st.session_state["book_query"] = query
+
+
+def avoided() -> dict:
+    """Remembered avoidances as search filters, so the pages respect them like the agent."""
+    memory = reading_memory()
+    return {
+        "exclude_genres": memory.get("avoided_genres", []),
+        "exclude_authors": memory.get("avoided_authors", []),
+    }
+
+
+def book_search_panel(genres: list[str], moods: list[str]) -> None:
+    with st.container(key="book_search_panel", border=True):
+        st.subheader("Find a book")
+        with st.form("book_search", border=False):
+            restore_input("book_query")
+            query = st.text_input(
+                "Describe a book",
+                key="book_query",
+                placeholder="e.g. fantasy like The Name of the Wind",
+                max_chars=200,
+            )
+            remember_input("book_query", query)
+            left, middle, right = st.columns([0.42, 0.3, 0.28], vertical_alignment="bottom")
+            with left:
+                restore_input("book_genres")
+                chosen = st.multiselect(
+                    "Genres",
+                    genres,
+                    key="book_genres",
+                    max_selections=3,
+                    placeholder="Any genre",
+                )
+                remember_input("book_genres", chosen)
+            with middle:
+                mood = st.selectbox(
+                    "Mood", [None, *moods], format_func=lambda m: m or "Any mood", key="book_mood"
+                )
+            with right:
+                pages = st.selectbox(
+                    "Length", list(BOOK_LENGTHS), format_func=BOOK_LENGTHS.get, key="book_pages"
+                )
+            st.form_submit_button(
+                "Find books", type="primary", key="book_search_submit", width="stretch"
+            )
+            st.caption("Or try an example")
+            with st.container(key="book_example", horizontal=True):
+                for index, example in enumerate(BOOK_EXAMPLES):
+                    st.form_submit_button(
+                        example,
+                        key=f"book_example_{index}",
+                        on_click=use_book_example,
+                        args=(example,),
+                    )
+    if not (query.strip() or chosen or mood):
+        return
+    body = {
+        "query": query.strip(),
+        "genres": chosen,
+        "mood": mood,
+        "max_pages": pages,
+        "boost_genres": reading_memory().get("liked_genres", []),
+        "top_k": BOOK_TOP_K,
+        **avoided(),
+    }
+    with st.container(key="book_search_results"):
+        st.subheader("Matching books")
+        with st.spinner("Searching books…"):
+            show_book_hits(
+                call_api("POST", "/books/search", json=body),
+                context="search",
+                empty="No matching books. Try fewer filters or another description.",
+            )
+
+
+def because_panel() -> None:
+    index = book_index()
+    titles = {b["book_id"]: f"{b['title']} · {b['author']}" for b in index}
+    with st.container(key="because_panel", border=True):
+        st.subheader("Because you liked…")
+        st.caption(
+            "Pick books you loved. Curio finds what readers who loved them also loved, "
+            "from about 6 million real ratings."
+        )
+        if "book_loved" not in st.session_state and "saved_book_loved" not in st.session_state:
+            # First visit: start from the reading list.
+            st.session_state["book_loved"] = [b["book_id"] for b in reading_list()][:10]
+        restore_input("book_loved")
+        loved = st.multiselect(
+            "Books you loved",
+            list(titles),
+            format_func=lambda bid: titles.get(bid, f"Book {bid}"),
+            key="book_loved",
+            max_selections=10,
+            placeholder="Start typing a title, e.g. The Hobbit",
+        )
+        remember_input("book_loved", loved)
+    if not loved:
+        st.caption("Add at least one book you loved, or save books to your reading list first.")
+        return
+    body = {"liked": loved, "top_k": BOOK_TOP_K, **avoided()}
+    with st.container(key="because_results"):
+        st.subheader("Readers like you also loved")
+        with st.spinner("Asking fellow readers…"):
+            show_book_hits(
+                call_api("POST", "/books/because", json=body),
+                context="because",
+                empty="No shared readers yet. Try another book you loved.",
+            )
+
+
+def browse_panel(genres: list[str], moods: list[str]) -> None:
+    with st.container(key="browse_panel", border=True):
+        st.subheader("Browse by mood")
+        mood = st.pills("Mood", moods, key="browse_mood", label_visibility="collapsed")
+        genre = st.selectbox(
+            "Genre", [None, *genres], format_func=lambda g: g or "Any genre", key="browse_genre"
+        )
+    if not (mood or genre):
+        st.caption("Pick a mood or a genre to browse the best-loved books in it.")
+        return
+    body = {
+        "mood": mood,
+        "genres": [genre] if genre else [],
+        "boost_genres": reading_memory().get("liked_genres", []),
+        "top_k": BOOK_TOP_K,
+        **avoided(),
+    }
+    with st.container(key="browse_results"):
+        st.subheader(" · ".join(part for part in (mood, genre) if part))
+        show_book_hits(
+            call_api("POST", "/books/search", json=body),
+            context="browse",
+            empty="Nothing here yet. Try another mood or genre.",
+        )
+
+
+def books_page() -> None:
+    st.title("Books")
+    count = st.session_state.get("service_health", {}).get("book_count")
+    st.caption(
+        f"Search {count:,} popular books, start from one you loved, or browse by mood."
+        if count
+        else "Search popular books, start from one you loved, or browse by mood."
+    )
+    mode = st.segmented_control(
+        "Find books by",
+        ["search", "because", "browse"],
+        format_func={
+            "search": "Search",
+            "because": "Because you liked…",
+            "browse": "Browse by mood",
+        }.get,
+        default="search",
+        required=True,
+        key="book_mode",
+        label_visibility="collapsed",
+    )
+    if mode == "because":
+        because_panel()
+        return
+    genres = call_api("GET", "/books/genres")
+    moods = call_api("GET", "/books/moods")
+    if genres is None or moods is None:
+        return
+    (browse_panel if mode == "browse" else book_search_panel)(genres, moods)
+
+
+@st.dialog("Book", width="large")
+def book_details(book_id: int) -> None:
+    book = call_api("GET", f"/books/{book_id}")
+    if book is None:
+        return
+    saved = any(b["book_id"] == book_id for b in reading_list())
+    with st.container(key="book_detail_body"):
+        left, right = st.columns([0.32, 0.68], gap="large")
+        with left:
+            book_cover(book, key=f"detail_book_{book_id}")
+        with right:
+            st.subheader(book["title"], anchor=False)
+            st.markdown(f"by {plain(', '.join(book['authors'][:3]))}")
+            st.badge(rating_line(book), color="violet", icon=":material/star:")
+            if facts := book_facts(book):
+                st.caption(facts)
+            if book.get("genres"):
+                st.markdown(" ".join(f":blue-badge[{plain(g)}]" for g in book["genres"]))
+            if book.get("description"):
+                st.text(book["description"])
+            if book.get("tags"):
+                st.caption("Readers shelve it as " + plain(", ".join(book["tags"][:8])))
+            with st.container(horizontal=True):
+                st.button(
+                    "On your reading list" if saved else "Save to reading list",
+                    icon=":material/bookmark:" if saved else ":material/bookmark_border:",
+                    key=f"book_detail_save_{book_id}",
+                    disabled=saved,
+                    on_click=add_book,
+                    args=(book,),
+                )
+                if st.button(
+                    "Ask Curio about it",
+                    icon=":material/chat_bubble:",
+                    key=f"book_detail_ask_{book_id}",
+                ):
+                    # Dialogs rerun on their own; a full rerun closes this one and opens chat.
+                    queue_message(
+                        f"Tell me about {book['title']} (book {book_id}).", True, domain=BOOKS
+                    )
+                    st.rerun()
+                st.link_button("Goodreads", book["source_url"], icon=":material/open_in_new:")
+    similar, by_author = st.columns(2, gap="large")
+    # Buttons cannot open a second native dialog inside this one, so related books are text.
+    with similar:
+        st.markdown("**Readers also liked**")
+        related_books(
+            call_api(
+                "GET",
+                f"/books/{book_id}/similar",
+                params={"top_k": 5, "other_authors_only": True},
+                missing_ok=True,
+            ),
+            "No shared readers for this book yet.",
+        )
+    with by_author:
+        st.markdown(f"**More by {plain(book['authors'][0])}**")
+        related_books(
+            call_api("GET", f"/books/{book_id}/by-author", params={"top_k": 5}, missing_ok=True),
+            "No other books by this author in the catalog.",
+        )
+    st.caption(BOOK_CREDIT)
+
+
+def related_books(hits: list[dict] | None, empty: str) -> None:
+    if not hits:
+        if hits is not None:
+            st.caption(empty)
+        return
+    for hit in hits:
+        item = hit["book"]
+        # "By <author>" repeats the heading of the author column; show the series instead.
+        reasons = [r for r in hit.get("reasons", []) if not r.startswith("By ")]
+        reason = f" · {reasons[0]}" if reasons else ""
+        st.text(f"{item['title']} · ★ {item['average_rating']:.2f}{reason}")
+
+
 # --- App shell -----------------------------------------------------------------------------
 
 
@@ -2400,6 +3005,12 @@ def cocktail_note(health: dict) -> str:
     count = health.get("cocktail_count")
     recipes = f"{count:,} recipes · " if count else ""
     return f"Recipe data: TheCocktailDB · {recipes}Please drink responsibly."
+
+
+def book_note(health: dict) -> str:
+    count = health.get("book_count")
+    books = f"{count:,} books · " if count else ""
+    return f"{BOOK_SOURCE} · {books}{BOOK_RATINGS}"
 
 
 # In display order: the first domain the server serves is the default.
@@ -2449,6 +3060,26 @@ DOMAIN_VIEWS: dict[str, DomainView] = {
         session_panel=cocktail_session_panel,
         chat_context=cocktail_context,
         catalog_note=cocktail_note,
+    ),
+    BOOKS: DomainView(
+        label=":material/menu_book: Books",
+        unavailable="Books are not available",
+        setup_hint=BOOKS_UNAVAILABLE,
+        copy=BOOK_COPY,
+        state={
+            "history": "chat_history_books",
+            "shortlist": "book_shortlist",
+            "memory": "book_preferences",
+            "queued": "chat_queued_books",
+            "decision": "chat_decision_books",
+        },
+        badges=BOOK_BADGES,
+        approval_tools={"ask_shortlist": "SaveBooks", "ask_memory": "RememberReadingTastes"},
+        feedback_prefix="feedback_books",
+        pages=(DomainPage(books_page, "Books", "books"),),
+        session_panel=book_session_panel,
+        chat_context=book_context,
+        catalog_note=book_note,
     ),
 }
 # Pages that belong to one domain; a deep link to one of them selects that domain.

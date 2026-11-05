@@ -37,14 +37,16 @@ h1, h2, h3 { text-wrap: balance; }
 .st-key-discovery_mode { margin-block-end: .75rem; }
 .st-key-discovery_mode button { min-height: 2.75rem; padding-inline: 1.25rem; }
 :is(.st-key-text_search_panel, .st-key-photo_search_panel, .st-key-connection_controls,
-    .st-key-cocktail_search_panel, .st-key-pantry_panel) {
+    .st-key-cocktail_search_panel, .st-key-pantry_panel, .st-key-book_search_panel,
+    .st-key-because_panel, .st-key-browse_panel) {
     background: color-mix(in srgb, currentColor 4%, transparent);
     border-color: color-mix(in srgb, currentColor 16%, transparent);
     border-radius: .65rem;
     padding: 1.5rem 1.75rem;
 }
 :is(.st-key-text_search_panel, .st-key-photo_search_panel, .st-key-connection_controls,
-    .st-key-cocktail_search_panel, .st-key-pantry_panel) h3 {
+    .st-key-cocktail_search_panel, .st-key-pantry_panel, .st-key-book_search_panel,
+    .st-key-because_panel, .st-key-browse_panel) h3 {
     font: 600 1.35rem/1.4 system-ui, sans-serif;
     letter-spacing: -.025em;
     padding-block: 0 .5rem;
@@ -68,7 +70,8 @@ h1, h2, h3 { text-wrap: balance; }
     [class*="st-key-product_card_"] { max-width: 100%; }
     .st-key-feed_controls { justify-content: flex-start; }
     :is(.st-key-text_search_panel, .st-key-photo_search_panel, .st-key-connection_controls,
-        .st-key-cocktail_search_panel, .st-key-pantry_panel) { padding: 1rem; }
+        .st-key-cocktail_search_panel, .st-key-pantry_panel, .st-key-book_search_panel,
+        .st-key-because_panel, .st-key-browse_panel) { padding: 1rem; }
     .st-key-photo_search_panel [data-testid="stHorizontalBlock"] {
         display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -246,4 +249,66 @@ h1, h2, h3 { text-wrap: balance; }
 }
 .st-key-agent_conversation :is([class*="st-key-chat_product_home_"], [class*="st-key-chat_cocktail_home_"]) [data-testid="stText"] > span {
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* Books: portrait covers, two-line titles, the same card rhythm as drinks. */
+[class*="st-key-book_card_"] { padding-bottom: 1.5rem; }
+[class*="st-key-book_card_"] [data-testid="stImage"] img {
+    width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: .35rem;
+}
+[class*="st-key-book_card_"] [class*="st-key-missing_photo_"],
+[class*="st-key-chat_book_"] [class*="st-key-missing_photo_"] { padding: .75rem; }
+[class*="st-key-book_info_"] [data-testid="stText"] {
+    font-weight: 550; font-size: 1.05rem; min-height: 3.2em; line-height: 1.5;
+}
+[class*="st-key-book_info_"] [data-testid="stText"] > span {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+[class*="st-key-book_card_"] button { min-height: 2.75rem; }
+.st-key-book_mode { margin-block-end: .75rem; }
+.st-key-book_mode button { min-height: 2.75rem; padding-inline: 1.25rem; }
+.st-key-book_search_panel input { font-size: 1.05rem; }
+.st-key-book_example button { min-height: 2.75rem; font-size: .875rem; }
+:is(.st-key-book_search_results, .st-key-because_results, .st-key-browse_results) {
+    margin-block-start: 1.5rem;
+}
+.st-key-book_detail_body [data-testid="stImage"] img {
+    width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: .35rem;
+    max-height: min(26rem, 50dvh);
+}
+.st-key-book_detail_body button [data-testid="stMarkdownContainer"] { font-size: .9rem; }
+[class*="st-key-chat_book_"] {
+    padding-block: .5rem;
+    border-block-start: 1px solid #d5d0c6;
+}
+[class*="st-key-chat_book_"] [data-testid="stImage"] img {
+    width: 56px; height: 84px; object-fit: cover; border-radius: .25rem;
+}
+.st-key-agent_conversation [class*="st-key-chat_book_home_"] [data-testid="stImage"] img,
+[class*="st-key-chat_book_page_"] [data-testid="stImage"] img {
+    width: 100%; height: auto; aspect-ratio: 2 / 3;
+}
+.st-key-agent_conversation [class*="st-key-chat_book_"],
+[class*="st-key-chat_book_page_"] { border-block-start: 0; padding-block: .25rem .75rem; }
+[class*="st-key-chat_book_"] [data-testid="stText"] { font-size: .9rem; font-weight: 550; }
+[class*="st-key-chat_book_"] button {
+    min-height: 2.25rem; padding-inline: .7rem; font-size: .85rem;
+}
+.st-key-agent_conversation [class*="st-key-chat_book_home_"] [data-testid="stText"] {
+    min-height: 3em; line-height: 1.5;
+}
+.st-key-agent_conversation [class*="st-key-chat_book_home_"] [data-testid="stText"] > span {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.st-key-agent_session [class*="st-key-reading_list_"] [data-testid="stImage"] img {
+    width: 32px; height: 48px; object-fit: cover; border-radius: .2rem;
+}
+@media (max-width: 640px) {
+    [class*="st-key-book_card_"] { max-width: 100%; }
+    .st-key-agent_conversation [data-testid="stHorizontalBlock"]:has([class*="st-key-chat_book_"]) {
+        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .st-key-agent_conversation [data-testid="stColumn"]:has([class*="st-key-chat_book_"]) {
+        width: auto; min-width: 0;
+    }
 }

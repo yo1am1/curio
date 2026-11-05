@@ -295,7 +295,7 @@ def test_served_domains_reads_new_and_legacy_health():
     legacy = ui.served_domains({"status": "ok", "chat_enabled": True})
     assert legacy["fashion"]["chat_enabled"] is True
     assert legacy["cocktails"] == {"id": "cocktails", "enabled": False, "chat_enabled": None}
-    unknown = {"domains": [{"id": "books", "enabled": True}, *COCKTAILS_ONLY["domains"]]}
+    unknown = {"domains": [{"id": "music", "enabled": True}, *COCKTAILS_ONLY["domains"]]}
     assert ui.available_domains(unknown) == ["cocktails"]  # a newer server's extra domain
 
 
