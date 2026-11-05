@@ -244,8 +244,9 @@ BOOK_NEIGHBOURS = [
 ]
 
 
-def book_frame():
-    """The prepared books.parquet layout for a tiny, varied catalog."""
+def book_frame(rows=None):
+    """The prepared books.parquet layout for a tiny, varied catalog (or for `rows`, laid out
+    like `BOOK_ROWS`)."""
     import json as _json
 
     return pd.DataFrame(
@@ -275,7 +276,7 @@ def book_frame():
             for (
                 book_id, title, authors, series, position, year, rating, ratings, pages, genres,
                 tags, cover,
-            ) in BOOK_ROWS
+            ) in (BOOK_ROWS if rows is None else rows)
         ]
     ).astype({"year": "Int64", "pages": "Int64"})  # fmt: skip
 

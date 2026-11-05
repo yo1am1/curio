@@ -90,6 +90,7 @@ GENRE_WORDS: Mapping[str, str] = {
     "childrens": "Children's",
     "children": "Children's",
     "kids": "Children's",
+    "kid": "Children's",
     "classic": "Classics",
     "dystopia": "Dystopian",
     "dystopias": "Dystopian",

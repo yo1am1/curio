@@ -63,6 +63,43 @@ def test_short_classic_novels_are_short_classics(api):
     assert {"Of Mice and Men", "Animal Farm", "The Great Gatsby"} & set(titles(hits))
 
 
+def _search(api, query: str, top_k: int = 6) -> list[dict]:
+    hits = api.post("/books/search", json={"query": query, "top_k": top_k}).json()
+    assert len(hits) == top_k, query
+    return hits
+
+
+def test_golden_queries_find_the_topic_not_the_request_words(api):
+    """The review's probes: request words ("gift", "mom", "loves", "long", "2") once matched
+    titles; the topic now decides."""
+    gardening = _search(api, "a gift for my mom who loves gardening", 4)
+    for hit in gardening:
+        assert {"gardening", "botany", "farming"} & set(hit["book"]["tags"]), hit["book"]["title"]
+    dragons = _search(api, "something for a 10 year old who loves dragons")
+    for hit in dragons:
+        assert "Children's" in hit["book"]["genres"] and "dragons" in hit["book"]["tags"]
+    war = _search(api, "best books about world war 2")
+    for hit in war:
+        assert {"wwii", "world war ii", "ww2"} & set(hit["book"]["tags"]), hit["book"]["title"]
+    flight = _search(api, "funny books for a long flight")
+    assert all(any(r.startswith("Mood: Funny") for r in hit["reasons"]) for hit in flight)
+    for hits in (gardening, dragons, war, flight):
+        reasons = [r for hit in hits for r in hit["reasons"]]
+        assert not any(r.startswith("Title matches") for r in reasons), reasons
+    shown = {t for hits in (gardening, dragons, war, flight) for t in titles(hits)}
+    assert not shown & {
+        "The Girl with All the Gifts",
+        "The Gift of the Magi",
+        "The History of Love",
+        "P.S. I Love You",
+        "The Girl with the Dragon Tattoo",
+        "Night World, No. 2",
+        "Persepolis 2: The Story of a Return",
+        "A Long Way Down",
+        "The Long Haul",
+    }
+
+
 def test_readers_also_liked_because_and_by_author(api):
     similar = api.get("/books/192/similar", params={"other_authors_only": True}).json()
     assert similar and all(h["book"]["authors"][0] != "Patrick Rothfuss" for h in similar)

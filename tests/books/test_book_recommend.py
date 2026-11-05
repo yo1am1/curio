@@ -187,3 +187,106 @@ def test_text_helpers_and_quality_prior(book_catalog):
     prior = quality(list(book_catalog))
     assert prior.min() >= 0 and prior.max() <= 1
     assert quality([]).size == 0
+
+
+# --- Golden queries: the topic of a request, not its phrasing ------------------------------
+
+# Titles that share a request word ("gift", "love", "long", "world", "2") with the golden
+# queries below, beside the books those queries are about. Laid out like BOOK_ROWS.
+GOLDEN_ROWS = [
+    (1, "The Girl with All the Gifts", ["M.R. Carey"], None, None, 2014, 3.9, 120_000, 460,
+     ["Horror", "Science fiction"], ["zombies", "dystopia"], True),
+    (2, "The Gift of the Magi", ["O. Henry"], None, None, 1905, 4.1, 90_000, 20,
+     ["Classics", "Short stories"], ["christmas", "classic"], True),
+    (3, "The Five Love Languages", ["Gary Chapman"], None, None, 1992, 4.2, 150_000, 204,
+     ["Non-fiction", "Self-help"], ["relationships", "marriage", "love"], True),
+    (4, "The Botany of Desire", ["Michael Pollan"], None, None, 2001, 4.0, 70_000, 271,
+     ["Non-fiction", "Science"], ["gardening", "botany", "food"], True),
+    (5, "The History of Love", ["Nicole Krauss"], None, None, 2005, 3.9, 80_000, 252,
+     ["Literary fiction"], ["love", "literary fiction"], True),
+    (6, "P.S. I Love You", ["Cecelia Ahern"], None, None, 2004, 4.0, 300_000, 512,
+     ["Romance"], ["love", "romance", "chick lit"], True),
+    (7, "The Girl with the Dragon Tattoo", ["Stieg Larsson"], "Millennium", "1", 2005,
+     4.1, 2_000_000, 465, ["Mystery", "Thriller"], ["crime", "sweden"], True),
+    (8, "How to Train Your Dragon", ["Cressida Cowell"], "How to Train Your Dragon", "1",
+     2003, 3.9, 50_000, 214, ["Children's", "Fantasy"], ["dragons", "middle grade"], True),
+    (9, "Eragon", ["Christopher Paolini"], "The Inheritance Cycle", "1", 2002, 3.9, 1_000_000,
+     509, ["Young adult", "Fantasy"], ["dragons", "fantasy"], True),
+    (10, "Night World, No. 2", ["L.J. Smith"], "Night World", "4-6", 1997, 4.1, 30_000, 640,
+     ["Young adult", "Paranormal"], ["vampires", "night world"], True),
+    (11, "Persepolis 2", ["Marjane Satrapi"], "Persepolis", "2", 2004, 4.2, 40_000, 187,
+     ["Graphic novels", "Biography & memoir"], ["iran", "memoir"], True),
+    (12, "All the Light We Cannot See", ["Anthony Doerr"], None, None, 2014, 4.3, 600_000, 531,
+     ["Historical fiction"], ["wwii", "world war ii", "historical fiction"], True),
+    (13, "A Long Way Down", ["Nick Hornby"], None, None, 2005, 3.5, 90_000, 333,
+     ["Contemporary", "Humour"], ["humor", "funny", "british"], True),
+    (14, "Me Talk Pretty One Day", ["David Sedaris"], None, None, 2000, 4.0, 200_000, 272,
+     ["Humour", "Biography & memoir"], ["humor", "essays", "funny"], True),
+    (15, "Dune", ["Frank Herbert"], "Dune Chronicles", "1", 1965, 4.2, 600_000, 661,
+     ["Science fiction"], ["science fiction", "space"], True),
+    (16, "Catch-22", ["Joseph Heller"], None, None, 1961, 3.9, 600_000, 453,
+     ["Classics"], ["war", "satire"], True),
+]  # fmt: skip
+
+
+@pytest.fixture
+def golden():
+    import pandas as pd
+
+    from clothes_recommender.books.catalog import BookCatalog
+    from tests.conftest import book_frame
+
+    links = pd.DataFrame(
+        [(9, 8, 0.2, 50)], columns=["book_id", "neighbour_id", "score", "co_readers"]
+    )
+    return BookRecommender(BookCatalog(book_frame(GOLDEN_ROWS)), links)
+
+
+def test_an_empty_neighbour_file_still_serves_search(book_catalog):
+    empty = book_neighbours_frame().iloc[:0]
+    recommender = BookRecommender(book_catalog, empty)
+    assert ids(search(recommender, "magic")) and recommender.similar(1, 2)[0].book.book_id == 3
+
+
+def test_a_gift_request_finds_the_hobby_not_titles_with_gift_or_love(golden):
+    hits = search(golden, "a gift for my mom who loves gardening")
+    assert ids(hits) == [4]
+    assert hits[0].reasons == ["Shelved as gardening, botany"]
+
+
+def test_a_childs_age_picks_childrens_books_about_the_topic(golden):
+    hits = search(golden, "something for a 10 year old who loves dragons")
+    assert ids(hits) == [8]  # not Eragon (young adult), the Dragon Tattoo or love stories
+    assert hits[0].reasons[0] == "Genre: Children's"
+    assert ids(search(golden, "dragons for a 15-year-old")) == [9]
+    assert ids(search(golden, "a dragon book for a kid")) == [8]
+
+
+def test_world_war_2_means_the_war_shelves_not_a_2_in_a_title(golden):
+    for query in ("best books about world war 2", "WWII novels", "second world war"):
+        hits = search(golden, query)
+        assert ids(hits) == [12], query
+        assert hits[0].reasons == ["Shelved as wwii, world war ii"]
+    # A bare one- or two-digit number never matches on its own.
+    assert ids(search(golden, "persepolis 2")) == [11]
+
+
+def test_flight_and_long_are_about_the_trip_not_the_book(golden):
+    hits = search(golden, "funny books for a long flight")
+    assert set(ids(hits)) == {13, 14, 16}  # the Funny shelves (Catch-22: satire)
+    assert not any(r.startswith("Title matches") for h in hits for r in h.reasons)
+
+
+def test_a_title_counts_for_two_query_words_or_the_whole_title(golden):
+    dune = search(golden, "dune")
+    assert ids(dune)[0] == 15 and 'Title matches "dune"' in dune[0].reasons
+    assert ids(search(golden, "catch 22"))[0] == 16
+    assert ids(search(golden, "the girl with the dragon tattoo"))[0] == 7
+    # One shared word is a coincidence: the Dragon Tattoo is not about dragons. (Its
+    # description here repeats its title, so it still matches, last and without the title.)
+    dragons = search(golden, "dragons")
+    assert ids(dragons) == [8, 9, 7]
+    assert not any(r.startswith("Title matches") for r in dragons[2].reasons)
+    # Request words still search when nothing else is asked.
+    assert ids(search(golden, "gift"))[0] == 2
+    assert set(ids(search(golden, "love"))) >= {3, 5, 6}

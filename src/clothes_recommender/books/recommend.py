@@ -8,6 +8,13 @@ Search (`search`):
 - TF-IDF cosine over title, series, authors, genres, reader shelves and the description, each
   with its own weight (`FIELD_WEIGHTS`), scaled by the share of query words the book uses and
   by a quality prior (`quality`: Goodreads rating and popularity) that only breaks near-ties.
+- Only the topic counts. Words about the person or occasion (`REQUEST_WORDS`: "gift", "mom",
+  "loves", "year old", "long flight") are dropped when anything else describes the book, and
+  bare one- or two-digit numbers always are. A title counts only when it matches two of the
+  query's words or the query names the whole title ("dune"), so one shared word ("gift",
+  "love") never ranks a book by its title. A reader's age ("for a 10 year old") becomes the
+  Children's (up to 12) or Young adult (up to 17) genre, and topic phrases ("world war 2")
+  match the shelves readers file the topic under (`TOPIC_SHELVES`).
 - "like <title>", "similar to <title>" or "fans of <title>" seeds the search with that book:
   candidates are the books its readers also liked, blended with shelf similarity, minus its
   own series; the other query words ("fantasy like ...") must still match.
@@ -68,7 +75,66 @@ SHELF_HINTS: Mapping[str, tuple[str, ...]] = {
     "uplifting": ("inspirational", "feel", "good"),
     "inspiring": ("inspirational",),
     "spy": ("spy", "espionage"),
+    "gardening": ("gardening", "gardener", "botany", "farming", "horticulture"),
+    "gardener": ("gardening", "gardener", "botany", "farming", "horticulture"),
 }
+# Topics readers shelve under several names, each a phrase in a request. The shelves are
+# indexed as whole labels ("#world war ii"), so "world war 2" matches books shelved as
+# "wwii" and never a title that happens to contain "world" and "2".
+TOPIC_SHELVES: Mapping[str, tuple[str, ...]] = {
+    r"world war (?:2|ii|two)|ww ?(?:2|ii)|second world war": (
+        "world war ii",
+        "wwii",
+        "ww2",
+        "world war two",
+        "second world war",
+    ),
+    r"world war (?:1|i|one)|ww ?(?:1|i)|first world war|great war": (
+        "world war i",
+        "wwi",
+        "ww1",
+    ),
+    r"holocaust": ("holocaust",),
+}
+_TOPIC_PHRASE = re.compile(
+    r"(?<![\w'])(" + "|".join(f"(?:{p})" for p in TOPIC_SHELVES) + r")(?![\w'])"
+)
+_TOPIC_LABELS = frozenset(label for labels in TOPIC_SHELVES.values() for label in labels)
+# "for a 10 year old", "my 7-year-old", "aged 12": a reader's age, which picks the shelf.
+_AGE = re.compile(
+    r"(?<![\w'])(?:(\d{1,2})[\s-]*(?:years?|yrs?|yo)(?:[\s-]*olds?)?|(?:aged?|ages)\s+(\d{1,2}))"
+    r"(?![\w'])"
+)
+CHILDREN_MAX_AGE = 12
+TEEN_MAX_AGE = 17
+# Words about the person and the occasion, not the book ("a gift for my mom who loves
+# gardening"). They are dropped when anything else describes the book, so "gift" alone still
+# finds The Gift of the Magi. Raw words, before plurals fold.
+REQUEST_WORDS = frozenset(
+    {
+        "loves", "loved", "loving", "enjoys", "enjoyed", "likes", "liked", "adores", "adored",
+        "gift", "gifts", "present", "presents", "birthday", "mom", "moms", "mum", "mums",
+        "mother", "mothers", "mommy", "dad", "dads", "father", "fathers", "daddy", "parent",
+        "parents", "son", "sons", "daughter", "daughters", "wife", "husband", "partner",
+        "friend", "friends", "boyfriend", "girlfriend", "grandma", "grandmother", "grandpa",
+        "grandfather", "grandson", "granddaughter", "grandchild", "grandkids", "sister",
+        "brother", "aunt", "uncle", "niece", "nephew", "boss", "colleague", "coworker",
+        "teacher", "kid", "child", "toddler", "baby", "someone", "somebody", "person",
+        "people", "fan", "fans", "year", "years", "yr", "yrs", "old", "aged", "age", "long",
+        "flight", "flights", "plane", "train", "trip", "commute", "vacation", "into",
+        "interested", "obsessed", "suggest", "suggestion", "suggestions", "idea", "ideas",
+        "buy", "need", "needs", "wants", "gets", "make", "makes", "perfect", "ideal", "nice",
+        "kind", "sort", "type", "sorts", "types", "really", "very", "also",
+    }
+)  # fmt: skip
+# "I love dragons", "she would love": "love" as a verb about the reader, not a topic.
+_LOVE_VERB = re.compile(
+    r"(?<![\w'])(?:i|we|they|she|he|who|would|really|both|kids|kid|child)\s+(?:love|adore)"
+    r"(?![\w'])"
+)
+# A title match earns the title's weight only when it covers this many of the query's
+# words, or the query names the whole title ("dune", "catch 22").
+MIN_TITLE_WORDS = 2
 # Generic request words that never describe a book.
 STOPWORDS = frozenset(
     {
@@ -151,8 +217,19 @@ class BookRecommender:
         self._author_keys = [frozenset(name_key(a) for a in b.authors) for b in self._books]
         self._tag_sets = [frozenset(b.tags) for b in self._books]
         self._quality = quality(self._books)
-        self._vocabulary, self._documents = _tfidf([_fields(b) for b in self._books])
+        self._vocabulary, self._documents, self._titles = _tfidf(
+            [_fields(b) for b in self._books], [_title_words(b) for b in self._books]
+        )
         self._by_word = self._documents.tocsc()
+        # The same books without their titles: which words each uses outside the title.
+        untitled = self._documents - self._titles
+        untitled.data[np.abs(untitled.data) < 1e-12] = 0
+        untitled.eliminate_zeros()
+        self._untitled_by_word = untitled.tocsc()
+        self._title_terms = [
+            frozenset(w for w in terms(b.title) if w not in STOPWORDS) for b in self._books
+        ]
+        self._title_phrases = [_title_phrase(b.title) for b in self._books]
         self._shelves = _shelf_matrix(self._books)
         self._neighbours = self._load_neighbours(neighbours)
         self._title_keys: dict[str, list[int]] = defaultdict(list)
@@ -171,14 +248,21 @@ class BookRecommender:
             query = query.model_copy(update={"author": name})
             text = f"{text[:start]} {text[end:]}"
         text = text.casefold()
+        # What is left once the seed and author are out: a whole title the query names.
+        named = " ".join(tokens(text))
         if query.mood is None and (found := _MOOD_PHRASE.search(text)):
             query = query.model_copy(update={"mood": MOOD_WORDS[found.group(1)]})
             text = f"{text[: found.start()]} {text[found.end() :]}"
+        text, age_genre = _age_phrase(text)
         text, genres = _genre_phrases(text)
+        if age_genre:
+            genres = [age_genre, *genres]
         if genres:
-            named = list(dict.fromkeys([*query.genres, *genres]))[:5]
-            query = query.model_copy(update={"genres": named})
-        words = [w for w in terms(text) if w not in STOPWORDS]
+            wanted = list(dict.fromkeys([*query.genres, *genres]))[:5]
+            query = query.model_copy(update={"genres": wanted})
+        text, topics = _topic_phrases(text)
+        described = bool(seed or topics or query.genres or query.mood or query.author)
+        words = _content_words(text, described)
         # "short stories" was taken as a genre above, so "short" here is about length.
         if query.max_pages is None and any(w in SHORT_WORDS for w in words):
             query = query.model_copy(update={"max_pages": SHORT_PAGES})
@@ -189,8 +273,9 @@ class BookRecommender:
             candidates = [
                 r for r in candidates if r != seed.row and not self._same_series(r, seed.row)
             ]
-        concepts = self._concepts(words)
-        scores = self._scores(candidates, concepts, seed, mood, query, bool(words))
+        concepts = self._concepts(words) + self._topic_concepts(topics)
+        has_words = bool(words or topics)
+        scores = self._scores(candidates, concepts, seed, mood, query, has_words, named)
         boost = {name_key(g) for g in query.boost_genres}
         if boost:
             scores = {
@@ -199,13 +284,14 @@ class BookRecommender:
             }
         ranked = sorted(scores, key=lambda row: (-round(scores[row], 9), row))[: query.top_k]
         matched = {w for c in concepts for w in c}
+        titled = self._title_ok(np.asarray(ranked, dtype=np.int64), concepts, named)
         return [
             BookHit(
                 book=self._books[row],
                 score=round(scores[row], 6),
-                reasons=self._search_reasons(row, query, mood, matched, seed, boost),
+                reasons=self._search_reasons(row, query, mood, matched, seed, boost, bool(title)),
             )
-            for row in ranked
+            for row, title in zip(ranked, titled, strict=True)
         ]
 
     def similar(
@@ -431,6 +517,35 @@ class BookRecommender:
                 concepts.append(dict.fromkeys(hints, 1 / len(hints)))
         return concepts
 
+    def _topic_concepts(self, topics: Sequence[tuple[str, ...]]) -> list[dict[str, float]]:
+        """One concept per topic: its shelf labels as indexed ("#wwii")."""
+        concepts = []
+        for labels in topics:
+            hints = [f"#{label}" for label in labels if f"#{label}" in self._vocabulary]
+            if hints:
+                concepts.append(dict.fromkeys(hints, 1 / len(hints)))
+        return concepts
+
+    def _title_ok(
+        self, rows: np.ndarray, concepts: list[dict[str, float]], named: str
+    ) -> np.ndarray:
+        """Whether each book's title may count: it matches at least MIN_TITLE_WORDS of the
+        query's words, or the query names the whole title. One shared word ("gift", "love",
+        "long") is a coincidence, not a match."""
+        wanted = [set(c) for c in concepts]
+        ok = np.zeros(len(rows), dtype=bool)
+        padded = f" {named} "
+        for i, row in enumerate(rows.tolist()):
+            title = self._title_terms[row]
+            hits = sum(1 for words in wanted if words & title)
+            if hits >= MIN_TITLE_WORDS:
+                ok[i] = True
+            elif hits and (phrase := self._title_phrases[row]) and f" {phrase} " in padded:
+                # A one-word title ("Night") must be all the query asks for, so "night
+                # circus" does not credit Night.
+                ok[i] = " " in phrase or all(words & title for words in wanted)
+        return ok
+
     def _scores(
         self,
         candidates: list[int],
@@ -439,6 +554,7 @@ class BookRecommender:
         mood: tuple[str, Mood] | None,
         query: BookQuery,
         has_words: bool,
+        named: str = "",
     ) -> dict[int, float]:
         if not candidates:
             return {}
@@ -447,13 +563,14 @@ class BookRecommender:
         if has_words and not concepts:
             return {}  # no book uses any of the query words
         relevance = np.ones(len(rows))
+        titled = self._title_ok(rows, concepts, named) if concepts else None
         if seed is not None:
             # The seed ranks; other query words ("fantasy like ...") only have to match.
             if concepts:
-                relevance = self._coverage(rows, concepts)
+                relevance = self._coverage(rows, concepts, titled)
             relevance = relevance * self._seed_relevance(rows, seed.row)
         elif concepts:
-            relevance = self._text_relevance(rows, concepts)
+            relevance = self._text_relevance(rows, concepts, titled)
         if query.genres:
             wanted = [name_key(g) for g in query.genres]
             relevance = relevance * np.array([self._genre_strength(r, wanted) for r in candidates])
@@ -464,22 +581,35 @@ class BookRecommender:
         keep = relevance > 0
         return dict(zip(rows[keep].tolist(), score[keep].tolist(), strict=True))
 
-    def _text_relevance(self, rows: np.ndarray, concepts: list[dict[str, float]]) -> np.ndarray:
+    def _text_relevance(
+        self, rows: np.ndarray, concepts: list[dict[str, float]], titled: np.ndarray
+    ) -> np.ndarray:
+        """TF-IDF cosine and word coverage; a title counts only where `titled` allows it."""
         vector = np.zeros(len(self._vocabulary))
         for concept in concepts:
             for word, weight in concept.items():
                 vector[self._vocabulary[word]] += weight
-        cosine = self._documents[rows] @ vector / (np.linalg.norm(vector) or 1)
+        norm = np.linalg.norm(vector) or 1
+        cosine = self._documents[rows] @ vector
+        # A title that does not count gives back its share; the norms stay the same.
+        cosine = np.where(titled, cosine, cosine - self._titles[rows] @ vector) / norm
         # The square root narrows the gap between a book that repeats a word everywhere and
         # one that merely carries it, so the quality prior can order them.
-        return np.sqrt(np.maximum(cosine, 0)) * self._coverage(rows, concepts)
+        return np.sqrt(np.maximum(cosine, 0)) * self._coverage(rows, concepts, titled)
 
-    def _coverage(self, rows: np.ndarray, concepts: list[dict[str, float]]) -> np.ndarray:
+    def _coverage(
+        self, rows: np.ndarray, concepts: list[dict[str, float]], titled: np.ndarray | None
+    ) -> np.ndarray:
         """Share of the query's words each book uses, so books using all of them rank first."""
         used = np.zeros(len(rows))
         for concept in concepts:
             columns = [self._vocabulary[w] for w in concept]
-            used += np.asarray(self._by_word[:, columns][rows].sum(axis=1)).ravel() > 0
+            full = np.asarray(self._by_word[:, columns][rows].sum(axis=1)).ravel() > 0
+            if titled is None:
+                used += full
+                continue
+            body = np.asarray(self._untitled_by_word[:, columns][rows].sum(axis=1)).ravel() > 0
+            used += np.where(titled, full, body)
         return used / len(concepts)
 
     def _seed_relevance(self, rows: np.ndarray, seed: int) -> np.ndarray:
@@ -498,6 +628,7 @@ class BookRecommender:
         matched: set[str],
         seed: _Seed | None,
         boost: set[str],
+        titled: bool = False,
     ) -> list[str]:
         book = self._books[row]
         reasons = []
@@ -509,7 +640,7 @@ class BookRecommender:
             else:
                 reasons.append(f"Shelved like {self._books[seed.row].title}")
         in_title = [w for w in dict.fromkeys(tokens(book.title)) if term(w) in matched]
-        if in_title:
+        if in_title and titled:
             reasons.append(f'Title matches "{" ".join(in_title)}"')
         if query.author:
             reasons.append(f"By {self._catalog.canonical_author(query.author) or query.author}")
@@ -525,7 +656,8 @@ class BookRecommender:
         shelves = [
             t
             for t in book.tags
-            if set(terms(t)) & matched and t.casefold() not in {g.casefold() for g in book.genres}
+            if (set(terms(t)) & matched or f"#{t}" in matched)
+            and t.casefold() not in {g.casefold() for g in book.genres}
         ]
         if shelves:
             reasons.append(f"Shelved as {_join(shelves)}")
@@ -542,6 +674,10 @@ class BookRecommender:
             reasons.append(f"A genre you like: {_join(liked)}")
         if query.exclude_authors or query.exclude_genres:
             reasons.append("Respects what you avoid")
+        if not reasons and (
+            described := [w for w in dict.fromkeys(tokens(book.description)) if term(w) in matched]
+        ):
+            reasons.append(f'Description mentions "{" ".join(described[:MAX_REASON_ITEMS])}"')
         if not reasons:
             reasons.append(f"Loved by readers: {book.ratings_count:,} Goodreads ratings")
         return reasons
@@ -565,7 +701,9 @@ class BookRecommender:
         shared = frame["co_readers"].to_numpy(dtype=np.int64)
         order = np.lexsort((others, -np.round(scores, 9), rows))
         rows, others, scores, shared = rows[order], others[order], scores[order], shared[order]
-        starts = np.flatnonzero(np.r_[True, rows[1:] != rows[:-1]]) if len(rows) else []
+        if not len(rows):
+            return {}
+        starts = np.flatnonzero(np.r_[True, rows[1:] != rows[:-1]])
         ends = [*starts[1:], len(rows)]
         return {
             int(rows[start]): (others[start:end], scores[start:end], shared[start:end])
@@ -628,6 +766,50 @@ def _genre_phrases(text: str) -> tuple[str, list[str]]:
     return _GENRE_PHRASE.sub(" ", text), list(dict.fromkeys(genres))
 
 
+def _topic_phrases(text: str) -> tuple[str, list[tuple[str, ...]]]:
+    """The query without its topic phrases, and the shelf labels each one stands for."""
+    topics = []
+    for match in _TOPIC_PHRASE.finditer(text):
+        found = next(labels for p, labels in TOPIC_SHELVES.items() if re.fullmatch(p, match[1]))
+        topics.append(found)
+    return _TOPIC_PHRASE.sub(" ", text), list(dict.fromkeys(topics))
+
+
+def _age_phrase(text: str) -> tuple[str, str | None]:
+    """The query without a reader's age, and the genre for that age: Children's up to 12,
+    Young adult up to 17, none for adults."""
+    found = _AGE.search(text)
+    if found is None:
+        return text, None
+    age = int(found[1] or found[2])
+    genre = (
+        "Children's" if age <= CHILDREN_MAX_AGE else "Young adult" if age <= TEEN_MAX_AGE else None
+    )
+    return f"{text[: found.start()]} {text[found.end() :]}", genre
+
+
+def _content_words(text: str, described: bool) -> list[str]:
+    """The query's words that describe a book: no stopwords, no bare one- or two-digit
+    numbers ("world war 2", "persepolis 2") and, when anything else describes the book (or a
+    filter does), none of the words about the person or occasion (`REQUEST_WORDS`)."""
+    raw = [w for w in tokens(text) if not (w.isdigit() and len(w) <= 2)]
+    words = [term(w) for w in raw if term(w) not in STOPWORDS]
+    content = [
+        term(w)
+        for w in tokens(_LOVE_VERB.sub(" ", text))
+        if w not in REQUEST_WORDS and term(w) not in STOPWORDS and not (w.isdigit() and len(w) <= 2)
+    ]
+    return content if content or described else words
+
+
+def _title_phrase(title: str) -> str:
+    """A title as words without a leading article ("the hobbit" -> "hobbit")."""
+    words = tokens(title)
+    if len(words) > 1 and words[0] in ("the", "a", "an"):
+        words = words[1:]
+    return " ".join(words)
+
+
 def quality(books: Sequence[Book]) -> np.ndarray:
     """A 0-1 prior per book: half Bayesian-average rating, half log popularity."""
     if not books:
@@ -643,6 +825,8 @@ def quality(books: Sequence[Book]) -> np.ndarray:
 
 
 def _fields(book: Book) -> list[tuple[str, float]]:
+    """Weighted words of a book. Topic shelves (`TOPIC_SHELVES`) are also indexed as whole
+    labels ("#world war ii")."""
     words: list[tuple[str, float]] = []
     parts = {
         "title": book.title,
@@ -654,26 +838,44 @@ def _fields(book: Book) -> list[tuple[str, float]]:
     }
     for field, text in parts.items():
         words += [(w, FIELD_WEIGHTS[field]) for w in terms(text) if w not in STOPWORDS]
+    words += [(f"#{t}", FIELD_WEIGHTS["genres"]) for t in book.tags if t in _TOPIC_LABELS]
     return words
 
 
-def _tfidf(documents: list[list[tuple[str, float]]]) -> tuple[dict[str, int], sparse.csr_matrix]:
-    """Vocabulary and the L2-normalised TF-IDF matrix (one row per book) with field weights."""
+def _title_words(book: Book) -> list[tuple[str, float]]:
+    return [(w, FIELD_WEIGHTS["title"]) for w in terms(book.title) if w not in STOPWORDS]
+
+
+def _tfidf(
+    documents: list[list[tuple[str, float]]], titles: list[list[tuple[str, float]]]
+) -> tuple[dict[str, int], sparse.csr_matrix, sparse.csr_matrix]:
+    """Vocabulary, the L2-normalised TF-IDF matrix (one row per book) with field weights, and
+    the part of it that comes from each book's title (`titles`, scaled by the same norms)."""
     vocabulary = {w: i for i, w in enumerate(sorted({w for doc in documents for w, _ in doc}))}
-    data, rows, columns = [], [], []
-    for row, doc in enumerate(documents):
-        weights: dict[int, float] = defaultdict(float)
-        for word, weight in doc:
-            weights[vocabulary[word]] += weight
-        rows += [row] * len(weights)
-        columns += list(weights)
-        data += list(weights.values())
-    matrix = sparse.csr_matrix(
-        (np.asarray(data, dtype=float), (rows, columns)), shape=(len(documents), len(vocabulary))
-    )
+
+    def counts(docs: list[list[tuple[str, float]]]) -> sparse.csr_matrix:
+        data, rows, columns = [], [], []
+        for row, doc in enumerate(docs):
+            weights: dict[int, float] = defaultdict(float)
+            for word, weight in doc:
+                weights[vocabulary[word]] += weight
+            rows += [row] * len(weights)
+            columns += list(weights)
+            data += list(weights.values())
+        return sparse.csr_matrix(
+            (np.asarray(data, dtype=float), (rows, columns)), shape=(len(docs), len(vocabulary))
+        )
+
+    matrix = counts(documents)
     frequency = np.bincount(matrix.indices, minlength=len(vocabulary))
-    idf = np.log((1 + len(documents)) / (1 + frequency)) + 1
-    return vocabulary, _normalise_rows(matrix @ sparse.diags(idf))
+    idf = sparse.diags(np.log((1 + len(documents)) / (1 + frequency)) + 1)
+    weighted = sparse.csr_matrix(matrix @ idf)
+    scale = sparse.diags(_inverse_norms(weighted))
+    return (
+        vocabulary,
+        sparse.csr_matrix(scale @ weighted),
+        sparse.csr_matrix(scale @ counts(titles) @ idf),
+    )
 
 
 def _shelf_matrix(books: Sequence[Book]) -> sparse.csr_matrix:
@@ -696,9 +898,12 @@ def _shelf_matrix(books: Sequence[Book]) -> sparse.csr_matrix:
 
 def _normalise_rows(matrix: sparse.spmatrix) -> sparse.csr_matrix:
     matrix = sparse.csr_matrix(matrix)
+    return sparse.csr_matrix(sparse.diags(_inverse_norms(matrix)) @ matrix)
+
+
+def _inverse_norms(matrix: sparse.csr_matrix) -> np.ndarray:
     norms = np.sqrt(np.asarray(matrix.multiply(matrix).sum(axis=1)).ravel())
-    scale = np.divide(1.0, norms, out=np.zeros_like(norms), where=norms > 0)
-    return sparse.csr_matrix(sparse.diags(scale) @ matrix)
+    return np.divide(1.0, norms, out=np.zeros_like(norms), where=norms > 0)
 
 
 def _join(names: Sequence[str]) -> str:

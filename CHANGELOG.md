@@ -109,6 +109,19 @@ All notable changes to Curio are recorded here. The format follows
   where it also beats remembered section filters. A companion ("dinner with my wife") does
   not set it. Previously such requests could get a women's outfit and a "from the best
   match" note.
+- Book search matches the topic of a request, not its phrasing. "A gift for my mom who loves
+  gardening" returned The Girl with All the Gifts and The Five Love Languages; "for a 10 year
+  old who loves dragons" love stories and The Girl with the Dragon Tattoo; "world war 2"
+  Night World, No. 2 and Persepolis 2; "funny books for a long flight" six titles with
+  "Long". Words about the person or occasion (`REQUEST_WORDS`: gift, mom, loves, year old,
+  long, flight…) are dropped when anything else describes the book, bare one- or two-digit
+  numbers always are, and a title counts (and earns "Title matches") only when it matches two
+  query words or the query names the whole title. A reader's age picks the Children's (up to
+  12) or Young adult (up to 17) genre, "kid" means Children's, "world war 2"/"wwii"/"second
+  world war" match the readers' WWII shelves, and "gardening" also matches botany and farming
+  shelves. Results matched only in the description now say so ("Description mentions …")
+  instead of "Loved by readers". Golden-query tests on a small catalog and on the real one
+  (E2E). An empty neighbour file no longer crashes the recommender.
 
 ### Security
 
