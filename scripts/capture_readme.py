@@ -9,7 +9,8 @@ the scripted stub in tests/e2e/llm_stub.py was used:
     uv run streamlit run src/clothes_recommender/ui.py
     uv run python -m scripts.capture_readme --out docs/screenshots
 
-`--only books` refreshes just the book screenshots, `--only outfit` the outfit builder.
+`--only books` refreshes just the book screenshots, `--only outfit` the outfit builder and
+`--only pairing` the book → cocktail pairing (books and cocktails both prepared).
 Example customer 3 is used for the feed; its default picks all have photos.
 """
 
@@ -27,7 +28,7 @@ parser.add_argument("--executable-path", help="Chromium binary (default: Playwri
 parser.add_argument(
     "--only",
     nargs="+",
-    choices=["fashion", "cocktails", "books", "outfit", "phone"],
+    choices=["fashion", "cocktails", "books", "outfit", "pairing", "phone"],
     help="Capture only these groups (default: all). Books need scripts.prepare_books.",
 )
 ARGS = parser.parse_args()
@@ -279,6 +280,26 @@ def outfit(b) -> None:
     save(p, "curio-outfit")
 
 
+def pairing(b) -> None:
+    """Book → cocktail pairing in the book dialog: The Great Gatsby's drinks and reasons."""
+    p = desk(b, 1150)
+    p.goto(f"{UI}/books")
+    settle(p)
+    p.get_by_label("Describe a book").fill("The Great Gatsby")
+    p.get_by_role("button", name="Find books").click()
+    settle(p)
+    p.locator('[class*="st-key-book_card_search_"]').first.get_by_role(
+        "button", name="View The Great Gatsby"
+    ).click()
+    settle(p)
+    dialog = p.get_by_role("dialog")
+    dialog.get_by_role("button", name="Pair a drink").click()
+    settle(p)
+    dialog.locator(".st-key-book_pairing").evaluate("el => el.scrollIntoView({block: 'end'})")
+    p.wait_for_timeout(500)
+    save(p, "curio-pairing")
+
+
 def phone(b) -> None:
     """Home and feed on a phone."""
     # Phone: home and feed.
@@ -298,6 +319,7 @@ GROUPS = {
     "cocktails": cocktails,
     "books": books,
     "outfit": outfit,
+    "pairing": pairing,
     "phone": phone,
 }
 

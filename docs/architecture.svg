@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title>Curio architecture</title>
-  <desc>Streamlit UI and API clients call a FastAPI service. A shared agent engine plans, calls policy-gated tools from per-domain toolkits, asks for human approval before state changes, and verifies answers against tool evidence. Each domain toolkit is backed by its own recommenders and data.</desc>
+  <desc>Streamlit UI and API clients call a FastAPI service. A shared agent engine plans, calls policy-gated tools from per-domain toolkits, asks for human approval before state changes, and verifies answers against tool evidence. Each domain toolkit is backed by its own recommenders and data. A cross-domain pairing links Books to Cocktails: it pours drinks for a book or a reading list.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#8a7f72"/>
@@ -20,7 +20,7 @@
     </style>
   </defs>
 
-  <rect x="0" y="0" width="1200" height="660" rx="18" fill="#faf8f4"/>
+  <rect x="0" y="0" width="1200" height="700" rx="18" fill="#faf8f4"/>
   <text x="40" y="48" font-family="Georgia, serif" font-size="30" fill="#2b2a27">Curio</text>
   <text x="122" y="47" class="tag">ARCHITECTURE</text>
   <text x="40" y="74" class="s">One agent engine, many recommendation domains. Each answer is planned, acted on through gated tools, approved by a human when it changes state, and verified.</text>
@@ -114,9 +114,14 @@
   <text x="818" y="456" class="h">Books</text>
   <text x="818" y="478" class="s">goodbooks-10k · 10,000 books with reader ratings</text>
   <text x="818" y="504" class="t">Tools: search, inspect, readers also liked,</text>
-  <text x="818" y="522" class="t">more by this author, reading list, tastes</text>
+  <text x="818" y="522" class="t">more by author, pair a drink, reading list, tastes</text>
   <text x="818" y="550" class="t">TF-IDF over titles, authors and tags</text>
   <text x="818" y="568" class="t">Item-item collaborative filtering</text>
   <text x="818" y="586" class="t">from reader ratings</text>
   <text x="818" y="610" class="s">New domain = one toolkit, no engine changes</text>
+
+  <!-- Cross-domain link: Books → Cocktails pairing -->
+  <path d="M980 628 V658 H600 V628" class="line" marker-end="url(#arrow)"/>
+  <rect x="675" y="645" width="230" height="26" rx="13" class="pill"/>
+  <text x="790" y="662" text-anchor="middle" class="pilltext">Pairing · book → cocktail, explained</text>
 </svg>
