@@ -4,6 +4,42 @@ All notable changes to Curio are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **One-command quick start** without the 3.5 GB H&M download:
+  `docker compose --profile demo up --build`, or `scripts/quickstart.sh` with uv and no
+  Docker. Both prepare the cocktail recipes on the first run and start the API and the UI.
+  Chat works when `LLM_*` is set; otherwise the app says how to enable it. An optional
+  `ollama` compose profile runs a local model for the demo.
+- **Domain registry** (`services.DOMAINS`): every domain is optional at serving time. The API
+  starts with any subset of prepared domains, including none; adding a domain is one
+  `DomainSpec` entry plus its runtime, endpoints and one UI `DomainView`.
+- `/health` adds `fashion_enabled`, `llm_configured` and `domains`; each `/domains` entry
+  adds `item_count` and a `hint` (how to prepare the domain, or how to enable its chat).
+- `ENABLED_DOMAINS` setting (comma-separated ids) to serve only some prepared domains.
+- The UI lists only served domains in the header switch, opens on the first one, marks the
+  others "not available" with the server's hint, registers no pages for them, and shows a
+  setup page when the API serves no domain.
+- Tests for fashion-less serving (services, API, UI), a quick-start browser scenario in the
+  E2E suite, and a CI step that starts the real API with only the recipes.
+
+### Changed
+
+- Fashion endpoints return 503 with how to prepare the H&M data when fashion is not served
+  (previously the API could not start without it).
+- Docker: the full fashion stack is now the `fashion` profile
+  (`docker compose --profile fashion up --build`); plain `docker compose up` starts nothing.
+  The image creates `/app/data` for its non-root user.
+- `Services` holds the loaded domains (`services.fashion`, `services.cocktails`) instead of
+  flat fashion and cocktail fields.
+
+### Known limitations
+
+- The first Docker build or `uv sync` still installs PyTorch, which only fashion uses.
+- The Ollama profile was checked with `docker compose config` only, not run against a model.
+
 ## [1.0.0] - 2026-11-04
 
 Curio now covers two domains, fashion and cocktails, with one agent engine.
@@ -111,5 +147,6 @@ tool-using shopping assistant with a conversation home and floating panel. Earli
 development is recorded in [docs/engineering-workflow.md](docs/engineering-workflow.md)
 and [docs/session-handoff.md](docs/session-handoff.md).
 
+[Unreleased]: https://github.com/yo1am1/curio/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/yo1am1/curio/compare/release/fashion-mvp...release/v1.0
 [0.2.0]: https://github.com/yo1am1/curio/tree/release/fashion-mvp

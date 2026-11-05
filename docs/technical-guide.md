@@ -2,9 +2,10 @@
 
 [Back to the product overview](../README.md).
 
-Curio 1.0 has two domains, fashion and cocktails, behind one API, one Streamlit UI and
+Curio has two domains, fashion and cocktails, behind one API, one Streamlit UI and
 one agent engine. Fashion needs the prepared H&M data and image index; cocktails need only
-`data/cocktails.parquet`. Either can run without the other.
+`data/cocktails.parquet`. Every domain is optional at serving time: the API serves whichever
+domains are prepared, so the [quick start](#quick-start) runs with cocktails alone.
 
 ## Fashion engine
 
@@ -207,7 +208,93 @@ scripts/prepare_cocktails.py # Download the pinned recipe CSV, write data/cockta
 scripts/take_screenshots.py # Development captures of every page with Playwright
 ```
 
+### Domain registry
+
+Each domain is one `DomainSpec` in `services.DOMAINS` (display order): its id, label, a
+setup hint and a loader. `build_services` runs every loader; a loader returns `None` while
+its data is missing (fashion: `products`, `users` and `purchases.parquet`; cocktails:
+`cocktails.parquet`), so that domain is left out and the API still starts. Data that is
+present but unusable fails startup for fashion (for example an index built with another
+encoder) and only disables cocktails. A loaded domain is a runtime (`FashionServices`,
+`CocktailServices`) with an `assistant`, `item_count()` and `close()`; `Services.domains`
+maps ids to the loaded runtimes, and both domains share one chat model and one approval
+signer (`AgentKit`).
+
+From that registry, without per-domain code:
+
+- `GET /health` and `GET /domains` list every registered domain with `enabled`,
+  `chat_enabled`, `item_count` and a `hint` (how to prepare a missing domain, or how to enable
+  chat for a served one).
+- A domain's endpoints answer 503 with its setup hint when it is not served, through one
+  FastAPI dependency per domain (`FashionDep`, `CocktailsDep`).
+- `POST /chat` routes by `ChatRequest.domain` to that runtime's assistant.
+
+The UI mirrors this with `DOMAIN_VIEWS` in `ui.py`: one `DomainView` per domain (switch
+label, copy, session-state keys, grounding badges, approval tools, pages, session panel,
+chat-request fields, footer). It reads availability from `/health`, registers only the
+pages of served domains, opens on the first served domain, and shows a setup page when the
+API serves none. A domain the server does not serve appears beside the switch as "… is not
+available", with the server's hint.
+
+`ENABLED_DOMAINS` (comma-separated ids, e.g. `cocktails`) limits loading to those domains
+even when other data is present; an unknown id fails startup. Unset, every prepared domain
+loads.
+
+To add a domain (say, books): write its catalog and recommender, a runtime dataclass and a
+loader in `services.py`, append a `DomainSpec` to `DOMAINS`, add its id to
+`chat.schemas.Domain`, add its endpoints with a `BooksDep` dependency, and add a
+`DomainView` with its pages to `DOMAIN_VIEWS`. Its agent is a `Toolkit` for the shared
+engine ([agent architecture](agent-architecture.md)).
+
 ## Quick start
+
+Two equivalent ways to run Curio with the cocktail domain, without the H&M download:
+
+```bash
+docker compose --profile demo up --build   # Docker
+scripts/quickstart.sh                      # uv, no Docker
+```
+
+On the first run both download the pinned recipe file (about 400 KB, SHA-256 checked) and
+then start the API (port 8000) and the UI (port 8501); later runs reuse the recipes. Expect
+a few minutes for the first Docker build or `uv sync` (PyTorch is a dependency of the
+fashion engine even though the demo never loads it), then seconds to start.
+
+- **Docker** (`demo` profile): `demo-data` prepares the recipes into the `demo-data`
+  volume (nothing is written to `./data`), `demo-api` serves them with
+  `ENABLED_DOMAINS=cocktails` (it never loads CLIP or opens Qdrant), and `demo-ui` starts
+  once the API is healthy. `docker compose --profile demo down -v` removes the volume.
+- **`scripts/quickstart.sh`**: runs `uv sync --locked --extra ui --extra anthropic`, writes
+  `data/cocktails.parquet` if it is missing, starts the API in the background, prints which
+  domains and chat are available, then runs the UI; Ctrl+C stops both. `ENABLED_DOMAINS`
+  (default `cocktails`), `API_PORT` and `UI_PORT` change what it serves and where. With
+  fashion prepared, `ENABLED_DOMAINS=fashion,cocktails scripts/quickstart.sh` serves both.
+
+Chat works when `LLM_*` is set in `.env` (see [LLM configuration](#llm-configuration));
+both ways read it. Without it, the assistant says chat is unavailable and how to enable
+it, and every other page works.
+
+**Local LLM with Ollama (optional).** Add the `ollama` profile to the demo and point the
+LLM settings in `.env` at it:
+
+```bash
+LLM_PROVIDER=openai
+LLM_BASE_URL=http://ollama:11434/v1
+LLM_API_KEY=ollama
+LLM_MODEL=qwen2.5:3b          # any Ollama model with tool calling
+```
+
+```bash
+docker compose --profile demo --profile ollama up --build
+```
+
+`ollama-pull` downloads `LLM_MODEL` into the `ollama-models` volume (about 2 GB for
+`qwen2.5:3b`) and the API starts after it. Small local models follow the tool protocol
+less reliably than hosted ones; the grounding check still replaces unverified answers with
+catalog facts. For `scripts/quickstart.sh`, run Ollama yourself and use
+`LLM_BASE_URL=http://localhost:11434/v1`.
+
+## Fashion data
 
 Requires [uv](https://docs.astral.sh/uv/) and Python 3.13.
 
@@ -266,9 +353,11 @@ starting the API (or point everything at a Qdrant server).
 
 ### Docker
 
+The full stack (Qdrant server, API and UI over `./data`) is the `fashion` profile:
+
 ```bash
-docker compose up --build
-docker compose exec api python -m scripts.build_index --limit 3000
+docker compose --profile fashion up --build
+docker compose --profile fashion exec api python -m scripts.build_index --limit 3000
 ```
 
 The image includes the `ui` and `anthropic` extras, so `LLM_PROVIDER=anthropic` works in
@@ -278,15 +367,15 @@ then restart the API so it loads the file:
 
 ```bash
 docker compose run --rm --user "$(id -u):$(id -g)" prepare-cocktails
-docker compose restart api
+docker compose --profile fashion restart api
 ```
 
 `--user` makes the written file belong to you. Running
 `uv run python -m scripts.prepare_cocktails` on the host and then
-`docker compose restart api` works too. The CLIP model is downloaded once into the
+`docker compose --profile fashion restart api` works too. The CLIP model is downloaded once into the
 `hf-cache` volume; the image creates that directory for its non-root user.
 
-### LLM configuration
+## LLM configuration
 
 The assistant works with any LangChain chat provider, configured only through `.env`:
 
@@ -310,8 +399,8 @@ string when running several API workers, so approval proposals verify on any wor
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/health` | Index and catalog sizes, whether chat and ranking are enabled, `cocktails_enabled` and `cocktail_count` |
-| GET | `/domains` | `fashion` and `cocktails`, each with `enabled` and `chat_enabled` |
+| GET | `/health` | Index and catalog sizes, whether chat and ranking are enabled, `fashion_enabled`, `cocktails_enabled`, `cocktail_count`, `llm_configured`, and `domains` (as below) |
+| GET | `/domains` | Every registered domain in display order: `id`, `label`, `enabled`, `chat_enabled`, `item_count`, `hint` |
 | GET | `/products/{id}` | Product details |
 | GET | `/products/{id}/graph` | Bounded product neighborhood: nodes and edges |
 | GET | `/products/{id}/related?kind=complement\|alternative` | Co-purchased complements or higher-priced alternatives |
@@ -334,7 +423,11 @@ string when running several API workers, so approval proposals verify on any wor
 | GET | `/evaluation` | Offline evaluation results saved by `scripts.evaluate --output` |
 
 Every `/cocktails` endpoint returns 503 until `scripts.prepare_cocktails` has been run, and
-`/chat` returns 503 when the requested domain's assistant is unavailable. The API title and
+every fashion endpoint (`/products`, `/sections`, `/search`, `/users`, `/demo/customers`,
+`/evaluation`) returns 503 with how to prepare the H&M data when fashion is not served.
+`/chat` returns 503 when the requested domain is not served or has no assistant (no LLM);
+the detail says which. The flat `chat_enabled`, `ranking_enabled` and catalog counts in
+`/health` describe fashion and read `false`/`0` without it. The API title and
 version shown at `http://localhost:8000/docs` come from the installed package metadata.
 
 ## Offline evaluation
@@ -479,7 +572,13 @@ reaches it through `LLM_PROVIDER=openai` and `LLM_BASE_URL`, so the real provide
 over HTTP while replies stay deterministic and need no key. It does not measure the
 quality of a real model's answers.
 
-Prepare the data as in the quick start (`prepare_data`, `fetch_photos`, `build_index`,
+`test_quickstart_e2e.py` starts a second API and UI the way the quick start does: a data
+folder with only `cocktails.parquet`, no image index, no LLM and no `.env`. It checks that
+`/health` and `/domains` report fashion as not prepared, that fashion endpoints answer 503,
+and that the UI opens on cocktails, says how to enable chat and has no fashion pages. It
+opens no Qdrant index, so it runs beside the full-data API.
+
+Prepare the data as in [Fashion data](#fashion-data) (`prepare_data`, `fetch_photos`, `build_index`,
 `fetch_query_photos`, `train_ranker`, `evaluate`, `prepare_cocktails`), stop any API that
 holds the embedded Qdrant index, then run `uv run pytest -m e2e tests/e2e`. Screenshots of
 each step go to `e2e-artifacts/` (override with `E2E_ARTIFACTS`); `E2E_DATA_DIR`,
@@ -487,12 +586,22 @@ each step go to `e2e-artifacts/` (override with `E2E_ARTIFACTS`); `E2E_DATA_DIR`
 `uv run pytest` run excludes these tests.
 
 CI (`.github/workflows/ci.yml`) runs `uv sync --locked`, Ruff, `scripts.prepare_cocktails`
-(so the probes on the real recipe catalog run instead of skipping), the offline test suite
-and `docker compose config`. It needs no secrets.
+(so the probes on the real recipe catalog run instead of skipping), the offline test suite,
+a startup check of the real API with only the recipes (the runner has no H&M data: `/health`
+must report cocktails served and fashion not, `/products/1` must be 503 and recipe search
+200) and `docker compose config` for every profile. It needs no secrets.
+
+The offline suite covers fashion-less serving in `tests/test_optional_domains.py` (real
+`Settings` over a temporary data folder; CLIP and Qdrant fail the test if touched) and the
+UI's cocktails-only, no-domain and legacy-API cases in `tests/test_ui_cocktails.py`.
 
 ### Release scope and compatibility
 
 Version 1.0.0 covers fashion and cocktails; see the [changelog](../CHANGELOG.md). The
 installable distribution is `curio-recommendations`; the `clothes_recommender` import path
 remains stable for existing scripts. `ChatRequest.domain` defaults to `fashion`, so fashion
-clients written for 0.2.0 keep working.
+clients written for 0.2.0 keep working. Unreleased changes: `/health` and `/domains` only
+gain fields; the UI still reads an older API's `/health`. In Docker the full stack now
+starts with `docker compose --profile fashion up` (plain `docker compose up` selects no
+service), and Python code that read fields from `Services` reads them from
+`services.fashion` / `services.cocktails`.

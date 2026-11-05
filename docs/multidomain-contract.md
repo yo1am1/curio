@@ -125,11 +125,31 @@ been returned by tools (or be in history/shortlist); ingredient amounts must app
 evidence recipes. Never claim allergen safety, medical effects or that alcohol is safe; label
 alcohol status; no encouragement of excessive drinking.
 
+## Serving: every domain is optional
+
+`services.DOMAINS` is the registry (display order): one `DomainSpec(id, label, setup_hint,
+runtime_type, load)` per domain. `load(settings, kit)` returns the domain's runtime, or `None`
+while its data is missing; a runtime has `assistant: AgentEngine | None`, `item_count()` and
+`close()` (`FashionServices`, `CocktailServices`). `Services.domains` maps ids to the loaded
+runtimes; `services.fashion` / `services.cocktails` are typed shortcuts. Fashion is served when
+`products.parquet`, `users.parquet` and `purchases.parquet` exist; cocktails when
+`cocktails.parquet` loads. `ENABLED_DOMAINS` (comma-separated ids) limits what is loaded; an
+unknown id is a startup error. Adding a domain: one `DomainSpec`, its id in
+`chat.schemas.Domain`, its endpoints behind a dependency like `FashionDep`, and one `DomainView`
+in `ui.DOMAIN_VIEWS`.
+
 ## API
 
-- `GET /health` adds `cocktails_enabled: bool` and `cocktail_count: int`.
-- `GET /domains` -> `[{"id": "fashion", "label": "Fashion", "enabled": bool, "chat_enabled": bool},
-  {"id": "cocktails", "label": "Cocktails", "enabled": bool, "chat_enabled": bool}]`.
+- `GET /health` adds `cocktails_enabled: bool` and `cocktail_count: int`; since the domain
+  registry also `fashion_enabled: bool`, `llm_configured: bool` and `domains` (the `/domains`
+  list). The flat fashion fields (`indexed_products`, `catalog_products`, `chat_enabled`,
+  `ranking_enabled`) read `0`/`false` when fashion is not served.
+- `GET /domains` -> one entry per registered domain, in display order:
+  `{"id": "fashion", "label": "Fashion", "enabled": bool, "chat_enabled": bool,
+  "item_count": int, "hint": str | null}`, then the same for `cocktails`. `hint` says how to
+  prepare a domain that is not served, or how to enable chat for a served one without it.
+- Fashion endpoints (`/products/*`, `/sections`, `/search/*`, `/users*`, `/demo/customers`,
+  `/evaluation`) return 503 with the fashion setup hint when fashion is not served.
 - `GET /cocktails/ingredients` -> `list[str]`; `GET /cocktails/categories` -> `list[str]`.
 - `GET /cocktails/{id}` -> `Cocktail` (404 unknown).
 - `POST /cocktails/search` body `CocktailQuery` -> `list[CocktailHit]`.
@@ -141,7 +161,8 @@ alcohol status; no encouragement of excessive drinking.
 - `POST /chat` and `/chat/stream`: `ChatRequest.domain: Literal["fashion", "cocktails"] = "fashion"`.
   Cocktail context fields on `TurnContext`: `cocktail_preferences: CocktailPreferences`,
   `cocktail_shortlist: list[int]` (max 20). `auto_approve` also accepts `SaveCocktails`,
-  `RememberTastes`. 503 when the requested domain's agent is unavailable.
+  `RememberTastes`. 503 when the requested domain is not served (its setup hint) or has no
+  agent (how to enable chat).
 - `AssistantReply` adds `domain` and `cocktails: list[Cocktail]` (empty for fashion; `products`
   empty for cocktails). `intent` stays (cocktail turns fill `SearchIntent(query=message)`).
 - `AppliedEffect.kind` adds `"cocktail_shortlist"` (ids in `drink_ids: list[int]`) and
@@ -150,7 +171,11 @@ alcohol status; no encouragement of excessive drinking.
 
 ## UI
 
-- A domain switch (Fashion / Cocktails) in the header, stored in `st.session_state["domain"]`.
+- A domain switch in the header, stored in `st.session_state["domain"]`, listing the domains
+  the API serves (from `/health` `domains`); it is disabled with one domain, each domain that
+  is not served shows "… is not available" with the server's hint, the app opens on the first
+  served domain, and a setup page replaces the app when none is served. Pages of a domain that
+  is not served are not registered.
 - Navigation per domain. Fashion: Ask Curio, Fashion, Discover, Product connections.
   Cocktails: Ask Curio, Cocktails (`/cocktails`: search + "What can I make?" pantry + recipe dialog
   with similar drinks).

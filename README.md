@@ -108,28 +108,43 @@ Model quality remains available at `/quality`, outside shopping navigation.
 
 ## Run locally
 
-Requires Python 3.13 and [uv](https://docs.astral.sh/uv/).
+### Quick start
+
+One command gives you a working Curio with the cocktail domain, without the 3.5 GB H&M
+download. With Docker:
+
+```bash
+docker compose --profile demo up --build
+```
+
+Or with [uv](https://docs.astral.sh/uv/) and no Docker:
+
+```bash
+scripts/quickstart.sh
+```
+
+Both prepare the cocktail recipes on the first run (a checksum-verified ~400 KB download)
+and start the API and the UI. Open http://localhost:8501. Recipe search, similar drinks and
+"What can I make?" work straight away. Chat needs an LLM: copy `.env.example` to `.env` and
+set `LLM_MODEL` (plus `LLM_API_KEY` / `LLM_BASE_URL`); until then the app says how to
+enable it. The Docker demo can also run a local model with Ollama
+([details](docs/technical-guide.md#quick-start)).
+
+### Fashion
+
+Fashion is opt-in, because its data is large: [prepare the H&M data and image
+index](docs/technical-guide.md#fashion-data), then run the full stack:
 
 ```bash
 uv sync --all-extras
 cp .env.example .env
-uv run python -m scripts.prepare_cocktails     # cocktail recipes: ~400 KB download
-```
-
-`prepare_cocktails` downloads a pinned recipe file, checks its SHA-256 and writes
-`data/cocktails.parquet`. Without that file the API serves fashion only and the
-Cocktails switch is disabled.
-For fashion, [prepare the H&M data and image index](docs/technical-guide.md#quick-start).
-Then run these commands in separate terminals:
-
-```bash
 uv run uvicorn clothes_recommender.api:create_app --factory
-uv run streamlit run src/clothes_recommender/ui.py
+uv run streamlit run src/clothes_recommender/ui.py     # in a second terminal
 ```
 
-Open http://localhost:8501. Configure an LLM provider in `.env` to enable chat; search,
-recommendations and the cocktail pages work without one.
-[Docker](docs/technical-guide.md#docker) is also supported.
+With Docker, `docker compose --profile fashion up --build` starts it. Every domain is
+optional: the API serves whichever domains are prepared, and the UI opens on the first one
+available. Search, recommendations and the cocktail pages work without an LLM.
 
 [Data, architecture, Docker and API reference](docs/technical-guide.md) ·
 [LLM setup](docs/technical-guide.md#llm-configuration) ·

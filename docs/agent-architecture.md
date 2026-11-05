@@ -21,8 +21,14 @@ fields.
 The engine owns everything shared: the tool-call and time budgets, policy enforcement,
 signed proposals and resume, clarifying questions, merging approved effects into the
 turn, the self-correction step, the streamed trace and the error mapping. `POST /chat`
-picks the assistant by `ChatRequest.domain` (default `fashion`). Both assistants use the
-same LLM configuration.
+picks the assistant by `ChatRequest.domain` (default `fashion`) from the loaded domains in
+the domain registry (`services.DOMAINS`, see the
+[technical guide](technical-guide.md#domain-registry)). Every domain is optional: a request
+for a domain the server does not serve gets 503 with how to prepare it, and a served domain
+without an LLM gets 503 saying how to enable chat. Both assistants are built once at startup
+from one shared `AgentKit` (the chat model and the approval signer), so a proposal is bound
+to its tool's domain but verifies on either. A new domain's assistant is a `Toolkit` for
+the same engine, built by its loader from that kit.
 
 ## One turn
 
