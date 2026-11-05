@@ -2,8 +2,8 @@
 
 Shared interfaces for the cocktail domain (v1.0), the book domain and the fashion outfit
 builder (1.1.0). Every teammate codes against this file; change it only together with
-every consumer. The [books](#books) and [fashion outfits](#fashion-outfits) sections follow
-the cocktail sections.
+every consumer. The [books](#books), [fashion outfits](#fashion-outfits) and
+[book → cocktail pairing](#book--cocktail-pairing) sections follow the cocktail sections.
 
 ## Data
 
@@ -410,3 +410,67 @@ outfit's `amounts()`, for the outfit built this turn and the one the client sent
   products outside the outfit. On the latest turn each filled slot has "Swap" and "Cheaper"
   and the card has "Save outfit"; all three send follow-up messages to the agent.
 - Fashion starters add "Outfit for an occasion".
+
+## Book → cocktail pairing
+
+A cross-domain feature over the books and cocktails domains; nothing existing changes shape
+except the additions below.
+
+### Python interfaces (`clothes_recommender.pairings`)
+
+- `domain.py`: `PairingRequest(book_id | book_ids (≤ 20), liked_genres, avoided_genres (≤ 10
+  `GenreTerm`s each), alcohol_free, cocktail_preferences: CocktailPreferences | None,
+  exclude_drink_ids (≤ 15), seed (0-10,000), top_k (1-5))`, extra fields forbidden, and at
+  least a book or a liked genre. `BookPairing(profile: FlavourProfile, pairings:
+  list[Pairing], seed, sets, note)`; `FlavourProfile(source, themes: list[ThemeWeight(id,
+  label, style, weight, evidence, books)], summary, alcohol_free, alcohol_free_reason,
+  book_ids)`; `Pairing(cocktail, score, theme, reasons (1-3))`.
+- `themes.py`: `Theme(id, label, style, terms, soft_style, soft_terms, genres, shelves,
+  words, signatures, glasses, setting, strength)`, `THEMES` (24 themes plus a fallback) and
+  `LORE` (author, drink, text). Every signature, glass and lore drink is a real catalog name
+  (checked on the real data).
+- `pairer.py`: `BookCocktailPairer(books: BookCatalog, cocktails: Iterable[Cocktail],
+  recommender: CocktailRecommender, *, table=THEMES, lore=LORE)`; `pair(request) ->
+  BookPairing` raises `UnknownBookError` (a `book_id` not in the catalog) or `PairingError`
+  (no known book or genre); `themes_of(book, avoided_genres) -> dict[str, float]`.
+- `CocktailRecommender` adds `term_scores(weights) -> {drink_id: cosine}`,
+  `ingredients_using(drink_id, words) -> [ingredient names]`, `contains_any(drink_id,
+  ingredients) -> bool` and `ingredient_similarity(a, b) -> float`.
+
+Rules: alcohol-free (only `Cocktail.alcohol_free`, never "Optional alcohol") for a children's
+or young-adult book by genre or reader shelf, `alcohol_free`, or an alcohol-free
+`cocktail_preferences`; never shots, slammers, flaming drinks, overproof spirits or crude
+names; avoided ingredients excluded; avoided genres never drive a profile; deterministic,
+ties by the lower drink ID; `seed` selects set `seed mod sets`.
+
+### Serving and API
+
+- `BookServices.pairing: BookCocktailPairer | None` and `Services.pairing`, set by
+  `services.link_domains` when books and cocktails are both loaded; the book assistant gets
+  PairCocktail through `BookAssistant.attach_pairing(pairer, cocktails)`.
+- `POST /pairings/book-cocktail` body `PairingRequest` -> `BookPairing`; 404 unknown book,
+  422 nothing known to pair or an invalid body, 503 with `BOOKS_MISSING` or
+  `COCKTAILS_MISSING` when either domain is not served.
+
+### Agent
+
+| Tool | Policy | Args |
+|---|---|---|
+| PairCocktail | read | exactly one of book_id, title (≤ 200), use_reading_list; alcohol_free; exclude_drink_ids (≤ 15) |
+
+The book agent reads `TurnContext.cocktail_preferences` for pairings. `AssistantReply.pairing:
+BookPairing | None`, with its drinks also in `AssistantReply.cocktails` for a book reply.
+Answers cite drinks as "drink #N" and bold names; `PairedDrinkCheck` verifies them against
+this turn's PairCocktail result only. `Toolkit.fallback(items, extras)` receives the turn's
+extras.
+
+### UI
+
+- `pairing_available()` when `/health` reports books and cocktails enabled. The book dialog's
+  "Pair a drink" toggles `pair_open_<book_id>`; each pairing panel keeps
+  `pair_seed_<key>` and `pair_alcohol_free_<key>`. "Recipe" inside a dialog sets
+  `open_drink` and switches to the Cocktails page (`page_routes` holds the registered
+  pages), which opens the recipe dialog.
+- Books page: "Your reading list's cocktail" (`pairing_reading_list`) when the reading list
+  or liked genres are set. Book chat sends `cocktail_preferences`, stores `pairing` on the
+  turn and renders it as a card; the starters add "Pair a cocktail with my reading list".

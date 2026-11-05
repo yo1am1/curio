@@ -158,6 +158,25 @@ page count. Probes on the real data, run with `prepare_books` output:
 - "cosy mystery", "funny fantasy" and "sci-fi" return cozy mysteries, Pratchett and Douglas
   Adams, and Ender's Game, The Martian and 1984.
 
+## Book → cocktail pairing
+
+`pairings/` pairs a book, or a reader's taste, with drinks from the recipe catalog. It is
+deterministic and offline: no model, no download, about a second to build at startup.
+
+| Step | How it works |
+|---|---|
+| Profile | A book's signals point to flavour themes (`pairings/themes.py`): each genre by rank (1.0, 0.8, 0.6, 0.5), each reader shelf by rank (0.5 fading to about 0.13) and title (0.6) or description (0.4) words such as a setting (Paris, Caribbean, Tuscany, Moscow) or an era (Jazz Age, Victorian), capped per theme. Broad themes weigh less (Classics ×0.6, literary ×0.7, historical ×0.75, adventure ×0.8). Shares below 10 % are dropped and at most four themes kept. Reader taste sums each reading-list book's shares, plus one book's worth per liked genre. |
+| Avoided genres | Their genre labels and their shelves (`books.taxonomy.GENRES`) are dropped, and a theme whose main genre is avoided (Horror for "Horror and gothic") is switched off, so an avoided genre never drives a pairing. |
+| Score | Each theme scores every recipe with the cocktail search index (`CocktailRecommender.term_scores`: TF-IDF cosine of weighted words), counted only when the recipe's ingredients or name use those words, plus a bonus for its signature drinks (most typical first) and glasses. A recipe's score is the profile-weighted sum, plus a bonus for a documented literary drink of the book's author (`LORE`: the Vesper for Ian Fleming, gin rickeys and mint juleps for F. Scott Fitzgerald, the Hemingway daiquiri and Death in the Afternoon, Chandler's gimlet). |
+| Choose | The pool is the recipes scoring at least 30 % of the best, at most four sets' worth. Sets are drawn greedily: a pick sharing a base spirit (×0.7), a theme (×0.75), a name word or most ingredient families (×0.5) with an earlier pick of its set ranks lower. `seed` picks set `seed mod sets`, so "Another pairing" is deterministic; the agent passes the drinks already shown instead. |
+| Explain | The main reason cites the book and recipe evidence: "The Big Sleep (Mystery · shelved as noir) → a bitter, spirit-forward whiskey drink: Old Fashioned (Bourbon, Angostura Bitters)", or "Your reading list leans Mystery and noir (4 of 6 books) → …". Lore leads when it chose the drink. A second theme the recipe also pours, and why it is alcohol-free, follow (at most three reasons). |
+| Responsible drinking | A book whose genres or reader shelves say children's or young adult, `alcohol_free`, or an alcohol-free `cocktail_preferences` keep only recipes marked "Non alcoholic" (alcohol-free styles then describe what is poured: "a drawing-room cup of tea", not gin). Shots, drinks named as slammers or flaming, overproof spirits and crude names are never offered; avoided ingredients are left out with search's broad matching. Pairings make no health or allergen claims. |
+
+When no allowed recipe fits (an alcohol-free profile that avoids milk, say), the result is
+empty rather than a drink without a reason. `tests/pairings/test_pairing_real_data.py`
+checks the golden cases on the real data; the E2E suite writes the top three pairings of 14
+famous books to `e2e-artifacts/pairings.json`.
+
 ## Data
 
 ### H&M data
@@ -329,6 +348,9 @@ flowchart LR
     BR --> BC[(books.parquet + book_neighbours.parquet)]
     BA --> BR
     BA --> LLM
+    API --> PR[BookCocktailPairer]
+    BA --> PR
+    PR --> BC & CR
     S --> E[CLIP encoder]
     S --> Q[(Qdrant)]
     CB --> Q
@@ -354,6 +376,7 @@ src/clothes_recommender/
 ├── outfits.py         # Outfit builder: occasion templates, budget allocation, swaps
 ├── recommenders/      # learned, repeat, content_based, collaborative, graph, popularity
 ├── cocktails/         # domain (types), catalog, recommend (search, similar, pantry)
+├── pairings/          # book → cocktail pairing: domain (types), themes, pairer
 ├── books/             # domain (types), catalog, taxonomy (genres, moods, shelves),
 │                      # recommend (search, readers also liked, because, by author)
 ├── chat/              # engine (shared agent loop), llm, intent, prompts, schemas,
@@ -417,6 +440,13 @@ fields on `TurnContext` (`book_preferences`, `book_shortlist`), its effect kinds
 `AppliedEffect` (serialized with their own fields only), and one entry each in the engine's
 `_MEMORY_EFFECTS` and `_SHORTLIST_EFFECTS` tables. The engine loop, budgets, signing,
 grounding flow and UI chat code did not change.
+
+Cross-domain features link loaded domains after loading: `link_domains` builds the
+`BookCocktailPairer` when books and cocktails are both served, stores it on `BookServices`
+(`services.pairing`) and enables the book agent's PairCocktail tool. A pairer that fails to
+build leaves both domains serving as before; `/pairings/book-cocktail` answers 503 with the
+setup hint of whichever domain is missing, and the UI shows its pairing controls only when
+`/health` reports both domains.
 
 ## Quick start
 
@@ -610,13 +640,15 @@ string when running several API workers, so approval proposals verify on any wor
 | GET | `/books/{id}` | Book details (404 for an unknown ID) |
 | GET | `/books/{id}/similar?top_k=5&other_authors_only=false` | Readers who liked this book also liked |
 | GET | `/books/{id}/by-author?top_k=5` | More by its first author |
+| POST | `/pairings/book-cocktail` | `{"book_id": 5}` or `{"book_ids": [1160, 1598], "liked_genres": [], "avoided_genres": []}`, plus `alcohol_free`, `cocktail_preferences`, `exclude_drink_ids`, `seed` (0-10,000) and `top_k` (1-5): drinks for a book or a reader's taste with `profile` (themes, summary, alcohol-free reason), `pairings` (cocktail, theme, 1-3 reasons), `sets` and `note`. 404 for an unknown book, 422 for nothing known to pair |
 | POST | `/chat` | One agent turn: `{"domain": "fashion\|cocktails\|books", "message", "history", "preferences", "shopper_id", "shortlist", "outfit", "cocktail_preferences", "cocktail_shortlist", "book_preferences", "book_shortlist", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal. `domain` defaults to `fashion`; a fashion reply carries `outfit` when the turn built or changed one |
 | POST | `/chat/stream` | The same turn as NDJSON: `step` events, then `reply` (or `error`) |
 | POST, GET | `/chat/feedback` | Rate an answer; summary of ratings and recent negative feedback |
 | GET | `/evaluation` | Offline evaluation results saved by `scripts.evaluate --output` |
 
 Every `/cocktails` endpoint returns 503 until `scripts.prepare_cocktails` has been run,
-every `/books` endpoint until `scripts.prepare_books` has, and
+every `/books` endpoint until `scripts.prepare_books` has, `/pairings/book-cocktail` until
+both have (with the missing domain's hint), and
 every fashion endpoint (`/products`, `/sections`, `/search`, `/outfits`, `/users`,
 `/demo/customers`, `/evaluation`) returns 503 with how to prepare the H&M data when fashion is not served.
 `/chat` returns 503 when the requested domain is not served or has no assistant (no LLM);
@@ -771,7 +803,15 @@ sections, the total within the budget), that a €8 wedding budget names the slo
 not fit, that swaps never exceed the budget or bring a piece back, and that the agent streams
 a step per slot with a verified total. In the browser it follows the "Outfit for an
 occasion" starter: the clarifying question, the outfit card, "Cheaper" shoes, and "Save
-outfit" narrowed to three pieces in the approval card (screenshots 36-40).
+outfit" narrowed to three pieces in the approval card (screenshots 36-40). `test_pairing_e2e.py`
+pairs 14 famous books on the real catalogs and writes their top three drinks to
+`pairings.json`; it checks that a noir mystery gets a whiskey-forward drink, that children's
+books only ever get alcohol-free drinks (every set), that The Great Gatsby gets a Jazz Age
+gin or Champagne drink, reader taste with avoided genres, and the agent's PairCocktail turn
+(verified) and an invented drink (caught, replaced by the paired drinks). In the browser it
+pairs a drink in the book dialog (another pairing, the alcohol-free toggle, the hand-off to
+the recipe), the reading-list cocktail card, the chat starter, and the dialog at phone
+width (screenshots 70-74).
 
 The chat model is `tests/e2e/llm_stub.py`, a scripted OpenAI-compatible server: the app
 reaches it through `LLM_PROVIDER=openai` and `LLM_BASE_URL`, so the real provider path runs

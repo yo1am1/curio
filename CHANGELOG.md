@@ -6,6 +6,51 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Book → cocktail pairing** ("Pour me something to read with"), cross-domain reasoning
+  between books and cocktails:
+  - `pairings` package: `BookCocktailPairer` maps a book's genres (strongest first), reader
+    shelves and title or description words (settings such as Paris or the Caribbean, eras
+    such as the Jazz Age or Victorian England) to weighted flavour themes, 24 in
+    `pairings/themes.py` (noir → bitter whiskey, classics → gin, sherry or port, romance →
+    sparkling and berry, fantasy → honey and herbs, sci-fi → blue curaçao, thrillers →
+    coffee, beach → rum and tropical fruit, cosy → toddies and cocoa, horror → absinthe and
+    blood-red, ...). It scores the 425 recipes with the cocktail search index (new
+    `CocktailRecommender.term_scores`, `ingredients_using`, `contains_any` and
+    `ingredient_similarity`), adds signature drinks, glasses and a few documented literary
+    drinks (the Vesper of Casino Royale, the gin rickeys of The Great Gatsby), and draws
+    diverse sets: a pick sharing a base spirit, a theme, a name word or most ingredients
+    with an earlier one is penalised. `seed` cycles deterministically through the sets.
+    Each pairing has 1-3 reasons citing the book and the recipe evidence. Reader-taste mode
+    sums the reading list and liked genres; avoided genres never drive a profile.
+  - Responsible drinking: a children's or young-adult book (by genre or reader shelf), a
+    reader who asks and a remembered alcohol-free cocktail taste get "Non alcoholic" recipes
+    only ("Optional alcohol" counts as alcoholic). Shots, flaming drinks, overproof spirits
+    and crude names are never offered; avoided ingredients are left out. No health claims.
+  - API: `POST /pairings/book-cocktail` (`book_id`, or `book_ids` with liked and avoided
+    genres; `alcohol_free`, `cocktail_preferences`, `exclude_drink_ids`, `seed`, `top_k`;
+    bounded, extra fields rejected) returns the flavour profile, pairings and the number of
+    sets. 503 with the setup hint of the missing domain unless books and cocktails are both
+    served; `services.link_domains` builds the pairer after loading.
+  - Agent: the book agent's `PairCocktail` READ tool (a book by ID or title, or the reading
+    list). `PairedDrinkCheck` verifies drink numbers ("drink #N"), drink names marked as
+    names and recipe amounts against the drinks PairCocktail returned in the same turn;
+    titles the pairer's reasons cite also count for that turn. Replies carry `pairing` and
+    the drinks in `cocktails`; suggestions offer "Another pairing" and "Make it alcohol-free".
+    The deterministic fallback lists the paired drinks (`Toolkit.fallback` receives the
+    turn's extras).
+  - UI: "Pair a drink" in the book dialog (photos, alcohol badges, reasons, an alcohol-free
+    toggle and "Another pairing"; "Recipe" opens the drink on the Cocktails page), "Your
+    reading list's cocktail" on the Books page, pairing cards in book chat, and a "Pair a
+    cocktail with my reading list" starter.
+  - Tests: pairer unit tests, golden checks on the real data, API, agent (including an
+    invented drink caught by grounding) and AppTest UI tests; pairing scenarios in the
+    scripted LLM stub; an E2E suite on the real catalogs with screenshots
+    (`tests/e2e/test_pairing_e2e.py`, which writes the real top-3 pairings of 14 famous
+    books to `pairings.json`). README screenshot `curio-pairing.jpg`
+    (`scripts.capture_readme --only pairing`) and a Pairing link in `docs/architecture.svg`.
+
 ### Changed
 
 - **Full photo index** (portfolio item 10): `scripts.fetch_photos` without `--limit` and an

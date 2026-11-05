@@ -15,6 +15,8 @@ domains, switched in the header:
 
 All three domains share one agent: it plans, calls policy-gated catalog tools, asks before
 changing your shortlist or memory, and checks its answer against what the tools returned.
+Books and cocktails also meet: Curio pours a drink to read with, for one book or your whole
+reading list, and says why.
 
 ![Personalized fashion picks with the evidence behind each one](docs/screenshots/curio-fashion.jpg)
 
@@ -31,6 +33,11 @@ Try it in one command, no large download: `docker compose --profile demo up --bu
 - **Human in the loop.** Tools are policy-gated as read, ask or approve. State changes
   become HMAC-signed proposals bound to the tool, arguments, request and time. You can approve
   or narrow them, but never widen or replay them across domains.
+- **Cross-domain reasoning.** A deterministic pairer maps a book's genres, reader shelves and
+  setting words to a flavour profile and scores the 425 recipes with the cocktail search
+  index, so "what should I drink with The Big Sleep?" gets bourbon and bitters with the
+  evidence from both catalogs. Children's and young-adult books only ever get alcohol-free
+  drinks, and the agent's drink names are verified like its book titles.
 - **Grounded answers.** Every price, ID, rating and catalog title in an answer is checked
   against what the tools returned. A failed check gets one self-correction, then a
   deterministic fallback, and the result is shown in the UI.
@@ -161,6 +168,23 @@ best-loved Cosy, Dark, Funny or Epic reads.
 Ratings are Goodreads averages. Genres and moods come from readers' Goodreads shelves, so
 they are crowd labels rather than editorial ones.
 
+### Pair a book with a cocktail
+
+"Pour me something to read with." In the book dialog, "Pair a drink" shows three drinks
+from the recipe catalog, each with the reason it was chosen: the book's evidence (genres,
+shelves, a setting such as Paris or an era such as the Jazz Age) and the recipe's
+("Mystery · shelved as noir → a bitter, spirit-forward whiskey drink: Old Fashioned (Bourbon,
+Angostura Bitters)"). A few authors bring their own drink: The Great Gatsby gets the gin
+rickeys Tom Buchanan mixes, Casino Royale the Vesper. "Another pairing" gives a different
+set, and "Alcohol-free only" keeps to recipes marked alcohol-free. The Books page pours
+"Your reading list's cocktail" from the reading list and liked genres (avoided genres never
+count), and the book agent answers "what should I drink with Dune?" or "pair a cocktail with
+my reading list". Children's and young-adult books, and anyone whose remembered cocktail
+taste is alcohol-free, only ever get alcohol-free drinks. The pairing is deterministic and
+offline: no model, no download.
+
+![Drinks paired with The Great Gatsby, each with the book and recipe evidence](docs/screenshots/curio-pairing.jpg)
+
 ## Under the hood
 
 Streamlit UI → FastAPI → a shared agent engine with one toolkit per domain.
@@ -247,9 +271,9 @@ by that licence:
   terms may also apply to them. Covers and book descriptions belong to their publishers and
   Goodreads and are not covered by CC BY-SA: when you run Curio, covers are loaded directly
   from Goodreads by your browser, and descriptions stay in your local prepared file. The
-  exception is three README screenshots (`docs/screenshots/curio-books.jpg`,
-  `curio-book-detail.jpg` and `curio-book-agent.jpg`), which show book covers and a
-  description excerpt for illustration only; that material remains its owners' and is not
+  exception is four README screenshots (`docs/screenshots/curio-books.jpg`,
+  `curio-book-detail.jpg`, `curio-book-agent.jpg` and `curio-pairing.jpg`), which show book
+  covers and a description excerpt for illustration only; that material remains its owners' and is not
   licensed by this repository. The prepared files are not part of this repository; if you
   share them, credit goodbooks-10k and share them under CC BY-SA 4.0. The book pages credit
   "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.0)" and link each book to Goodreads.

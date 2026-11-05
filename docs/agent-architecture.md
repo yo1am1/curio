@@ -15,8 +15,8 @@ fields.
 |---|---|---|---|
 | Toolkit | `chat/assistant.py`, `chat/tools.py` | `chat/cocktail_agent.py`, `chat/cocktail_tools.py` | `chat/book_agent.py`, `chat/book_tools.py` |
 | Planning | Structured `SearchIntent` from the LLM, then an initial catalog search | The message is the query; no extra model call before the tool loop | As cocktails |
-| Grounding | Euro amounts (including outfit totals) and product IDs | Drink IDs, catalog drink names and recipe amounts | Book IDs, catalog titles and Goodreads ratings |
-| Reply items | `products` | `cocktails` | `books` |
+| Grounding | Euro amounts (including outfit totals) and product IDs | Drink IDs, catalog drink names and recipe amounts | Book IDs, catalog titles and Goodreads ratings; paired drinks' numbers, names and amounts |
+| Reply items | `products` | `cocktails` | `books`; a pairing's drinks in `cocktails` and `pairing` |
 
 The engine owns everything shared: the tool-call and time budgets, policy enforcement,
 signed proposals and resume, clarifying questions, merging approved effects into the
@@ -44,7 +44,7 @@ flowchart TD
     M[Shopper message] --> P[Plan: structured intent + approved memory]
     P --> S[Initial catalog search]
     S --> L{Tool loop<br/>max 5 calls, 90 s}
-    L -- READ --> R[Domain READ tools<br/>fashion: SearchCatalog · InspectProducts · FindRelated · PersonalPicks · BuildOutfit · SwapOutfitItem<br/>cocktails: SearchCocktails · InspectCocktails · SimilarCocktails · WhatCanIMake<br/>books: SearchBooks · InspectBooks · ReadersAlsoLiked · BooksByAuthor]
+    L -- READ --> R[Domain READ tools<br/>fashion: SearchCatalog · InspectProducts · FindRelated · PersonalPicks · BuildOutfit · SwapOutfitItem<br/>cocktails: SearchCocktails · InspectCocktails · SimilarCocktails · WhatCanIMake<br/>books: SearchBooks · InspectBooks · ReadersAlsoLiked · BooksByAuthor · PairCocktail]
     R --> L
     L -- ASK --> Q[AskShopper: question + quick replies]
     L -- APPROVE --> A{Auto-approve<br/>allowed?}
@@ -147,6 +147,7 @@ show the same line.
 | InspectBooks | read | Full details (description, genres, shelves, rating, pages, year, series) for up to five book IDs |
 | ReadersAlsoLiked | read | Item-item collaborative filtering from goodbooks-10k ratings; other authors only by default |
 | BooksByAuthor | read | The author's books in the catalog, most rated first |
+| PairCocktail | read | `BookCocktailPairer`: drinks for one book (ID or title) or the reading list and remembered tastes, with reasons; `alcohol_free`, `exclude_drink_ids` for another pairing |
 | AskShopper | ask | Shared with fashion |
 | SaveBooks | approve | 1–5 validated book IDs for the reading list |
 | RememberReadingTastes | approve | Liked genres, avoided genres and avoided authors, mapped to catalog names |
@@ -158,6 +159,27 @@ be catalog names; an unknown one is a tool error that lists the valid ones, so t
 can retry. The book that a "like <title>" search started from counts as evidence, so the
 answer may name it. The prompt tells the model to quote ratings exactly, to say ratings are
 Goodreads averages and not to reveal endings.
+
+#### Cross-domain: pairing a drink with a book
+
+PairCocktail is the agent's one cross-domain tool. "What should I drink with The Name of the
+Wind?" is one call with the title; "pair a cocktail with my reading list" uses the reading
+list, liked genres and avoided genres from the turn context. It reads the same deterministic
+pairer as `POST /pairings/book-cocktail` ([technical guide](technical-guide.md#book--cocktail-pairing)),
+so the agent cites the pairer's reasons rather than inventing its own. The tool is
+registered with every book agent; when the server does not serve cocktails it returns a tool
+error saying pairing is unavailable, and the session prompt says so.
+
+Safety follows the cocktail rules: a children's or young-adult book is always alcohol-free,
+whatever the model asks; the cocktail domain's remembered tastes (`TurnContext.cocktail_preferences`,
+which the UI sends with book requests) apply, so an alcohol-free taste keeps every pairing
+alcohol-free and avoided ingredients stay out; the prompt adds the cocktail safety rules
+(alcohol status for each drink, no encouragement of excessive drinking, no health or allergen
+claims), and the fallback ends with the pairer's note ("Please drink responsibly."). The
+reply carries the drinks in `cocktails` and the explained `pairing`; its suggestions are
+"Another pairing", "Make it alcohol-free" and readers-also-liked. For another pairing the
+model sees the drinks earlier answers showed ("Drinks shown (an earlier pairing): drink #269
+Old Fashioned") and passes them as `exclude_drink_ids`.
 
 ## Human in the loop
 
@@ -239,8 +261,25 @@ and the reading list:
   Goodreads average at the precision written (4.6 may round 4.55; 4.55 must be exact) or
   a number the reader typed.
 
-The fallback lists "Title by Author · ★ rating" for the shown books. Plot, page counts and
+The fallback lists "Title by Author · ★ rating" for the shown books, then the drinks a
+pairing returned (`Toolkit.fallback` receives the turn's extras). Plot, page counts and
 years in prose are not verified.
+
+Drinks in a book answer are checked by `PairedDrinkCheck` against the drinks PairCocktail
+returned in the same turn only: earlier answers' drinks are context, never evidence, so the
+model calls the tool again to talk about them.
+
+- Drink numbers ("drink #12"; "[id 12]" means a book) must have been returned.
+- Catalog drink names count only where the answer marks them as names (bold, italic, quoted
+  or next to their "drink #N"), because in a book answer "Manhattan", "Brooklyn" or "San
+  Francisco" are usually places. A drink name inside a longer evidence book title or author
+  ("Casino" in "Casino Royale") is the book.
+- Ingredient amounts must match a paired recipe, checked only in turns that paired drinks.
+- Book titles accept the paired drinks' names ("Death in the Afternoon" is both) and titles
+  the pairer's reasons cite (a lore line names The Long Goodbye).
+
+An invented drink ("**Negroni** (drink #257)" when the pairing returned an Old Fashioned)
+is an unverified claim like an invented rating: one rewrite, then the fallback.
 
 ## Budgets and failure handling
 
@@ -302,6 +341,9 @@ actions. Gaps addressed here:
   not descriptive claims.
 - Book titles that are a single short word ("It", "Dune") are not checked, so the agent
   could name such a book without evidence.
+- A drink name the answer does not mark as a name (no bold, quotes or "drink #N") is read as
+  prose and not checked. Pairing themes are hand-written rules over crowd shelves, not a
+  taste model, and lore covers only a handful of authors.
 - Cocktail ingredient filters and avoided ingredients are not allergen guarantees.
 - Pantry words are mapped to catalog spelling only when the match is unique; "whiskey,
   lemon, sugar" does not yet find Whiskey Sour, whose recipe lists "Blended whiskey" and
