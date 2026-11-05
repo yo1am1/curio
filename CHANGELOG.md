@@ -6,6 +6,8 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-05
+
 ### Added
 
 - **Book → cocktail pairing** ("Pour me something to read with"), cross-domain reasoning
@@ -355,7 +357,8 @@ tool-using shopping assistant with a conversation home and floating panel. Earli
 development is recorded in [docs/engineering-workflow.md](docs/engineering-workflow.md)
 and [docs/session-handoff.md](docs/session-handoff.md).
 
-[Unreleased]: https://github.com/yo1am1/curio/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/yo1am1/curio/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/yo1am1/curio/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/yo1am1/curio/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/yo1am1/curio/compare/release/fashion-mvp...release/v1.0
 [0.2.0]: https://github.com/yo1am1/curio/tree/release/fashion-mvp
