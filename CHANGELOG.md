@@ -8,6 +8,38 @@ All notable changes to Curio are recorded here. The format follows
 
 ### Added
 
+- **Book domain** (portfolio item 6), the third domain on the shared agent engine:
+  - `scripts.prepare_books` downloads goodbooks-10k from a pinned commit, checks every
+    file's SHA-256 and writes `data/books.parquet` (10,000 books with clean titles, series,
+    authors, genres, reader shelves, page counts, descriptions and https covers) and
+    `data/book_neighbours.parquet` (the 50 strongest readers-also-liked links per book,
+    precomputed from ~6M ratings). About 40 seconds; ~9 MB of output.
+  - `books` package (numpy/scipy only): TF-IDF search over title, author, genres, shelves
+    and description with a quality prior; "like <title>" seeds a search with that book's
+    readers; genre names, mood words, "short" and "by <author>" become filters;
+    item-item collaborative filtering with popularity damping ("readers who liked X also
+    liked"); "Because you liked…" over several books; more by an author; browse by 30
+    genres and nine moods. Every result carries human-readable reasons.
+  - Book agent (`BookAssistant`): SearchBooks, InspectBooks, ReadersAlsoLiked,
+    BooksByAuthor, AskShopper, and approval-gated SaveBooks (reading list) and
+    RememberReadingTastes (liked genres, avoided genres and authors). Grounding checks
+    book IDs, catalog titles and Goodreads ratings.
+  - API: `/books/genres`, `/books/moods`, `/books/index`, `POST /books/search`,
+    `POST /books/because`, `/books/{id}`, `/books/{id}/similar`, `/books/{id}/by-author`;
+    `/health` adds `books_enabled` and `book_count`; chat domain `books` with
+    `book_preferences` and `book_shortlist`.
+  - UI: Books in the domain switch, a Books page (search, "Because you liked…", browse by
+    mood), a book dialog (cover, rating, facts, genres, description, readers also liked,
+    more by the author, Save, Ask Curio, Goodreads link), and per-domain book chat, reading
+    list and memory.
+  - Quick start: `CURIO_BOOKS=1 scripts/quickstart.sh` or `DEMO_BOOKS=1 docker compose
+    --profile demo up` also prepares the books; both serve books whenever they are
+    prepared. A `prepare-books` compose service (profile `tools`) for the full stack.
+  - Tests for the catalog, taxonomy, recommender, prepare script, agent, grounding, API and
+    UI (125 offline tests), book scenarios in the scripted LLM stub, and an E2E suite over
+    the real catalog with screenshots (`tests/e2e/test_books_e2e.py`).
+  - README screenshots of the Books page, the book dialog and the book agent;
+    `scripts.capture_readme --only books` refreshes them.
 - **One-command quick start** without the 3.5 GB H&M download:
   `docker compose --profile demo up --build`, or `scripts/quickstart.sh` with uv and no
   Docker. Both prepare the cocktail recipes on the first run and start the API and the UI.
@@ -27,6 +59,10 @@ All notable changes to Curio are recorded here. The format follows
 
 ### Changed
 
+- `TurnContext.auto_approve` accepts up to six approval tools (two per domain).
+- `AppliedEffect` serializes each kind with its own domain's fields from a table, and the
+  engine applies approved effects to the turn context from a table, so a domain adds
+  entries rather than code.
 - Fashion endpoints return 503 with how to prepare the H&M data when fashion is not served
   (previously the API could not start without it).
 - Docker: the full fashion stack is now the `fashion` profile
@@ -37,6 +73,12 @@ All notable changes to Curio are recorded here. The format follows
 
 ### Known limitations
 
+- Book genres and moods come from Goodreads reader shelves (crowd labels). A third of the
+  books have no cover in the dataset and 9 % no page count; a length filter leaves those out.
+- Book grounding does not check single-word titles shorter than six letters ("It", "Dune"),
+  or plot, year and page claims in prose.
+- The book data's licence is CC BY-SA 4.0; covers and descriptions are the publishers' and
+  Goodreads' material (see README "Data and licences").
 - The first Docker build or `uv sync` still installs PyTorch, which only fashion uses.
 - The Ollama profile was checked with `docker compose config` only, not run against a model.
 

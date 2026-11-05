@@ -9,7 +9,8 @@ the scripted stub in tests/e2e/llm_stub.py was used:
     uv run streamlit run src/clothes_recommender/ui.py
     uv run python -m scripts.capture_readme --out docs/screenshots
 
-Example customer 3 is used because all of its default picks have photos in the partial index.
+`--only books` refreshes just the book screenshots. Example customer 3 is used because all of
+its default picks have photos in the partial index.
 """
 
 import argparse
@@ -23,6 +24,12 @@ parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
 parser.add_argument("--ui-url", default="http://127.0.0.1:8501")
 parser.add_argument("--out", type=Path, default=Path("docs/screenshots"))
 parser.add_argument("--executable-path", help="Chromium binary (default: Playwright's).")
+parser.add_argument(
+    "--only",
+    nargs="+",
+    choices=["fashion", "cocktails", "books", "phone"],
+    help="Capture only these groups (default: all). Books need scripts.prepare_books.",
+)
 ARGS = parser.parse_args()
 UI = ARGS.ui_url
 OUT = ARGS.out
@@ -98,23 +105,21 @@ def scroll_main(p, y):
     p.wait_for_timeout(500)
 
 
-with sync_playwright() as pw:
-    b = pw.chromium.launch(executable_path=ARGS.executable_path)
+def desk(b, h=1100):
+    return b.new_context(viewport={"width": 1440, "height": h}, device_scale_factor=2).new_page()
 
-    def desk(h=1100):
-        return b.new_context(
-            viewport={"width": 1440, "height": h}, device_scale_factor=2
-        ).new_page()
 
+def fashion(b) -> None:
+    """Feed, agent, approval, memory, home, discover, product dialog, connections."""
     # Feed: default personalized ranking for a fully photographed example.
-    p = desk()
+    p = desk(b)
     p.goto(f"{UI}/fashion")
     settle(p)
     pick_example(p, 2)
     save(p, "curio-fashion")
 
     # Agent: search with trace, grounding badge and cards.
-    p = desk(1250)
+    p = desk(b, 1250)
     p.goto(UI)
     settle(p)
     send(p, "Black trousers under €30")
@@ -140,13 +145,13 @@ with sync_playwright() as pw:
     save(p, "curio-memory")
 
     # Home (empty) desktop.
-    p = desk()
+    p = desk(b)
     p.goto(UI)
     settle(p)
     save(p, "curio-home")
 
     # Discover by description and photo.
-    p = desk(1250)
+    p = desk(b, 1250)
     p.goto(f"{UI}/discover")
     settle(p)
     p.locator(".st-key-text_example_0 button").click()
@@ -168,7 +173,7 @@ with sync_playwright() as pw:
     save(p, "curio-discover-photo")
 
     # Product dialog with bought-together pieces, opened from the example feed.
-    p = desk()
+    p = desk(b)
     p.goto(f"{UI}/fashion")
     settle(p)
     pick_example(p, 2)
@@ -183,7 +188,7 @@ with sync_playwright() as pw:
     save(p, "curio-product-detail")
 
     # Product connections.
-    p = desk(1500)
+    p = desk(b, 1500)
     p.goto(f"{UI}/connections")
     settle(p)
     pick_example(p, 2)
@@ -191,8 +196,11 @@ with sync_playwright() as pw:
     p.wait_for_timeout(1500)
     save(p, "curio-connections")
 
+
+def cocktails(b) -> None:
+    """Cocktail agent with memory, recipe search and pantry."""
     # Cocktail agent with remembered alcohol-free taste.
-    p = desk(1250)
+    p = desk(b, 1250)
     p.goto(UI)
     settle(p)
     p.get_by_test_id("stButtonGroup").first.get_by_text("Cocktails", exact=True).click()
@@ -206,7 +214,7 @@ with sync_playwright() as pw:
     save(p, "curio-cocktail-agent")
 
     # Cocktails page: search, pantry.
-    p = desk(1250)
+    p = desk(b, 1250)
     p.goto(f"{UI}/cocktails")
     settle(p)
     p.get_by_label("Describe a drink").fill("Something fresh with lime and mint")
@@ -227,6 +235,40 @@ with sync_playwright() as pw:
     scroll_main(p, 330)
     save(p, "curio-cocktails-pantry")
 
+
+def books(b) -> None:
+    """Book search seeded by a title, "Because you liked…" and the book agent with memory."""
+    p = desk(b, 1250)
+    p.goto(f"{UI}/books")
+    settle(p)
+    p.get_by_label("Describe a book").fill("Fantasy like The Name of the Wind")
+    p.get_by_role("button", name="Find books").click()
+    settle(p)
+    scroll_main(p, 330)
+    save(p, "curio-books")
+    p.locator('[class*="st-key-book_card_search_"]').first.get_by_role(
+        "button", name=re.compile("^View ")
+    ).click()
+    settle(p)
+    save(p, "curio-book-detail")
+
+    p = desk(b, 1250)
+    p.goto(UI)
+    settle(p)
+    p.get_by_test_id("stButtonGroup").first.get_by_text("Books", exact=True).click()
+    settle(p)
+    send(p, "Remember I never read horror")
+    p.locator('[class*="st-key-approval_home_"]').last.get_by_role("button", name="Approve").click()
+    settle(p)
+    send(p, "Fantasy like The Name of the Wind")
+    p.get_by_text(re.compile(r"How Curio worked")).last.click()
+    settle(p)
+    show_last_answer(p)
+    save(p, "curio-book-agent")
+
+
+def phone(b) -> None:
+    """Home and feed on a phone."""
     # Phone: home and feed.
     m = b.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2).new_page()
     m.goto(UI)
@@ -237,5 +279,13 @@ with sync_playwright() as pw:
     pick_example(m, 2)
     scroll_main(m, 0)
     save(m, "curio-mobile", width=780)
-    b.close()
+
+
+GROUPS = {"fashion": fashion, "cocktails": cocktails, "books": books, "phone": phone}
+
+with sync_playwright() as pw:
+    browser = pw.chromium.launch(executable_path=ARGS.executable_path)
+    for name in ARGS.only or GROUPS:
+        GROUPS[name](browser)
+    browser.close()
 print(f"Wrote README screenshots to {OUT}")

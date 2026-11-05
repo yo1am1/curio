@@ -1,7 +1,8 @@
-# Multi-domain contract (fashion + cocktails)
+# Multi-domain contract (fashion, cocktails, books)
 
-Shared interfaces for the v1.0 cocktail domain. Every teammate codes against this file;
-change it only together with every consumer.
+Shared interfaces for the cocktail domain (v1.0) and the book domain (unreleased). Every
+teammate codes against this file; change it only together with every consumer. The
+[books](#books) section follows the cocktail sections.
 
 ## Data
 
@@ -136,7 +137,8 @@ runtimes; `services.fashion` / `services.cocktails` are typed shortcuts. Fashion
 `cocktails.parquet` loads. `ENABLED_DOMAINS` (comma-separated ids) limits what is loaded; an
 unknown id is a startup error. Adding a domain: one `DomainSpec`, its id in
 `chat.schemas.Domain`, its endpoints behind a dependency like `FashionDep`, and one `DomainView`
-in `ui.DOMAIN_VIEWS`.
+in `ui.DOMAIN_VIEWS`. Books (`BookServices`) are served when `books.parquet` and
+`book_neighbours.parquet` both load; a missing or broken file disables only books.
 
 ## API
 
@@ -183,3 +185,164 @@ in `ui.DOMAIN_VIEWS`.
   cocktails use `chat_history_cocktails`, `cocktail_shortlist`, `cocktail_preferences`).
 - Cocktail pages credit "Recipe data: TheCocktailDB" and say "Please drink responsibly."
   Images load directly from the https image URL.
+
+## Books
+
+### Data
+
+`scripts/prepare_books.py` reads [zygmuntz/goodbooks-10k](https://github.com/zygmuntz/goodbooks-10k)
+at commit `6dd165b555a7b47b2dd36743a425776e641ff50c` (raw GitHub URLs, or `--source` a local
+checkout): `books.csv`, `ratings.csv`, `book_tags.csv`, `tags.csv` and
+`books_xml/books_xml.zip` (skipped with `--no-details`). Every file is checked against its
+SHA-256 at that commit (`BOOKS_CSV`, `RATINGS_CSV`, ... in the script); a mismatch fails the
+run unless `--no-verify` is given. It writes, atomically:
+
+`data/books.parquet`:
+
+| column | type | notes |
+|---|---|---|
+| book_id | int | goodbooks-10k id, 1-10000 (most-rated first) |
+| goodreads_book_id | int | for `https://www.goodreads.com/book/show/{id}` |
+| title | str | without the "(Series, #n)" suffix |
+| authors | str | JSON list; the first is the author, later ones translators or illustrators |
+| series, series_position | str or null | from the title suffix ("1", "2.5", "1-3") |
+| year | Int64 or null | original publication year; negative for BC |
+| language | str or null | Goodreads language code |
+| average_rating | float | Goodreads average, 1-5 |
+| ratings_count | int | Goodreads ratings behind it |
+| pages | Int64 or null | from the XML archive |
+| description | str | plain text from the XML archive, at most 600 characters |
+| genres | str | JSON list of `books.taxonomy.GENRES` names, strongest first, at most 4 |
+| tags | str | JSON list of up to 12 descriptive shelves ("epic fantasy"), most used first |
+| image_url | str or null | only `https://images.gr-assets.com/...`; placeholders dropped |
+| readers | int | goodbooks-10k users who rated it |
+
+`data/book_neighbours.parquet` (`book_id`, `neighbour_id`, `score` float32, `co_readers`
+int32): for each book its 50 strongest "readers who liked X also liked Y" links. Liked
+means 4-5 stars; `score = c / (n_x^0.35 · n_y^0.65) · c / (c + 10)` with `c` readers who
+liked both and `n` readers who liked each; pairs with fewer than 5 shared readers are
+dropped.
+
+Settings: `Settings.books_path -> data_dir / "books.parquet"`,
+`Settings.book_neighbours_path -> data_dir / "book_neighbours.parquet"`. No API key and no
+network at serving time (covers load in the browser from Goodreads). UIs credit "Book
+data: goodbooks-10k from Goodreads (CC BY-SA 4.0)".
+
+### Python interfaces (`clothes_recommender.books`)
+
+Types in `books/domain.py`: `Book` (the columns above, with `source_url` instead of
+`goodreads_book_id` and `author` = first author), `BookRef`, `BookHit` (`book`, `score`,
+`reasons`), `BookPreferences` (`liked_genres`, `avoided_genres`, `avoided_authors`, each at
+most 10), `BookQuery` (`query` ≤ 200, `genres` ≤ 5, `mood`, `author`, `min_rating` 0-5,
+`max_pages` 1-5000, `exclude_genres`, `exclude_authors`, `boost_genres`, `top_k` ≤ 50),
+`BecauseYouLiked` (`liked` 1-20 ids, exclusions, `top_k`). Genre and author terms are
+stripped and bounded (`GenreTerm` ≤ 60, `AuthorTerm` ≤ 100 characters; HTTP 422 otherwise).
+
+`books/catalog.py`:
+
+```python
+class BookCatalog:
+    def __init__(self, frame: pd.DataFrame) -> None: ...  # columns as above
+    @classmethod
+    def from_parquet(cls, path: Path) -> "BookCatalog": ...
+    def __len__(self) -> int: ...
+    def __iter__(self) -> Iterator[Book]: ...  # book_id order
+    def get(self, book_id: int) -> Book | None: ...
+    def get_many(self, book_ids: Iterable[int]) -> list[Book]: ...  # order kept, unknown skipped
+    def genres(self) -> list[str]: ...  # most common first
+    def canonical_genre(self, name: str) -> str | None: ...
+    def canonical_author(self, name: str) -> str | None: ...  # case/accent/punctuation-insensitive
+    def by_author(self, name: str) -> list[Book]: ...
+    def by_title(self, title: str) -> list[Book]: ...
+    def authors(self) -> list[str]: ...
+    def titles(self) -> list[str]: ...
+```
+
+`books/recommend.py` (numpy/scipy, deterministic, ties by lower book_id):
+
+```python
+class BookRecommender:
+    def __init__(self, catalog: BookCatalog, neighbours: pd.DataFrame) -> None: ...
+    def search(self, query: BookQuery) -> list[BookHit]:
+        ...
+        # TF-IDF over title, series, authors, genres, shelves, description; "like <title>"
+        # seeds with that book's neighbours (its series and itself left out); genre words
+        # and the first mood word become filters; "short" = at most 250 pages; "by <author>"
+        # = author filter. Empty query: browse by filters and quality.
+
+    def similar(
+        self,
+        book_id: int,
+        top_k: int = 5,
+        *,
+        other_authors_only: bool = False,
+        exclude_genres=(),
+        exclude_authors=(),
+    ) -> list[BookHit]:
+        ...
+        # Neighbours, topped up by shelf similarity. Unknown id -> [].
+
+    def because(
+        self, liked: Sequence[int], top_k: int = 10, *, exclude_genres=(), exclude_authors=()
+    ) -> list[BookHit]:
+        ...
+        # Summed neighbour scores; seeds and their series left out; at most 2 per author.
+
+    def by_author(self, author: str, top_k: int = 10, *, exclude_book_id=None) -> list[BookHit]: ...
+    def seed_of(self, query: str) -> Book | None: ...
+    def resolve_title(self, text: str) -> Book | None: ...
+```
+
+Every hit has reasons, e.g. "960 readers who liked The Name of the Wind also liked this",
+"Also in The Kingkiller Chronicle", "Genre: Classics", "Mood: Cosy (shelved as cozy
+mystery)", "112 pages", "A genre you like: Fantasy", "Because you liked …".
+
+### Agent
+
+| Tool | Policy | Args |
+|---|---|---|
+| SearchBooks | read | query, genres (≤ 3), mood, min_rating (1-5), max_pages (20-2000) |
+| InspectBooks | read | book_ids (1-5) |
+| ReadersAlsoLiked | read | book_id, other_authors_only (default true) |
+| BooksByAuthor | read | author |
+| AskShopper | ask | shared |
+| SaveBooks | approve | book_ids (1-5), note |
+| RememberReadingTastes | approve | liked_genres, avoided_genres, avoided_authors |
+
+Remembered tastes exclude avoided genres and authors from every tool and boost liked genres
+in search; an explicitly requested genre wins over a remembered avoidance. Grounding: book
+IDs and catalog titles in the answer must have been returned by tools (or be in history,
+the reading list or typed), and ratings must match an evidence book's Goodreads average.
+
+### API
+
+- `GET /health` adds `books_enabled: bool` and `book_count: int`; `/domains` lists `books`
+  third.
+- `GET /books/genres`, `GET /books/moods` -> `list[str]`; `GET /books/index` ->
+  `list[BookRef]`, most rated first.
+- `POST /books/search` body `BookQuery` -> `list[BookHit]`;
+  `POST /books/because` body `BecauseYouLiked` -> `list[BookHit]`.
+- `GET /books/{id}` -> `Book` (404 unknown); `GET /books/{id}/similar?top_k=5&other_authors_only=false`
+  and `GET /books/{id}/by-author?top_k=5` -> `list[BookHit]`.
+- Every `/books` endpoint returns 503 `"The book catalog is not prepared: run scripts.prepare_books."`
+  when the domain is not served.
+- `ChatRequest.domain` accepts `"books"`; `TurnContext` adds `book_preferences:
+  BookPreferences` and `book_shortlist: list[int]` (max 20, the reading list);
+  `auto_approve` accepts `SaveBooks` and `RememberReadingTastes` (up to six tools in all);
+  `ChatTurn.book_ids` (max 5) carries the cards an answer showed.
+- `AssistantReply.books: list[Book]`; `PendingAction.books`; `AppliedEffect.kind` adds
+  `"book_shortlist"` (`book_ids`) and `"book_preferences"` (`book_preferences`). Each
+  effect kind is serialized with its own domain's fields only.
+
+### UI
+
+- The header switch lists Books third. Navigation: Ask Curio, Books (`/books`: Search,
+  "Because you liked…" seeded from the reading list, Browse by mood; a book dialog with
+  cover, rating, facts, genres, description, shelves, Save, Ask Curio, a Goodreads link,
+  "Readers also liked" and "More by <author>").
+- Session keys: `chat_history_books`, `book_shortlist` (reading list), `book_preferences`,
+  `chat_queued_books`, `chat_decision_books`. The Books page sends remembered avoidances as
+  exclusions and liked genres as boosts, like the agent.
+- Book pages credit "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.0)" and say ratings
+  are Goodreads averages. Covers load directly from Goodreads (the 318 px variant of the
+  dataset's link on cards and dialogs).

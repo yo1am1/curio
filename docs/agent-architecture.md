@@ -1,22 +1,22 @@
 # Curio agent: architecture and review
 
 This page describes how Curio's agent plans, acts, verifies and hands control back to
-the shopper, in both the fashion and the cocktail domain. It also records the review of
+the shopper, in the fashion, cocktail and book domains. It also records the review of
 the recommendation system and the earlier assistant that led to this design.
 
-## One engine, two toolkits
+## One engine, three toolkits
 
 The loop lives once, in `chat/engine.py` (`AgentEngine`). Each domain plugs in a
 `Toolkit`: its tool schemas and policies, planning, how READ tools run, how APPROVE
 effects are validated, the grounding check, the deterministic fallback and the reply
 fields.
 
-| | Fashion (`ShoppingAssistant`) | Cocktails (`CocktailAssistant`) |
-|---|---|---|
-| Toolkit | `chat/assistant.py`, `chat/tools.py` | `chat/cocktail_agent.py`, `chat/cocktail_tools.py` |
-| Planning | Structured `SearchIntent` from the LLM, then an initial catalog search | The message is the query; no extra model call before the tool loop |
-| Grounding | Euro amounts and product IDs | Drink IDs, catalog drink names and recipe amounts |
-| Reply items | `products` | `cocktails` |
+| | Fashion (`ShoppingAssistant`) | Cocktails (`CocktailAssistant`) | Books (`BookAssistant`) |
+|---|---|---|---|
+| Toolkit | `chat/assistant.py`, `chat/tools.py` | `chat/cocktail_agent.py`, `chat/cocktail_tools.py` | `chat/book_agent.py`, `chat/book_tools.py` |
+| Planning | Structured `SearchIntent` from the LLM, then an initial catalog search | The message is the query; no extra model call before the tool loop | As cocktails |
+| Grounding | Euro amounts and product IDs | Drink IDs, catalog drink names and recipe amounts | Book IDs, catalog titles and Goodreads ratings |
+| Reply items | `products` | `cocktails` | `books` |
 
 The engine owns everything shared: the tool-call and time budgets, policy enforcement,
 signed proposals and resume, clarifying questions, merging approved effects into the
@@ -25,10 +25,17 @@ picks the assistant by `ChatRequest.domain` (default `fashion`) from the loaded 
 the domain registry (`services.DOMAINS`, see the
 [technical guide](technical-guide.md#domain-registry)). Every domain is optional: a request
 for a domain the server does not serve gets 503 with how to prepare it, and a served domain
-without an LLM gets 503 saying how to enable chat. Both assistants are built once at startup
+without an LLM gets 503 saying how to enable chat. Every assistant is built once at startup
 from one shared `AgentKit` (the chat model and the approval signer), so a proposal is bound
-to its tool's domain but verifies on either. A new domain's assistant is a `Toolkit` for
-the same engine, built by its loader from that kit.
+to its tool's domain but verifies on any. A new domain's assistant is a `Toolkit` for the
+same engine, built by its loader from that kit.
+
+Books were the test of that claim. The book toolkit needed no change to the loop, budgets,
+signing, resume, grounding flow, streaming or UI chat code. The shared schemas only gained
+data: the book approval tools in `ApprovalTool`, `book_preferences` and `book_shortlist` on
+`TurnContext`, two `AppliedEffect` kinds, and one entry each in the engine's tables that
+say which context field an approved effect updates (`_MEMORY_EFFECTS`,
+`_SHORTLIST_EFFECTS`).
 
 ## One turn
 
@@ -37,7 +44,7 @@ flowchart TD
     M[Shopper message] --> P[Plan: structured intent + approved memory]
     P --> S[Initial catalog search]
     S --> L{Tool loop<br/>max 5 calls, 90 s}
-    L -- READ --> R[Domain READ tools<br/>fashion: SearchCatalog · InspectProducts · FindRelated · PersonalPicks<br/>cocktails: SearchCocktails · InspectCocktails · SimilarCocktails · WhatCanIMake]
+    L -- READ --> R[Domain READ tools<br/>fashion: SearchCatalog · InspectProducts · FindRelated · PersonalPicks<br/>cocktails: SearchCocktails · InspectCocktails · SimilarCocktails · WhatCanIMake<br/>books: SearchBooks · InspectBooks · ReadersAlsoLiked · BooksByAuthor]
     R --> L
     L -- ASK --> Q[AskShopper: question + quick replies]
     L -- APPROVE --> A{Auto-approve<br/>allowed?}
@@ -102,6 +109,26 @@ Ingredient filters only cover listed recipe ingredients. The deterministic fallb
 "Please drink responsibly." when a listed drink contains alcohol, and the cocktail pages
 show the same line.
 
+### Books
+
+| Tool | Policy | Backed by |
+|---|---|---|
+| SearchBooks | read | `BookRecommender.search`: query (including "like <title>"), genres, mood, minimum rating, maximum pages |
+| InspectBooks | read | Full details (description, genres, shelves, rating, pages, year, series) for up to five book IDs |
+| ReadersAlsoLiked | read | Item-item collaborative filtering from goodbooks-10k ratings; other authors only by default |
+| BooksByAuthor | read | The author's books in the catalog, most rated first |
+| AskShopper | ask | Shared with fashion |
+| SaveBooks | approve | 1–5 validated book IDs for the reading list |
+| RememberReadingTastes | approve | Liked genres, avoided genres and avoided authors, mapped to catalog names |
+
+Remembered tastes apply to every tool: avoided genres and authors are left out, and liked
+genres rank higher (a 10 % boost, with the reason "A genre you like"). A genre the reader
+asks for in the same call wins over a remembered avoidance of it. Genres and moods must
+be catalog names; an unknown one is a tool error that lists the valid ones, so the model
+can retry. The book that a "like <title>" search started from counts as evidence, so the
+answer may name it. The prompt tells the model to quote ratings exactly, to say ratings are
+Goodreads averages and not to reveal endings.
+
 ## Human in the loop
 
 The API is stateless. The shortlist, remembered preferences, linked shopping history
@@ -160,6 +187,24 @@ drinks in history and the cocktail shortlist:
 The same self-correction and fallback apply. Descriptive claims (taste, strength) are not
 verified.
 
+### Books
+
+`BookGroundingCheck` checks, against books returned by tools this turn, books in history
+and the reading list:
+
+- Book IDs ("[id 192]", "book #192") must have been returned.
+- Catalog titles, matched case-sensitively, must have been returned (or be the series of a
+  returned book) or typed by the reader. Only titles unlikely to be ordinary words are
+  checked: several words, or one word of at least six letters ("Twilight", not "It" or
+  "Room"). A title that is also an author, genre or mood name ("Mystery") is ignored, and
+  so is a title inside one ("George" in "George Orwell").
+- Ratings ("★ 4.55", "rated 4.6", "4.5/5", "4.3 stars") must match an evidence book's
+  Goodreads average at the precision written (4.6 may round 4.55; 4.55 must be exact) or
+  a number the reader typed.
+
+The fallback lists "Title by Author · ★ rating" for the shown books. Plot, page counts and
+years in prose are not verified.
+
 ## Budgets and failure handling
 
 - At most five tool calls per turn, then a grounded fallback.
@@ -215,8 +260,11 @@ actions. Gaps addressed here:
 
 ## Limits
 
-- The shortlist and memory last for the browser session only, kept per domain.
-- The grounding check verifies prices, IDs, drink names and amounts, not descriptive claims.
+- The shortlist, reading list and memory last for the browser session only, kept per domain.
+- The grounding check verifies prices, IDs, drink names, amounts, book titles and ratings,
+  not descriptive claims.
+- Book titles that are a single short word ("It", "Dune") are not checked, so the agent
+  could name such a book without evidence.
 - Cocktail ingredient filters and avoided ingredients are not allergen guarantees.
 - Pantry words are mapped to catalog spelling only when the match is unique; "whiskey,
   lemon, sugar" does not yet find Whiskey Sour, whose recipe lists "Blended whiskey" and

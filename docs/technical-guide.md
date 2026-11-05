@@ -2,10 +2,11 @@
 
 [Back to the product overview](../README.md).
 
-Curio has two domains, fashion and cocktails, behind one API, one Streamlit UI and
-one agent engine. Fashion needs the prepared H&M data and image index; cocktails need only
-`data/cocktails.parquet`. Every domain is optional at serving time: the API serves whichever
-domains are prepared, so the [quick start](#quick-start) runs with cocktails alone.
+Curio has three domains, fashion, cocktails and books, behind one API, one Streamlit UI
+and one agent engine. Fashion needs the prepared H&M data and image index; cocktails need
+only `data/cocktails.parquet`; books need `data/books.parquet` and
+`data/book_neighbours.parquet`. Every domain is optional at serving time: the API serves
+whichever domains are prepared, so the [quick start](#quick-start) runs with cocktails alone.
 
 ## Fashion engine
 
@@ -53,6 +54,38 @@ list alcoholic ingredients, so every filter treats them as alcoholic; they are l
 "Alcohol optional". Ingredient filters and avoided ingredients only see the listed recipe
 ingredients and are not an allergen or dietary guarantee. The layout of the prepared file
 and every interface are in the [multi-domain contract](multidomain-contract.md).
+
+## Book engine
+
+The book domain serves the 10,000 most-rated Goodreads books of
+[goodbooks-10k](https://github.com/zygmuntz/goodbooks-10k), in memory, with numpy and scipy
+only: no model, index or network call at serving time. `BookRecommender`
+(`books/recommend.py`) is deterministic, and ties go to the lower book ID (goodbooks-10k
+numbers books by popularity). It loads in about 2 seconds.
+
+| Feature | How it works |
+|---|---|
+| Search | TF-IDF cosine over title (×3), series, authors, genres (×2), reader shelves and the description (×0.3), scaled by the share of query words a book uses, then by a quality prior (Bayesian-average rating and log popularity) that scales it by 0.65 to 1, so it orders near-ties without overriding relevance. Genre names ("sci-fi", "ya", "classics") become genre filters, the first mood word ("cosy", "dark", "funny") the mood filter, "short" a 250-page limit, and "by <author>" an author filter when the name is in the catalog. |
+| "Like <title>" | "fantasy like The Name of the Wind" seeds the search with that book: candidates are what its readers also liked (75 %) blended with shelf similarity (25 %), its own series is left out, and the other words still have to match. |
+| Readers also liked | Item-item collaborative filtering precomputed by `prepare_books` from ~6 M ratings: "liked" is 4 or 5 stars, and the score is an asymmetric cosine `c / (n_i^0.35 · n_j^0.65)` (c readers liked both; n readers liked each), which damps blockbusters every reader liked, shrunk by `c / (c + 10)`; pairs with fewer than 5 shared readers are dropped and each book keeps its 50 best. Books with few links are topped up by shelf similarity. Reasons name the shared readers ("960 readers who liked The Name of the Wind also liked this") and the link (same series, author or shelves). |
+| Because you liked… | The neighbour scores of several liked books, summed; the seeds and their series are left out and each author appears at most twice. |
+| More by this author | The author's books, most rated first, with their series position. |
+| Browse by genre and mood | 30 genres mapped from reader shelves (`books/taxonomy.py`), and nine moods (Cosy, Dark, Funny, Romantic, Thought-provoking, Adventurous, Emotional, Epic, Short reads) defined by shelves and, for short reads, a 200-page limit. Books rank by how high the mood's shelf sits among their shelves, times the quality prior. |
+| Book agent | The shared agent engine with book tools: SearchBooks, InspectBooks, ReadersAlsoLiked, BooksByAuthor, SaveBooks and RememberReadingTastes. See [agent architecture](agent-architecture.md). |
+
+Ratings are Goodreads averages over all Goodreads readers; the neighbour links come from the
+~53,000 goodbooks-10k readers. Genres and moods come from reader shelves, so they are
+crowd labels, not editorial ones. A length filter leaves out the ~9 % of books without a
+page count. Probes on the real data, run with `prepare_books` output:
+
+- "fantasy like The Name of the Wind": The Way of Kings, The Final Empire, The Lies of Locke
+  Lamora, The Hero of Ages, The Well of Ascension, Words of Radiance, The Blade Itself, The
+  Warded Man; never The Wise Man's Fear (same series).
+- "short classic novels": The Great Gatsby, Persuasion, Animal Farm, A Little Princess, A
+  Study in Scarlet, Alice's Adventures in Wonderland, Of Mice and Men, Fahrenheit 451, all
+  Classics of at most 250 pages.
+- "cosy mystery", "funny fantasy" and "sci-fi" return cozy mysteries, Pratchett and Douglas
+  Adams, and Ender's Game, The Martian and 1984.
 
 ## Data
 
@@ -127,6 +160,46 @@ covers the code only. Check TheCocktailDB's terms before commercial use. The fil
 committed; photos are loaded directly from thecocktaildb.com by the browser, and the UI
 credits "Recipe data: TheCocktailDB".
 
+### Book data
+
+```sh
+uv run python -m scripts.prepare_books                     # default: pinned source, checksum-verified
+uv run python -m scripts.prepare_books --no-details        # skip page counts and descriptions
+uv run python -m scripts.prepare_books --source path/to/goodbooks-10k   # a local checkout
+```
+
+The source is [zygmuntz/goodbooks-10k](https://github.com/zygmuntz/goodbooks-10k) pinned to
+commit `6dd165b`: `books.csv`, `ratings.csv` (5,976,479 ratings), `book_tags.csv`,
+`tags.csv` and `books_xml/books_xml.zip` (page counts and descriptions). Each file is
+checked against its SHA-256 at that commit, also for a local `--source`; `--no-verify`
+skips the check for another version. It takes about 40 seconds with a ~150 MB download
+(25 seconds from a local copy) and about 1 GB of RAM at its peak, and writes two files
+of about 9 MB together:
+
+- `books.parquet`: one row per book. Titles lose the "(Series, #1)" suffix, which becomes
+  `series` and `series_position`; authors are split; reader shelves are cleaned of
+  bookkeeping ("to-read", "owned", "kindle", "read-in-2015"); genres come from shelf shares;
+  descriptions are plain text, cut at 600 characters; only https covers on
+  `images.gr-assets.com` are kept (a third of the books have Goodreads' "no photo"
+  placeholder, which is dropped). The XML archive is read member by member with a size cap,
+  and documents with a DOCTYPE are skipped.
+- `book_neighbours.parquet`: the 50 strongest readers-also-liked links per book
+  (499,419 rows), so the 72 MB ratings file is not needed to serve.
+
+The layout is in the [multi-domain contract](multidomain-contract.md#books). Files are
+written atomically; restart the API after preparing.
+
+**Terms.** goodbooks-10k is published by Zygmunt Zając under the
+[Creative Commons Attribution-ShareAlike 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
+licence (its `LICENSE` file). Its metadata, shelves and ratings were collected from
+Goodreads, so Goodreads' own terms may also apply to that content; Curio does not
+relicense it, and the MIT licence covers this repository's code only. Covers stay on
+Goodreads' servers and are loaded by the browser; they and the book descriptions are the
+publishers' and Goodreads' material, not covered by CC BY-SA. The prepared files stay on
+your machine. If you share them, they are adaptations of goodbooks-10k: credit it and share
+them under CC BY-SA 4.0. The UI credits "Book data: goodbooks-10k from Goodreads (CC BY-SA
+4.0)" and links each book to its Goodreads page.
+
 ### Shopify enrichment and graph behavior
 
 The saved mapping in `taxonomy/hm_shopify_categories.json` assigns H&M product types to
@@ -167,6 +240,11 @@ flowchart LR
     CR --> CC[(cocktails.parquet)]
     CA --> CR
     CA --> LLM
+    API --> BA[BookAssistant]
+    API --> BR[BookRecommender]
+    BR --> BC[(books.parquet + book_neighbours.parquet)]
+    BA --> BR
+    BA --> LLM
     S --> E[CLIP encoder]
     S --> Q[(Qdrant)]
     CB --> Q
@@ -191,10 +269,12 @@ src/clothes_recommender/
 ├── search.py          # Text and image search
 ├── recommenders/      # learned, repeat, content_based, collaborative, graph, popularity
 ├── cocktails/         # domain (types), catalog, recommend (search, similar, pantry)
+├── books/             # domain (types), catalog, taxonomy (genres, moods, shelves),
+│                      # recommend (search, readers also liked, because, by author)
 ├── chat/              # engine (shared agent loop), llm, intent, prompts, schemas,
 │                      # guardrails (grounding, signed proposals), tools + assistant
 │                      # (fashion), cocktail_tools + cocktail_agent (cocktails),
-│                      # navigator (recommender bridge)
+│                      # book_tools + book_agent (books), navigator (recommender bridge)
 ├── services.py        # Composition root
 ├── api.py             # FastAPI app
 └── ui.py              # Streamlit client
@@ -205,6 +285,7 @@ scripts/build_index.py # Embed product photos with CLIP, upsert into Qdrant
 scripts/classify_product_types.py # Reviewable H&M-to-Shopify category decisions
 scripts/evaluate.py # Chronological holdout evaluation; JSON results for the Model quality page
 scripts/prepare_cocktails.py # Download the pinned recipe CSV, write data/cocktails.parquet
+scripts/prepare_books.py # Download pinned goodbooks-10k, write books + book_neighbours.parquet
 scripts/take_screenshots.py # Development captures of every page with Playwright
 ```
 
@@ -213,12 +294,13 @@ scripts/take_screenshots.py # Development captures of every page with Playwright
 Each domain is one `DomainSpec` in `services.DOMAINS` (display order): its id, label, a
 setup hint and a loader. `build_services` runs every loader; a loader returns `None` while
 its data is missing (fashion: `products`, `users` and `purchases.parquet`; cocktails:
-`cocktails.parquet`), so that domain is left out and the API still starts. Data that is
-present but unusable fails startup for fashion (for example an index built with another
-encoder) and only disables cocktails. A loaded domain is a runtime (`FashionServices`,
-`CocktailServices`) with an `assistant`, `item_count()` and `close()`; `Services.domains`
-maps ids to the loaded runtimes, and both domains share one chat model and one approval
-signer (`AgentKit`).
+`cocktails.parquet`; books: `books.parquet` and `book_neighbours.parquet`), so that domain
+is left out and the API still starts. Data that is present but unusable fails startup for
+fashion (for example an index built with another encoder) and only disables cocktails or
+books. A loaded domain is a runtime (`FashionServices`, `CocktailServices`,
+`BookServices`) with an `assistant`, `item_count()` and `close()`; `Services.domains` maps
+ids to the loaded runtimes, and every domain shares one chat model and one approval signer
+(`AgentKit`).
 
 From that registry, without per-domain code:
 
@@ -226,7 +308,7 @@ From that registry, without per-domain code:
   `chat_enabled`, `item_count` and a `hint` (how to prepare a missing domain, or how to enable
   chat for a served one).
 - A domain's endpoints answer 503 with its setup hint when it is not served, through one
-  FastAPI dependency per domain (`FashionDep`, `CocktailsDep`).
+  FastAPI dependency per domain (`FashionDep`, `CocktailsDep`, `BooksDep`).
 - `POST /chat` routes by `ChatRequest.domain` to that runtime's assistant.
 
 The UI mirrors this with `DOMAIN_VIEWS` in `ui.py`: one `DomainView` per domain (switch
@@ -240,11 +322,16 @@ available", with the server's hint.
 even when other data is present; an unknown id fails startup. Unset, every prepared domain
 loads.
 
-To add a domain (say, books): write its catalog and recommender, a runtime dataclass and a
-loader in `services.py`, append a `DomainSpec` to `DOMAINS`, add its id to
-`chat.schemas.Domain`, add its endpoints with a `BooksDep` dependency, and add a
-`DomainView` with its pages to `DOMAIN_VIEWS`. Its agent is a `Toolkit` for the shared
-engine ([agent architecture](agent-architecture.md)).
+Books were added this way, which is the recipe for the next domain: its catalog and
+recommender (`books/`), a runtime dataclass and a loader in `services.py`, a `DomainSpec`
+appended to `DOMAINS`, its id in `chat.schemas.Domain`, its endpoints behind a `BooksDep`
+dependency, and a `DomainView` with its pages in `DOMAIN_VIEWS`. Its agent is a `Toolkit` for
+the shared engine ([agent architecture](agent-architecture.md)). The shared parts needed
+only data-driven additions: the domain's approval tools in `ApprovalTool`, its context
+fields on `TurnContext` (`book_preferences`, `book_shortlist`), its effect kinds on
+`AppliedEffect` (serialized with their own fields only), and one entry each in the engine's
+`_MEMORY_EFFECTS` and `_SHORTLIST_EFFECTS` tables. The engine loop, budgets, signing,
+grounding flow and UI chat code did not change.
 
 ## Quick start
 
@@ -255,20 +342,28 @@ docker compose --profile demo up --build   # Docker
 scripts/quickstart.sh                      # uv, no Docker
 ```
 
+Add books with `DEMO_BOOKS=1 docker compose --profile demo up --build` or
+`CURIO_BOOKS=1 scripts/quickstart.sh`: the first run then also prepares goodbooks-10k
+(about 150 MB to download, under a minute and about 1 GB of RAM; ~9 MB on disk). Both ways
+serve books whenever they are prepared, so the flag is only needed once.
+
 On the first run both download the pinned recipe file (about 400 KB, SHA-256 checked) and
 then start the API (port 8000) and the UI (port 8501); later runs reuse the recipes. Expect
 a few minutes for the first Docker build or `uv sync` (PyTorch is a dependency of the
 fashion engine even though the demo never loads it), then seconds to start.
 
 - **Docker** (`demo` profile): `demo-data` prepares the recipes into the `demo-data`
-  volume (nothing is written to `./data`), `demo-api` serves them with
-  `ENABLED_DOMAINS=cocktails` (it never loads CLIP or opens Qdrant), and `demo-ui` starts
-  once the API is healthy. `docker compose --profile demo down -v` removes the volume.
+  volume (nothing is written to `./data`), plus the books with `DEMO_BOOKS=1`; `demo-api`
+  serves them with `ENABLED_DOMAINS=cocktails,books` (it never loads CLIP or opens Qdrant),
+  and `demo-ui` starts once the API is healthy. `docker compose --profile demo down -v`
+  removes the volume.
 - **`scripts/quickstart.sh`**: runs `uv sync --locked --extra ui --extra anthropic`, writes
-  `data/cocktails.parquet` if it is missing, starts the API in the background, prints which
-  domains and chat are available, then runs the UI; Ctrl+C stops both. `ENABLED_DOMAINS`
-  (default `cocktails`), `API_PORT` and `UI_PORT` change what it serves and where. With
-  fashion prepared, `ENABLED_DOMAINS=fashion,cocktails scripts/quickstart.sh` serves both.
+  `data/cocktails.parquet` if it is missing (and the book files with `CURIO_BOOKS=1`),
+  starts the API in the background, prints which domains and chat are available, then runs
+  the UI; Ctrl+C stops both. `ENABLED_DOMAINS` (default `cocktails,books`; a domain that is
+  not prepared is skipped), `API_PORT` and `UI_PORT` change what it serves and where. With
+  fashion prepared, `ENABLED_DOMAINS=fashion,cocktails,books scripts/quickstart.sh` serves
+  all three.
 
 Chat works when `LLM_*` is set in `.env` (see [LLM configuration](#llm-configuration));
 both ways read it. Without it, the assistant says chat is unavailable and how to enable
@@ -370,7 +465,8 @@ docker compose run --rm --user "$(id -u):$(id -g)" prepare-cocktails
 docker compose --profile fashion restart api
 ```
 
-`--user` makes the written file belong to you. Running
+`--user` makes the written file belong to you. `prepare-books` does the same for the book
+catalog (`docker compose run --rm --user "$(id -u):$(id -g)" prepare-books`). Running
 `uv run python -m scripts.prepare_cocktails` on the host and then
 `docker compose --profile fashion restart api` works too. The CLIP model is downloaded once into the
 `hf-cache` volume; the image creates that directory for its non-root user.
@@ -391,15 +487,15 @@ Any OpenAI-compatible gateway (OmniRoute, OpenRouter, LiteLLM, Ollama, vLLM) wor
 `LLM_BASE_URL=http://127.0.0.1:20128/v1`, choose an available gateway model ID for
 `LLM_MODEL`, and keep the gateway key in `.env`. The API uses this configuration
 for both intent extraction and catalog-grounded replies. Without `LLM_MODEL`
-every feature except chat still works. One configuration serves both the fashion and the
-cocktail assistant. Set `AGENT_SIGNING_KEY` to a long random
+every feature except chat still works. One configuration serves the fashion, cocktail and
+book assistants. Set `AGENT_SIGNING_KEY` to a long random
 string when running several API workers, so approval proposals verify on any worker.
 
 ## API
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/health` | Index and catalog sizes, whether chat and ranking are enabled, `fashion_enabled`, `cocktails_enabled`, `cocktail_count`, `llm_configured`, and `domains` (as below) |
+| GET | `/health` | Index and catalog sizes, whether chat and ranking are enabled, `fashion_enabled`, `cocktails_enabled`, `cocktail_count`, `books_enabled`, `book_count`, `llm_configured`, and `domains` (as below) |
 | GET | `/domains` | Every registered domain in display order: `id`, `label`, `enabled`, `chat_enabled`, `item_count`, `hint` |
 | GET | `/products/{id}` | Product details |
 | GET | `/products/{id}/graph` | Bounded product neighborhood: nodes and edges |
@@ -417,12 +513,20 @@ string when running several API workers, so approval proposals verify on any wor
 | POST | `/cocktails/pantry` | `{"ingredients": ["Gin", "Lime"], "alcohol": "any", "max_missing": 2, "top_k": 10}`: drinks you can make, with what is missing |
 | GET | `/cocktails/{id}` | Full recipe (404 for an unknown ID) |
 | GET | `/cocktails/{id}/similar?top_k=5&alcohol=any` | Drinks sharing the most distinctive ingredients |
-| POST | `/chat` | One agent turn: `{"domain": "fashion\|cocktails", "message", "history", "preferences", "shopper_id", "shortlist", "cocktail_preferences", "cocktail_shortlist", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal. `domain` defaults to `fashion` |
+| GET | `/books/genres`, `/books/moods` | Genres in use (most common first) and the browse moods |
+| GET | `/books/index` | Every book's `book_id`, `title` and first `author`, most rated first (for pickers) |
+| POST | `/books/search` | `{"query": "fantasy like The Name of the Wind", "genres": [], "mood": null, "author": null, "min_rating": null, "max_pages": null, "exclude_genres": [], "exclude_authors": [], "boost_genres": [], "top_k": 10}`; an empty query with filters browses |
+| POST | `/books/because` | `{"liked": [192, 2], "exclude_genres": [], "exclude_authors": [], "top_k": 10}`: what readers of those books also liked |
+| GET | `/books/{id}` | Book details (404 for an unknown ID) |
+| GET | `/books/{id}/similar?top_k=5&other_authors_only=false` | Readers who liked this book also liked |
+| GET | `/books/{id}/by-author?top_k=5` | More by its first author |
+| POST | `/chat` | One agent turn: `{"domain": "fashion\|cocktails\|books", "message", "history", "preferences", "shopper_id", "shortlist", "cocktail_preferences", "cocktail_shortlist", "book_preferences", "book_shortlist", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal. `domain` defaults to `fashion` |
 | POST | `/chat/stream` | The same turn as NDJSON: `step` events, then `reply` (or `error`) |
 | POST, GET | `/chat/feedback` | Rate an answer; summary of ratings and recent negative feedback |
 | GET | `/evaluation` | Offline evaluation results saved by `scripts.evaluate --output` |
 
-Every `/cocktails` endpoint returns 503 until `scripts.prepare_cocktails` has been run, and
+Every `/cocktails` endpoint returns 503 until `scripts.prepare_cocktails` has been run,
+every `/books` endpoint until `scripts.prepare_books` has, and
 every fashion endpoint (`/products`, `/sections`, `/search`, `/users`, `/demo/customers`,
 `/evaluation`) returns 503 with how to prepare the H&M data when fashion is not served.
 `/chat` returns 503 when the requested domain is not served or has no assistant (no LLM);
@@ -559,13 +663,18 @@ the real recipe catalog; chat replies come from the scripted stub, as the README
 ### End-to-end tests
 
 `tests/e2e` starts the real API (real catalog, CLIP index, recommenders and ranker), the
-real Streamlit UI and Chromium, then clicks through every page in both domains: the feed
+real Streamlit UI and Chromium, then clicks through every page in all three domains: the feed
 and its strategies, description and photo search, the product dialog hand-off to the
 assistant, product connections, model quality, the agent trace, self-correction,
 approve / narrow / decline, clarifying questions, memory, personal picks, the cocktail
-chat, recipe search, "What can I make?" and phone layouts. API scenarios check CLIP
-retrieval quality, image search finding the photographed product, every strategy's
-evidence, signed approvals (including cross-domain replay) and the cocktail endpoints.
+chat, recipe search, "What can I make?", the Books page (search seeded by a title, the book
+dialog, "Because you liked…", browse by mood), the book agent (grounded search,
+self-correction of an invented rating, reading-list approval, remembered tastes in the
+trace, a clarifying question) and phone layouts. API scenarios check CLIP retrieval
+quality, image search finding the photographed product, every strategy's evidence, signed
+approvals (including cross-domain replay), the cocktail endpoints and the book probes on
+the real catalog ("fantasy like The Name of the Wind", "short classic novels").
+`test_books_e2e.py` skips when the book files are not prepared.
 
 The chat model is `tests/e2e/llm_stub.py`, a scripted OpenAI-compatible server: the app
 reaches it through `LLM_PROVIDER=openai` and `LLM_BASE_URL`, so the real provider path runs
@@ -579,7 +688,8 @@ and that the UI opens on cocktails, says how to enable chat and has no fashion p
 opens no Qdrant index, so it runs beside the full-data API.
 
 Prepare the data as in [Fashion data](#fashion-data) (`prepare_data`, `fetch_photos`, `build_index`,
-`fetch_query_photos`, `train_ranker`, `evaluate`, `prepare_cocktails`), stop any API that
+`fetch_query_photos`, `train_ranker`, `evaluate`, `prepare_cocktails`, `prepare_books`),
+stop any API that
 holds the embedded Qdrant index, then run `uv run pytest -m e2e tests/e2e`. Screenshots of
 each step go to `e2e-artifacts/` (override with `E2E_ARTIFACTS`); `E2E_DATA_DIR`,
 `E2E_QDRANT_PATH` and `E2E_CHROMIUM` point at other data or browsers. The default
@@ -593,7 +703,12 @@ must report cocktails served and fashion not, `/products/1` must be 503 and reci
 
 The offline suite covers fashion-less serving in `tests/test_optional_domains.py` (real
 `Settings` over a temporary data folder; CLIP and Qdrant fail the test if touched) and the
-UI's cocktails-only, no-domain and legacy-API cases in `tests/test_ui_cocktails.py`.
+UI's cocktails-only, no-domain and legacy-API cases in `tests/test_ui_cocktails.py`. Books
+have their own offline tests over a ten-book fixture (`tests/conftest.py`): the catalog,
+taxonomy and recommender in `tests/books/`, `scripts.prepare_books` over a miniature
+goodbooks-10k checkout in `tests/test_prepare_books.py`, the agent and its grounding in
+`tests/chat/test_book_agent.py`, loading and endpoints in `tests/test_books_api.py`, and
+the UI in `tests/test_ui_books.py`. CI does not download goodbooks-10k.
 
 ### Release scope and compatibility
 
@@ -604,4 +719,8 @@ clients written for 0.2.0 keep working. Unreleased changes: `/health` and `/doma
 gain fields; the UI still reads an older API's `/health`. In Docker the full stack now
 starts with `docker compose --profile fashion up` (plain `docker compose up` selects no
 service), and Python code that read fields from `Services` reads them from
-`services.fashion` / `services.cocktails`.
+`services.fashion` / `services.cocktails` / `services.books`. The book domain adds fields
+only: `/health` gains `books_enabled` and `book_count`, `/domains` a third entry,
+`ChatRequest` the `books` domain with `book_preferences` and `book_shortlist`, and
+`TurnContext.auto_approve` accepts up to six tools. A client that lists `/domains` and only
+knows fashion and cocktails ignores the new entry.
