@@ -157,8 +157,9 @@ class Toolkit[T](Protocol):
 
     def check(self, turn: Turn[T], text: str) -> GroundingReport: ...
 
-    def fallback(self, items: Sequence[T]) -> str:
-        """A deterministic answer built from verified catalog facts only."""
+    def fallback(self, items: Sequence[T], extras: Mapping[str, Any] | None = None) -> str:
+        """A deterministic answer built from verified catalog facts only; `extras` are the
+        turn's domain results that are not catalog items (a book turn's drink pairing)."""
         ...
 
     def reply_fields(self, turn: Turn[T]) -> dict[str, Any]:
@@ -522,7 +523,7 @@ class AgentEngine[T]:
         final = GroundingReport(status="fallback", checked=report.checked, issues=report.issues)
         if self._out_of_time(turn):
             yield self._record(turn, _time_budget_step())
-            yield self._reply(turn, self._toolkit.fallback(turn.items), final)
+            yield self._reply(turn, self._toolkit.fallback(turn.items, turn.extras), final)
             return
         started = self._clock()
         instruction = self._toolkit.repair_instruction.format(issues="; ".join(report.issues))
@@ -552,7 +553,7 @@ class AgentEngine[T]:
             ),
             started,
         )
-        yield self._reply(turn, self._toolkit.fallback(turn.items), final)
+        yield self._reply(turn, self._toolkit.fallback(turn.items, turn.extras), final)
 
     # --- Helpers --------------------------------------------------------------------------
 
@@ -585,7 +586,7 @@ class AgentEngine[T]:
         # Built from catalog rows only, so it is grounded by construction.
         return self._reply(
             turn,
-            self._toolkit.fallback(turn.items),
+            self._toolkit.fallback(turn.items, turn.extras),
             GroundingReport(status="verified", checked=0),
         )
 

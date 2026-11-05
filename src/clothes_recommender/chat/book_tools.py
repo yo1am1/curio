@@ -60,6 +60,30 @@ class BooksByAuthor(BaseModel):
     author: AuthorName
 
 
+class PairCocktail(BaseModel):
+    """Pair drinks from the cocktail recipe catalog with one book (`book_id`, or its exact
+    `title`) or with the reader's taste (`use_reading_list`: the reading list plus remembered
+    liked and avoided genres), with reasons citing the book and the recipe. Set
+    `alcohol_free` when the reader wants no alcohol; children's and young-adult books are
+    always alcohol-free. For another pairing, pass the drinks already shown as
+    `exclude_drink_ids`."""
+
+    model_config = ConfigDict(extra="forbid")
+    book_id: PositiveInt | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    use_reading_list: bool = False
+    alcohol_free: bool = False
+    exclude_drink_ids: list[PositiveInt] = Field(default_factory=list, max_length=15)
+
+    @model_validator(mode="after")
+    def _one_subject(self) -> "PairCocktail":
+        given = [self.book_id is not None, bool(self.title and self.title.strip())]
+        given.append(self.use_reading_list)
+        if sum(given) != 1:
+            raise ValueError("Give exactly one of book_id, title or use_reading_list")
+        return self
+
+
 class SaveBooks(BaseModel):
     """Propose saving catalog books to the reader's reading list. The reader must approve
     it before anything is saved; this ends your turn. Only propose when they ask to save,
@@ -95,6 +119,7 @@ BOOK_TOOLS: dict[str, type[BaseModel]] = {
         InspectBooks,
         ReadersAlsoLiked,
         BooksByAuthor,
+        PairCocktail,
         AskShopper,
         SaveBooks,
         RememberReadingTastes,
@@ -106,6 +131,7 @@ BOOK_POLICIES: dict[str, Policy] = {
     "InspectBooks": Policy.READ,
     "ReadersAlsoLiked": Policy.READ,
     "BooksByAuthor": Policy.READ,
+    "PairCocktail": Policy.READ,
     "AskShopper": Policy.ASK,
     "SaveBooks": Policy.APPROVE,
     "RememberReadingTastes": Policy.APPROVE,

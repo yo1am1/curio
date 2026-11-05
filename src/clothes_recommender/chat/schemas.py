@@ -16,6 +16,7 @@ from clothes_recommender.chat.intent import SearchIntent
 from clothes_recommender.cocktails.domain import Cocktail, CocktailPreferences
 from clothes_recommender.domain import Product
 from clothes_recommender.outfits import Outfit, OutfitState
+from clothes_recommender.pairings.domain import BookPairing
 
 Domain = Literal["fashion", "cocktails", "books"]
 ApprovalTool = Literal[
@@ -161,6 +162,9 @@ class AssistantReply(BaseModel):
     suggestions: list[str] = Field(default_factory=list)
     # The outfit this turn built or changed; the client keeps `outfit.state` for follow-ups.
     outfit: Outfit | None = None
+    # A book turn's cocktail pairing (PairCocktail): the profile, drinks and reasons. Its
+    # drinks are also in `cocktails`.
+    pairing: BookPairing | None = None
 
 
 class TurnContext(BaseModel):

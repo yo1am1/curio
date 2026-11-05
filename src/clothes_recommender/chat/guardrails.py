@@ -296,8 +296,17 @@ class BookGroundingCheck:
         phrases = sorted(others, key=lambda name: (-len(name), name))
         self._others = _any_of(phrases, re.IGNORECASE) if phrases else None
 
-    def check(self, text: str, evidence: Sequence[Book], typed: str = "") -> GroundingReport:
-        """`typed` is what the reader wrote: titles and ratings they named may be repeated."""
+    def check(
+        self,
+        text: str,
+        evidence: Sequence[Book],
+        typed: str = "",
+        *,
+        also_allowed: Sequence[str] = (),
+    ) -> GroundingReport:
+        """`typed` is what the reader wrote: titles and ratings they named may be repeated.
+        `also_allowed` are other names this turn's tools returned (paired drinks such as
+        "Casino Royale" or "Death in the Afternoon"), which may share a book's title."""
         issues: list[str] = []
         checked = 0
         known_ids = {b.book_id for b in evidence}
@@ -307,6 +316,7 @@ class BookGroundingCheck:
             if book_id not in known_ids:
                 issues.append(f"book {book_id} was not returned by any tool")
         names = [b.title for b in evidence] + [b.series for b in evidence if b.series]
+        names += list(also_allowed)
         for title in self._title_mentions(text):
             checked += 1
             if not _name_allowed(title, names, typed):
@@ -342,14 +352,101 @@ class BookGroundingCheck:
     def _marked(self, text: str, start: int, end: int) -> bool:
         """Whether the answer marks text[start:end] as a title: bold, italic or quoted, next
         to a book ID, or followed by "by" and an author's name."""
-        before, after = text[:start], text[end:]
-        for opener, closer in _OPENERS.items():
-            if before.endswith(opener) and after.startswith(closer):
-                return True
-        if _ID_AFTER.match(after) or _ID_BEFORE.search(before):
+        if _marked_name(text, start, end, _ID_AFTER, _ID_BEFORE):
             return True
-        by = _BY.match(after)
-        return bool(by and self._others and self._others.match(after, by.end()))
+        by = _BY.match(text[end:])
+        return bool(by and self._others and self._others.match(text[end:], by.end()))
+
+
+def _marked_name(
+    text: str, start: int, end: int, id_after: re.Pattern[str], id_before: re.Pattern[str]
+) -> bool:
+    """Whether text[start:end] is bold, italic or quoted, or next to its ID."""
+    before, after = text[:start], text[end:]
+    for opener, closer in _OPENERS.items():
+        if before.endswith(opener) and after.startswith(closer):
+            return True
+    return bool(id_after.match(after) or id_before.search(before))
+
+
+# A book answer cites paired drinks as "drink #12": "[id 12]" there means a book.
+_PAIRED_DRINK_ID = re.compile(r"\b(?:drink|recipe|cocktail) #(\d+)\b", re.IGNORECASE)
+_DRINK_ID_AFTER = re.compile(rf"\s*[(,:{_DASHES}]?\s*(?:drink|recipe|cocktail) #\d+", re.I)
+_DRINK_ID_BEFORE = re.compile(rf"(?:drink|recipe|cocktail) #\d+\s*[):,{_DASHES}]?\s*$", re.I)
+
+
+class PairedDrinkCheck(CocktailGroundingCheck):
+    """Checks the drinks a book answer pairs with a book against this turn's pairing.
+
+    In a book answer most capitalised words are about books: "Manhattan", "San Francisco"
+    and "Brooklyn" are places, "Rose" a character. So a drink name counts only where the
+    answer marks it as a name (bold, italic or quoted, or next to its "drink #N"), as the
+    prompt asks, and a name inside a longer evidence book title or author ("Casino" in
+    "Casino Royale") is not a drink. Drink IDs ("drink #12") must have been returned, and
+    ingredient amounts are checked like cocktail answers when the turn paired drinks.
+    """
+
+    def check(
+        self,
+        text: str,
+        evidence: Sequence[Cocktail],
+        typed: str = "",
+        *,
+        also_allowed: Sequence[str] = (),
+    ) -> GroundingReport:
+        issues: list[str] = []
+        checked = 0
+        known_ids = {c.drink_id for c in evidence}
+        for match in _PAIRED_DRINK_ID.finditer(text):
+            checked += 1
+            if int(match.group(1)) not in known_ids:
+                issues.append(f"drink {match.group(1)} was not returned by PairCocktail")
+        evidence_names = [c.name for c in evidence] + list(also_allowed)
+        for name in self._marked_mentions(text):
+            checked += 1
+            if not _name_allowed(name, evidence_names, typed):
+                issues.append(f"{name} was not returned by PairCocktail")
+        if evidence:
+            allowed = [
+                m for c in evidence for i in c.ingredients for _, m in measures_in(i.measure or "")
+            ]
+            allowed += [m for _, m in measures_in(typed)]
+            for raw, measure in measures_in(text):
+                checked += 1
+                if not any(_same_measure(measure, other) for other in allowed):
+                    issues.append(f"{raw} does not match any amount in the paired recipes")
+        if not checked:
+            return GroundingReport(status="not_applicable")
+        return GroundingReport(
+            status="fallback" if issues else "verified", checked=checked, issues=issues
+        )
+
+    def _marked_mentions(self, text: str) -> list[str]:
+        """Drink names the answer marks as names, outside longer ingredient or glass names."""
+        if self._names is None:
+            return []
+        phrases = [m.span() for m in self._phrases.finditer(text)] if self._phrases else []
+        found = []
+        for match in self._names.finditer(text):
+            start, end = match.span()
+            if any(s <= start and end <= e and e - s > end - start for s, e in phrases):
+                continue
+            if _marked_name(text, start, end, _DRINK_ID_AFTER, _DRINK_ID_BEFORE):
+                found.append(match.group(0))
+        return found
+
+
+def merge_reports(*reports: GroundingReport) -> GroundingReport:
+    """One report for several checks of the same answer: any issue means fallback."""
+    applied = [r for r in reports if r.status != "not_applicable"]
+    if not applied:
+        return GroundingReport(status="not_applicable")
+    issues = [issue for r in applied for issue in r.issues]
+    return GroundingReport(
+        status="fallback" if issues else "verified",
+        checked=sum(r.checked for r in applied),
+        issues=issues,
+    )
 
 
 def _checkable_title(title: str) -> bool:

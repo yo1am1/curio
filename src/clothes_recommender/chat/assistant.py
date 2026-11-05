@@ -419,7 +419,7 @@ class FashionToolkit:
     def check(self, turn: Turn[Product], text: str) -> GroundingReport:
         return check_grounding(text, list(turn.evidence.values()), self._allowed_amounts(turn))
 
-    def fallback(self, items: Sequence[Product]) -> str:
+    def fallback(self, items: Sequence[Product], extras: Mapping[str, Any] | None = None) -> str:
         if not items:
             return (
                 "I couldn't confirm matching pieces. Try another description or adjust your "

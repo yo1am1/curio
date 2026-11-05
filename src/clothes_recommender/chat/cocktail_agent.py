@@ -309,7 +309,7 @@ class CocktailToolkit:
     def check(self, turn: Turn[Cocktail], text: str) -> GroundingReport:
         return self._grounding.check(text, list(turn.evidence.values()), typed=turn.message)
 
-    def fallback(self, items: Sequence[Cocktail]) -> str:
+    def fallback(self, items: Sequence[Cocktail], extras: Mapping[str, Any] | None = None) -> str:
         if not items:
             return (
                 "I couldn't confirm matching drinks. Try other ingredients, another style "
