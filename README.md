@@ -18,6 +18,37 @@ changing your shortlist or memory, and checks its answer against what the tools 
 
 ![Personalized fashion picks with the evidence behind each one](docs/screenshots/curio-fashion.jpg)
 
+Try it in one command, no large download: `docker compose --profile demo up --build`
+([quick start](#quick-start)).
+
+## Engineering highlights
+
+![Architecture: clients, FastAPI, the shared agent engine and one toolkit per domain](docs/architecture.svg)
+
+- **One agent engine, three domains.** Fashion, cocktails and books plug into the same
+  plan → act → verify loop through a typed `Toolkit` protocol. Adding the books domain needed
+  no change to the loop.
+- **Human in the loop.** Tools are policy-gated as read, ask or approve. State changes
+  become HMAC-signed proposals bound to the tool, arguments, request and time. You can approve
+  or narrow them, but never widen or replay them across domains.
+- **Grounded answers.** Every price, ID, rating and catalog title in an answer is checked
+  against what the tools returned. A failed check gets one self-correction, then a
+  deterministic fallback, and the result is shown in the UI.
+- **Bounded and observable.** Each turn allows at most five tool calls and 90 seconds, and
+  every step streams to the UI as NDJSON.
+- **Stateless server.** The client holds the shortlist, memory and outfit. Client-held text
+  is display-only and never treated as evidence.
+- **Real recommenders.** Fashion uses CLIP and Qdrant search, co-purchase and graph
+  recommenders and a learned ranker evaluated on a holdout. Books use item-item
+  collaborative filtering from about 6 million ratings, with author and series diversity
+  caps. The outfit builder spreads a total budget across slots, using co-purchase
+  coherence.
+- **Reproducible data.** Every dataset is downloaded from a pinned commit and checked by
+  SHA-256. The server runs any subset of prepared domains and explains what is missing.
+- **Tested like a product.** About 1,000 offline tests plus a browser end-to-end suite of
+  more than 50 tests. It runs real uvicorn and Streamlit in Chromium on real data, with a
+  scripted OpenAI-compatible LLM. CI also boots the quick-start stack.
+
 ## Ask Curio
 
 Describe what you want, set a budget, then refine your search or compare items. In
