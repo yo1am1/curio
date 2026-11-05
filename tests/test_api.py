@@ -414,6 +414,81 @@ def test_chat_approval_round_trip_and_tamper_rejection(services):
         assert client.post("/chat", json={"message": " "}).status_code == 422
 
 
+def test_outfit_is_planned_over_the_index_with_reasons_and_gaps(client) -> None:
+    body = {"occasion": "summer wedding", "budget": 200, "audience": "women"}
+    outfit = client.post("/outfits", json=body).json()
+    assert [slot["slot"] for slot in outfit["slots"]] == ["dress", "shoes", "bag", "accessory"]
+    dress, shoes, bag, _ = outfit["slots"]
+    assert dress["product"]["product_id"] == 3
+    # No sandals or heels in the index: any shoe type from the audience's sections fills in.
+    assert shoes["product"]["product_id"] == 6
+    assert shoes["product"]["section"] == "Ladieswear"
+    assert bag["product"] is None and "No bag matched" in bag["issue"]
+    assert outfit["status"] == "partial" and outfit["total"] == 154.98
+    assert outfit["state"] == {
+        "occasion": "summer wedding",
+        "budget": 200.0,
+        "audience": "women",
+        "pieces": [{"slot": "dress", "product_id": 3}, {"slot": "shoes", "product_id": 6}],
+        "skipped": [],
+    }
+
+
+def test_outfit_pieces_are_bought_together_when_the_graph_says_so(services) -> None:
+    fashion = services.fashion
+    links = pd.DataFrame([(2, 3, 4, 2.0)], columns=["product_id", "other_id", "count", "lift"])
+    popularity = PopularityRecommender(fashion.customers.purchases)
+    graph = GraphRecommender(fashion.customers, fashion.catalog, popularity, links)
+    body = {"occasion": "weekend", "audience": "women", "slots": ["dress", "bottom"]}
+    with TestClient(create_app(with_fashion(services, graph=graph))) as client:
+        outfit = client.post("/outfits", json=body).json()
+    dress, trousers = outfit["slots"]
+    assert (dress["product"]["product_id"], trousers["product"]["product_id"]) == (3, 2)
+    assert trousers["reason"] == "Bought together with the Floral Summer Dress in 4 baskets."
+
+
+def test_outfit_swap_and_its_errors(client) -> None:
+    state = {
+        "occasion": "office",
+        "budget": 60,
+        "audience": "men",
+        "pieces": [{"slot": "top", "product_id": 4}, {"slot": "bottom", "product_id": 1}],
+    }
+    swapped = client.post("/outfits/swap", json={"outfit": state, "slot": "bottom"}).json()
+    # No other menswear trousers exist, so the outfit is returned unchanged.
+    assert swapped["state"]["pieces"] == state["pieces"]
+    assert swapped["total"] == 47.98
+    missing = client.post("/outfits/swap", json={"outfit": state, "slot": "shoes"})
+    assert missing.status_code == 422
+    assert missing.json()["detail"] == "This outfit has no shoes; its slots are top, bottom."
+    bad = {"outfit": state, "slot": "hat"}
+    assert client.post("/outfits/swap", json=bad).status_code == 422
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"occasion": " "},
+        {"occasion": "wedding", "budget": 0},
+        {"occasion": "wedding", "slots": ["top", "top"]},
+        {"occasion": "wedding", "slots": ["top", "bottom", "shoes", "bag", "accessory", "dress"]},
+        {"occasion": "wedding", "audience": "pets"},
+    ],
+)
+def test_outfit_requests_are_validated(client, body) -> None:
+    assert client.post("/outfits", json=body).status_code == 422
+
+
+def test_chat_accepts_the_client_held_outfit(services) -> None:
+    outfit = {"occasion": "office", "pieces": [{"slot": "top", "product_id": 4}]}
+    with TestClient(create_app(with_fashion(services, assistant=EchoAssistant()))) as client:
+        response = client.post("/chat", json={"message": "cheaper top", "outfit": outfit})
+        assert response.status_code == 200
+        too_many = {**outfit, "pieces": [{"slot": "top", "product_id": 4}] * 6}
+        response = client.post("/chat", json={"message": "hi", "outfit": too_many})
+        assert response.status_code == 422
+
+
 def test_chat_feedback_is_recorded_and_summarized(client):
     rating = {"rating": "down", "message": "jeans", "answer": "Try these.", "tools": ["Search"]}
     assert client.post("/chat/feedback", json=rating).status_code == 204

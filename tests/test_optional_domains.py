@@ -42,6 +42,15 @@ FASHION_REQUESTS = [
     ("GET", "/users/1/recommendations", None),
     ("GET", "/demo/customers", None),
     ("GET", "/evaluation", None),
+    ("POST", "/outfits", {"occasion": "summer wedding", "budget": 80}),
+    (
+        "POST",
+        "/outfits/swap",
+        {
+            "outfit": {"occasion": "wedding", "pieces": [{"slot": "top", "product_id": 1}]},
+            "slot": "top",
+        },
+    ),
     ("POST", "/chat", {"message": "white sneakers"}),  # domain defaults to fashion
     ("POST", "/chat/stream", {"message": "white sneakers", "domain": "fashion"}),
 ]

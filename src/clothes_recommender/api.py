@@ -39,6 +39,16 @@ from clothes_recommender.cocktails.domain import (
 from clothes_recommender.config import get_settings
 from clothes_recommender.demo import DemoCustomer
 from clothes_recommender.domain import Product, ProductFilter, ScoredProduct, User
+from clothes_recommender.outfits import (
+    MAX_SLOTS,
+    Audience,
+    Outfit,
+    OutfitError,
+    OutfitRequest,
+    OutfitState,
+    SlotName,
+    SwapMode,
+)
 from clothes_recommender.recommenders.base import Recommender, UnknownUserError
 from clothes_recommender.services import (
     BOOKS,
@@ -114,6 +124,23 @@ class FeedbackSummary(BaseModel):
     up: int
     down: int
     recent_down: list[ChatFeedback]
+
+
+class OutfitQuery(BaseModel):
+    """Build an outfit without the assistant: the same planner the BuildOutfit tool uses."""
+
+    occasion: str = Field(min_length=2, max_length=200, pattern=r"\S")
+    budget: float | None = Field(default=None, gt=0, le=10_000)
+    audience: Audience | None = None
+    slots: list[SlotName] | None = Field(default=None, min_length=2, max_length=MAX_SLOTS)
+    max_item_price: float | None = Field(default=None, gt=0, le=10_000)
+
+
+class OutfitSwap(BaseModel):
+    outfit: OutfitState
+    slot: SlotName
+    mode: SwapMode = "other"
+    refine: str = Field(default="", max_length=100)
 
 
 class DomainInfo(BaseModel):
@@ -431,6 +458,28 @@ def create_app(services: Services | None = None) -> FastAPI:
     def product_graph(product_id: int, fashion: FashionDep, top_k: TopK = 12) -> dict:
         get_product(product_id, fashion)
         return fashion.graph.neighborhood(product_id, top_k)
+
+    @app.post("/outfits")
+    def build_outfit(query: OutfitQuery, fashion: FashionDep) -> Outfit:
+        slots = tuple(dict.fromkeys(query.slots or ()))
+        if query.slots is not None and len(slots) < 2:
+            raise HTTPException(status_code=422, detail="Name at least two different slots.")
+        request = OutfitRequest(
+            occasion=query.occasion.strip(),
+            budget=query.budget,
+            audience=query.audience,
+            slots=slots,
+            max_item_price=query.max_item_price,
+        )
+        return fashion.outfits.outfit(request)
+
+    @app.post("/outfits/swap")
+    def swap_outfit_item(request: OutfitSwap, fashion: FashionDep) -> Outfit:
+        try:
+            swap = fashion.outfits.swap(request.outfit, request.slot, request.mode, request.refine)
+        except OutfitError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        return swap.outfit
 
     @app.get("/sections")
     def sections(fashion: FashionDep) -> list[str]:
