@@ -357,11 +357,14 @@ The outfit builder is fashion-only and adds fields; nothing existing changes sha
 - `SlotName = Literal["top", "bottom", "dress", "outerwear", "shoes", "bag", "accessory"]`,
   `Audience = Literal["women", "men", "kids"]`, `SwapMode = Literal["other", "cheaper"]`.
 - `OutfitState(occasion: str (1-200), budget: float | None (0 < b ≤ 10,000), audience,
-  pieces: list[OutfitPiece(slot, product_id)] (≤ 5), skipped: list[int] (≤ 20))`: what a
-  client holds and sends back. The server re-reads every piece from the catalog.
+  pieces: list[OutfitPiece(slot, product_id, reason: str (≤ 300))] (≤ 5), skipped:
+  list[int] (≤ 20), notes: list[str (≤ 300)] (≤ 4))`: what a client holds and sends back.
+  The server re-reads every piece from the catalog; `reason` and `notes` are display-only
+  (shown again after a swap, never sent to the model, never grounding evidence).
 - `Outfit(occasion, audience, budget, total, status: "complete" | "partial" | "empty",
-  slots: list[OutfitSlot], notes: list[str], minimum: float | None, state: OutfitState)`;
-  `OutfitSlot(slot, label, product: Product | None, reason, issue, cheapest)`. An empty slot
+  slots: list[OutfitSlot], notes: list[str], notes_carried: bool, minimum: float | None,
+  state: OutfitState)`; `OutfitSlot(slot, label, product: Product | None, reason, carried:
+  bool, issue, cheapest)`; `carried` marks a reason that came back from the client. An empty slot
   has an `issue` and, when the budget is what kept it out, its `cheapest` price. `minimum`
   is the cheapest complete outfit when the budget cannot cover one. `Outfit.amounts()`
   lists the euro figures an answer may state besides piece prices.
