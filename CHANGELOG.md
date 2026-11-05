@@ -153,6 +153,10 @@ All notable changes to Curio are recorded here. The format follows
   network error shows the placeholder, never a broken image. A `books.parquet` prepared
   without the column still loads (no ISBNs). Credited "Some covers: Open Library" in the UI
   and the README. Re-run `scripts.prepare_books` to add the ISBNs.
+- README "Data and licences" and the technical guide's book Terms said covers load from
+  Goodreads and descriptions stay local, while three committed README screenshots show
+  covers and a description; they now say those screenshots show covers and a description
+  excerpt for illustration only, not licensed by this repository.
 
 ### Security
 

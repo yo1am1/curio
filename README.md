@@ -205,11 +205,14 @@ and is not covered by that licence:
   licence. `prepare_books` downloads it from a pinned commit and checks each file's
   SHA-256. Its metadata, shelves and ratings were collected from Goodreads, so Goodreads'
   terms may also apply to them. Covers and book descriptions belong to their publishers and
-  Goodreads and are not covered by CC BY-SA: covers are loaded directly from Goodreads by
-  your browser, and descriptions stay in your local prepared file. The prepared files are
-  not part of this repository; if you share them, credit goodbooks-10k and share them under
-  CC BY-SA 4.0. The book pages credit "Book data: goodbooks-10k from Goodreads (CC BY-SA
-  4.0)" and link each book to Goodreads.
+  Goodreads and are not covered by CC BY-SA: when you run Curio, covers are loaded directly
+  from Goodreads by your browser, and descriptions stay in your local prepared file. The
+  exception is three README screenshots (`docs/screenshots/curio-books.jpg`,
+  `curio-book-detail.jpg` and `curio-book-agent.jpg`), which show book covers and a
+  description excerpt for illustration only; that material remains its owners' and is not
+  licensed by this repository. The prepared files are not part of this repository; if you
+  share them, credit goodbooks-10k and share them under CC BY-SA 4.0. The book pages credit
+  "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.0)" and link each book to Goodreads.
 - **Book covers missing from Goodreads** come from the [Open Library Covers
   API](https://openlibrary.org/dev/docs/api/covers) by ISBN, loaded by your browser; the
   book pages credit "Some covers: Open Library" and the book dialog links each such cover

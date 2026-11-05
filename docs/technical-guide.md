@@ -274,9 +274,12 @@ written atomically; restart the API after preparing.
 licence (its `LICENSE` file). Its metadata, shelves and ratings were collected from
 Goodreads, so Goodreads' own terms may also apply to that content; Curio does not
 relicense it, and the MIT licence covers this repository's code only. Covers stay on
-Goodreads' servers and are loaded by the browser; they and the book descriptions are the
-publishers' and Goodreads' material, not covered by CC BY-SA. The prepared files stay on
-your machine. If you share them, they are adaptations of goodbooks-10k: credit it and share
+Goodreads' (or Open Library's) servers and are loaded by the browser; they and the book
+descriptions are the publishers' and Goodreads' material, not covered by CC BY-SA. The
+prepared files stay on your machine. The only copies in this repository are three README
+screenshots (`curio-books.jpg`, `curio-book-detail.jpg`, `curio-book-agent.jpg`), which show
+covers and a description excerpt for illustration only; they are not licensed by this
+repository. If you share them, they are adaptations of goodbooks-10k: credit it and share
 them under CC BY-SA 4.0. The UI credits "Book data: goodbooks-10k from Goodreads (CC BY-SA
 4.0)" and links each book to its Goodreads page.
 
