@@ -238,3 +238,135 @@ def test_stream_errors_do_not_poison_history(api):
     assert not app.exception
     assert app.error[0].value == "The assistant is busy."
     assert app.session_state["chat_history"] == []
+
+
+SHOE = {**COAT, "product_id": 3, "name": "Block heels", "price": 24.99, "product_type": "Heels"}
+OUTFIT_STATE = {
+    "occasion": "summer wedding",
+    "budget": 80.0,
+    "audience": "women",
+    "pieces": [{"slot": "outerwear", "product_id": 1}, {"slot": "shoes", "product_id": 3}],
+    "skipped": [],
+}
+OUTFIT = {
+    "occasion": "summer wedding",
+    "audience": "women",
+    "budget": 80.0,
+    "total": 69.99,
+    "status": "partial",
+    "slots": [
+        {"slot": "outerwear", "label": "Outerwear", "product": COAT, "reason": "Best match."},
+        {
+            "slot": "shoes",
+            "label": "Shoes",
+            "product": SHOE,
+            "reason": "Bought together with the Wool coat in 3 baskets.",
+        },
+        {
+            "slot": "bag",
+            "label": "Bag",
+            "product": None,
+            "issue": "The budget cannot cover the bag: the cheapest match costs €14.99.",
+            "cheapest": 14.99,
+        },
+    ],
+    "notes": ["A complete outfit needs at least €84.98."],
+    "minimum": 84.98,
+    "state": OUTFIT_STATE,
+}
+OUTFIT_STEPS = [
+    {**STEP, "kind": "plan", "name": "Plan outfit", "summary": "Planned 3 slots."},
+    {**STEP, "name": "Fill slot", "summary": "Filled outerwear: Wool coat · €45.00."},
+    {**STEP, "name": "BuildOutfit", "summary": "Filled 2 of 3 slots for €69.99."},
+]
+
+
+def outfit_reply(**fields):
+    return (
+        reply(
+            text="Here's the outfit.",
+            products=[COAT, SHOE, SCARF],
+            steps=OUTFIT_STEPS,
+            outfit=OUTFIT,
+            suggestions=["Cheaper outerwear"],
+        )
+        | fields
+    )
+
+
+def test_outfit_card_shows_slots_reasons_gaps_and_the_budget(api):
+    _, responders = api
+    responders["chat"] = stream(outfit_reply())
+    app = home().run()
+    app.chat_input[0].set_value("Summer wedding outfit under €80").run()
+    assert not app.exception
+    assert any("Outfit · summer wedding" in m.value for m in app.markdown)
+    captions = [c.value for c in app.caption]
+    assert "Bought together with the Wool coat in 3 baskets." in captions
+    assert any("The budget cannot cover the bag" in c for c in captions)
+    assert "A complete outfit needs at least €84.98." in captions
+    (bar,) = app.get("progress")
+    assert bar.proto.text == "€69.99 of €80.00 · €10.01 left" and bar.proto.value == 87
+    keys = {button.key for button in app.button}
+    assert {"outfit_swap_home_1_shoes", "outfit_cheaper_home_1_outerwear"} <= keys
+    assert "outfit_save_home_1" in keys and "outfit_swap_home_1_bag" not in keys
+    # The scarf is not part of the outfit, so it keeps its product card.
+    assert "chat_view_home_1_2" in keys and "chat_view_home_1_1" not in keys
+    assert app.session_state["chat_outfit"] == OUTFIT_STATE
+    trace = [m.value for m in app.markdown if "**Plan outfit**" in m.value]
+    assert trace and "Planned 3 slots." in trace[0]
+
+
+def test_outfit_buttons_send_follow_ups_with_the_outfit(api):
+    calls, responders = api
+    responders["chat"] = stream(outfit_reply(), reply(), reply())
+    app = home().run()
+    app.chat_input[0].set_value("Summer wedding outfit").run()
+    app.button(key="outfit_swap_home_1_shoes").click().run()
+    assert not app.exception
+    body = calls["bodies"][-1]
+    assert body["message"] == "Swap the shoes in my outfit"
+    assert body["outfit"] == OUTFIT_STATE
+    assert body["history"][-1]["product_ids"] == [1, 3, 2]
+    # Only the latest turn offers actions.
+    assert "outfit_swap_home_1_shoes" not in [b.key for b in app.button]
+
+
+def test_save_outfit_and_cheaper_buttons(api):
+    calls, responders = api
+    responders["chat"] = stream(outfit_reply(), outfit_reply(), reply())
+    app = home().run()
+    app.chat_input[0].set_value("Summer wedding outfit").run()
+    app.button(key="outfit_cheaper_home_1_outerwear").click().run()
+    assert calls["bodies"][-1]["message"] == "Cheaper outerwear for my outfit"
+    app.button(key="outfit_save_home_3").click().run()
+    assert not app.exception
+    assert calls["bodies"][-1]["message"] == ui.SAVE_OUTFIT
+
+
+def test_new_conversation_forgets_the_outfit(api):
+    _, responders = api
+    responders["chat"] = stream(outfit_reply())
+    app = home().run()
+    app.chat_input[0].set_value("Summer wedding outfit").run()
+    assert "chat_outfit" in app.session_state
+    app.button(key="chat_reset_home").click().run()
+    assert not app.exception
+    assert "chat_outfit" not in app.session_state
+
+
+def test_outfit_starter_chip_is_offered(api):
+    calls, responders = api
+    responders["chat"] = stream(reply())
+    app = home().run()
+    starter = app.button(key="chat_starter_home_3")
+    assert starter.label == "Outfit for an occasion"
+    starter.click().run()
+    assert calls["bodies"][-1]["message"] == "Outfit for an occasion"
+    assert "outfit" not in calls["bodies"][-1]
+
+
+def test_budget_line_reads_left_over_or_total():
+    assert ui.budget_line(69.99, 80) == "€69.99 of €80.00 · €10.01 left"
+    assert ui.budget_line(80.5, 80) == "€80.50 of €80.00 · €0.50 over"
+    assert ui.budget_line(12.5, None) == "Total €12.50"

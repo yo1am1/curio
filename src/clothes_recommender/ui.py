@@ -969,6 +969,8 @@ class DomainCopy:
     ask_shortlist: str = "Ask before saving to my shortlist"
 
 
+# The starter asks for an occasion; the agent asks which one, then builds the outfit.
+OUTFIT_STARTER = "Outfit for an occasion"
 FASHION_COPY = DomainCopy(
     title="Find your next favorite.",
     intro=(
@@ -980,7 +982,12 @@ FASHION_COPY = DomainCopy(
         "Tell me what you're looking for, including a colour, occasion or budget. "
         "Try **white sneakers under €40**."
     ),
-    starters=("White sneakers under €40", "A linen shirt for summer", "Warm knitwear"),
+    starters=(
+        "White sneakers under €40",
+        "A linen shirt for summer",
+        "Warm knitwear",
+        OUTFIT_STARTER,
+    ),
     unavailable=(
         "The assistant is currently unavailable. "
         "You can still discover pieces by description or photo."
@@ -1084,6 +1091,10 @@ STEP_LABELS = {
     "InspectProducts": "Inspect products",
     "FindRelated": "Find related pieces",
     "PersonalPicks": "Personal picks",
+    "Plan outfit": "Plan outfit",
+    "Fill slot": "Fill slot",
+    "BuildOutfit": "Build outfit",
+    "SwapOutfitItem": "Swap a piece",
     "SearchCocktails": "Search recipes",
     "InspectCocktails": "Inspect recipes",
     "SimilarCocktails": "Find similar drinks",
@@ -1486,6 +1497,101 @@ def show_chat_books(books: list[dict], index: int, context: str) -> None:
                 )
 
 
+# The current outfit's client-held state (fashion only), sent back so the agent can swap or
+# save its pieces.
+OUTFIT_STATE = "chat_outfit"
+SAVE_OUTFIT = "Save the whole outfit to my shortlist"
+
+
+def swap_prompt(label: str) -> str:
+    return f"Swap the {label.lower()} in my outfit"
+
+
+def cheaper_prompt(label: str) -> str:
+    return f"Cheaper {label.lower()} for my outfit"
+
+
+def budget_line(total: float, budget: float | None) -> str:
+    if budget is None:
+        return f"Total €{total:.2f}"
+    left = budget - total
+    rest = f"€{left:.2f} left" if left >= 0 else f"€{-left:.2f} over"
+    return f"€{total:.2f} of €{budget:.2f} · {rest}"
+
+
+def outfit_card(outfit: dict, index: int, context: str, latest: bool) -> None:
+    """Slots in a row with photos and reasons, the total against the budget, and (on the
+    latest turn) Swap, Cheaper and Save outfit, which send follow-ups to the agent."""
+    compact = context == "popup"
+    slots = outfit["slots"]
+    with st.container(key=f"outfit_{context}_{index}", border=True):
+        st.markdown(f":material/checkroom: **Outfit · {plain(outfit['occasion'])}**")
+        columns = [st.container() for _ in slots] if compact else st.columns(len(slots))
+        for column, slot in zip(columns, slots, strict=True):
+            label = slot["label"]
+            with (
+                column,
+                st.container(
+                    key=f"outfit_slot_{context}_{index}_{slot['slot']}",
+                    horizontal=compact,
+                    vertical_alignment="center" if compact else "top",
+                ),
+            ):
+                product = slot.get("product")
+                if product is None:
+                    with st.container(gap=None):
+                        st.markdown(f"**{label}**")
+                        st.caption(f":material/block: {plain(slot.get('issue', ''))}")
+                    continue
+                pid = product["product_id"]
+                if (photo := product_photo(pid)) is not None:
+                    # Capped, so stacked slots stay short on a phone; columns are narrower.
+                    st.image(photo, width=56 if compact else 180)
+                with st.container(gap=None):
+                    st.markdown(f"**{label}**")
+                    st.text(product["name"])
+                    st.caption(f"€{product['price']:.2f} · {product['colour']}")
+                if latest:
+                    # Short text-only buttons fit side by side in a narrow slot column.
+                    with st.container(horizontal=True, gap="small"):
+                        st.button(
+                            "Swap",
+                            key=f"outfit_swap_{context}_{index}_{slot['slot']}",
+                            type="tertiary",
+                            help=f"Ask Curio for another {label.lower()}",
+                            on_click=queue_message,
+                            args=(swap_prompt(label),),
+                        )
+                        st.button(
+                            "Cheaper",
+                            key=f"outfit_cheaper_{context}_{index}_{slot['slot']}",
+                            type="tertiary",
+                            help=f"Ask Curio for a cheaper {label.lower()}",
+                            on_click=queue_message,
+                            args=(cheaper_prompt(label),),
+                        )
+                if slot.get("reason") and not compact:
+                    st.caption(plain(slot["reason"]))
+        total, budget = outfit["total"], outfit.get("budget")
+        with st.container(key=f"outfit_total_{context}_{index}"):
+            if budget:
+                st.progress(min(total / budget, 1.0), text=budget_line(total, budget))
+            else:
+                st.caption(budget_line(total, None))
+        for note in outfit.get("notes", []):
+            st.caption(plain(note))
+        if latest and any(slot.get("product") for slot in slots):
+            st.button(
+                "Save outfit",
+                key=f"outfit_save_{context}_{index}",
+                icon=":material/favorite:",
+                type="primary",
+                help="Curio proposes saving every piece; you approve or untick pieces.",
+                on_click=queue_message,
+                args=(SAVE_OUTFIT,),
+            )
+
+
 def approval_options(action: dict) -> list[tuple[str, object, str]]:
     """Checkbox rows (field, value, label) for every value the shopper may drop."""
     args = action["args"]
@@ -1572,8 +1678,13 @@ def show_chat_turn(turn: dict, index: int, context: str, latest: bool = False):
         if grounding in badges:
             label, color, icon = badges[grounding]
             st.badge(label, color=color, icon=icon)
-        if turn.get("products"):
-            show_chat_products(turn["products"], index, context)
+        products = turn.get("products") or []
+        if outfit := turn.get("outfit"):
+            outfit_card(outfit, index, context, latest)
+            worn = {s["product"]["product_id"] for s in outfit["slots"] if s.get("product")}
+            products = [p for p in products if p["product_id"] not in worn]
+        if products:
+            show_chat_products(products, index, context)
         if turn.get("cocktails"):
             show_chat_cocktails(turn["cocktails"], index, context)
         if turn.get("books"):
@@ -1614,6 +1725,8 @@ def show_chat_turn(turn: dict, index: int, context: str, latest: bool = False):
 
 def reset_chat() -> None:
     st.session_state[state_key("history")] = []
+    if current_domain() == FASHION:
+        st.session_state.pop(OUTFIT_STATE, None)
     for name in ("queued", "decision"):
         st.session_state.pop(state_key(name), None)
 
@@ -1642,6 +1755,8 @@ def fashion_context() -> dict:
         context["shopper_id"] = st.session_state["chat_shopper"]
     if shortlist():
         context["shortlist"] = [p["product_id"] for p in shortlist()]
+    if outfit := st.session_state.get(OUTFIT_STATE):
+        context["outfit"] = outfit
     return context
 
 
@@ -1824,7 +1939,11 @@ def run_turn(
         "clarification": reply.get("clarification"),
         "pending_action": reply.get("pending_action"),
         "suggestions": reply.get("suggestions", []),
+        "outfit": reply.get("outfit"),
     }
+    if reply.get("outfit"):
+        # Follow-ups ("cheaper shoes", "save the outfit") refer to the latest outfit.
+        st.session_state[OUTFIT_STATE] = reply["outfit"]["state"]
     if user_turn is not None:
         history.append(user_turn)
     history.append(assistant_turn)
