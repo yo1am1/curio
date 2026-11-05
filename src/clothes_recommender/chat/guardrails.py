@@ -10,6 +10,7 @@ from collections.abc import Iterable, Sequence
 from itertools import combinations
 from typing import Any
 
+from clothes_recommender.books.domain import Book
 from clothes_recommender.chat.intent import SearchIntent
 from clothes_recommender.chat.schemas import (
     ActionDecision,
@@ -230,6 +231,101 @@ def _name_allowed(name: str, evidence_names: Sequence[str], typed: str) -> bool:
 
 def _same_measure(a: Measure, b: Measure) -> bool:
     return a[1] == b[1] and abs(a[0] - b[0]) <= _MEASURE_TOLERANCE
+
+
+# Book answers cite books as "[id 192]" (the prompt's format) or "book #192".
+_BOOK_ID = re.compile(r"\[id (\d+)\]|\bbook #(\d+)\b", re.IGNORECASE)
+# "★ 4.55", "rated 4.5", "average rating of 4.55", "4.6/5", "4.5 out of 5", "4.3 stars".
+_RATING = re.compile(
+    r"(?:[★⭐]|\brated\b|\brating(?:\s+of)?\b|\baverage\s+rating(?:\s+of)?\b)"
+    r"\s*:?\s*([0-5](?:[.,]\d{1,2})?)(?![\d.,]*\d)"
+    r"|(?<![\d.,])([0-5](?:[.,]\d{1,2})?)\s*(?:/\s*5\b|out of 5\b|stars?\b|★)",
+    re.IGNORECASE,
+)
+# Single-word titles shorter than this ("It", "Room", "Dune") read like ordinary words.
+_MIN_SINGLE_WORD_TITLE = 6
+
+
+class BookGroundingCheck:
+    """Checks that titles, book IDs and ratings in a book answer come from tool evidence.
+
+    Titles are matched case-sensitively in catalog spelling and only when they are unlikely to
+    be ordinary words: several words, or one word of at least six letters ("Twilight" counts,
+    "It" and "Room" do not). A title inside a longer title in the answer counts as the longer
+    one. Ratings must equal an evidence book's Goodreads average at the precision written
+    ("4.55", or "4.6" for 4.55) or a number the reader typed.
+    """
+
+    def __init__(self, titles: Iterable[str], *, other_names: Iterable[str] = ()) -> None:
+        """`other_names` (authors, genres, moods) are never read as titles: a title equal to
+        one ("Mystery") is ignored, and so is a title inside one ("George" in "George
+        Orwell")."""
+        others = {name for name in other_names if name.strip()}
+        folded = {name.casefold() for name in others}
+        names = sorted(
+            {t for t in titles if _checkable_title(t) and t.casefold() not in folded},
+            key=lambda name: (-len(name), name),
+        )
+        self._titles = _any_of(names) if names else None
+        phrases = sorted(others, key=lambda name: (-len(name), name))
+        self._others = _any_of(phrases, re.IGNORECASE) if phrases else None
+
+    def check(self, text: str, evidence: Sequence[Book], typed: str = "") -> GroundingReport:
+        """`typed` is what the reader wrote: titles and ratings they named may be repeated."""
+        issues: list[str] = []
+        checked = 0
+        known_ids = {b.book_id for b in evidence}
+        for match in _BOOK_ID.finditer(text):
+            book_id = int(next(group for group in match.groups() if group))
+            checked += 1
+            if book_id not in known_ids:
+                issues.append(f"book {book_id} was not returned by any tool")
+        names = [b.title for b in evidence] + [b.series for b in evidence if b.series]
+        for title in self._title_mentions(text):
+            checked += 1
+            if not _name_allowed(title, names, typed):
+                issues.append(f"{title} was not returned by any tool")
+        ratings = [b.average_rating for b in evidence]
+        typed_numbers = amounts_in(typed)
+        for match in _RATING.finditer(text):
+            raw = match.group(1) or match.group(2)
+            checked += 1
+            if not _rating_allowed(raw, ratings, typed_numbers):
+                issues.append(f"a rating of {raw} does not match any book in the evidence")
+        if not checked:
+            return GroundingReport(status="not_applicable")
+        return GroundingReport(
+            status="fallback" if issues else "verified", checked=checked, issues=issues
+        )
+
+    def _title_mentions(self, text: str) -> list[str]:
+        """Titles in `text`, except those inside a longer author, genre or mood name."""
+        if self._titles is None:
+            return []
+        others = [m.span() for m in self._others.finditer(text)] if self._others else []
+        mentions = []
+        for match in self._titles.finditer(text):
+            start, end = match.span()
+            if not any(s <= start and end <= e and e - s > end - start for s, e in others):
+                mentions.append(match.group(0))
+        return list(dict.fromkeys(mentions))
+
+
+def _checkable_title(title: str) -> bool:
+    words = title.split()
+    if len(words) > 1:
+        return any(len(word) > 3 and word[0].isupper() for word in words)
+    return len(title) >= _MIN_SINGLE_WORD_TITLE and title[:1].isupper()
+
+
+def _rating_allowed(raw: str, ratings: Sequence[float], typed: Sequence[float]) -> bool:
+    value = _amount(raw)
+    decimals = len(raw.replace(",", ".").partition(".")[2])
+    if any(abs(value - number) < 1e-9 for number in typed):
+        return True
+    # "4.6" may round 4.55; "4.55" must be exact; a whole "4" stars may round 4.25.
+    tolerance = {0: 0.5, 1: 0.05}.get(decimals, 0.005) + 1e-9
+    return any(abs(value - rating) <= tolerance for rating in ratings)
 
 
 class InvalidActionError(ValueError):

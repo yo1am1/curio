@@ -54,7 +54,7 @@ MAX_HISTORY_TURNS = 10
 MAX_TOOL_CALLS = 5
 # Wall-clock budget for one turn; checked before every model call.
 TURN_DEADLINE_SECONDS = 90.0
-# TurnContext.shortlist and cocktail_shortlist hold at most this many IDs.
+# Every TurnContext shortlist (fashion, cocktails, books) holds at most this many IDs.
 MAX_SHORTLIST = 20
 
 
@@ -152,7 +152,7 @@ class Toolkit[T](Protocol):
         ...
 
     def reply_fields(self, turn: Turn[T]) -> dict[str, Any]:
-        """Domain fields of AssistantReply (domain, products, cocktails)."""
+        """Domain fields of AssistantReply (domain, products, cocktails, books)."""
         ...
 
     def suggestions(self, turn: Turn[T]) -> list[str]:
@@ -600,19 +600,22 @@ def _time_budget_step() -> AgentStep:
 def _with_effect(context: TurnContext, effect: AppliedEffect) -> TurnContext:
     """The client-held context as the client will store it after applying `effect`."""
     update: dict[str, Any] = {}
-    if effect.preferences is not None:
-        update["preferences"] = _merged(context.preferences, effect.preferences)
-    if effect.cocktail_preferences is not None:
-        update["cocktail_preferences"] = _merged(
-            context.cocktail_preferences, effect.cocktail_preferences
-        )
-    if effect.product_ids:
-        update["shortlist"] = _union(context.shortlist, effect.product_ids, MAX_SHORTLIST)
-    if effect.drink_ids:
-        update["cocktail_shortlist"] = _union(
-            context.cocktail_shortlist, effect.drink_ids, MAX_SHORTLIST
-        )
+    for name in _MEMORY_EFFECTS:
+        if (approved := getattr(effect, name)) is not None:
+            update[name] = _merged(getattr(context, name), approved)
+    for name, target in _SHORTLIST_EFFECTS.items():
+        if ids := getattr(effect, name):
+            update[target] = _union(getattr(context, target), ids, MAX_SHORTLIST)
     return context.model_copy(update=update)
+
+
+# AppliedEffect fields and the TurnContext fields they change, per domain.
+_MEMORY_EFFECTS = ("preferences", "cocktail_preferences", "book_preferences")
+_SHORTLIST_EFFECTS = {
+    "product_ids": "shortlist",
+    "drink_ids": "cocktail_shortlist",
+    "book_ids": "book_shortlist",
+}
 
 
 def _merged[M: BaseModel](current: M, approved: M) -> M:
