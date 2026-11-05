@@ -7,6 +7,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from clothes_recommender.books.domain import Book
 from clothes_recommender.cocktails.domain import OPTIONAL_ALCOHOL, Cocktail
 from clothes_recommender.domain import Product
+from clothes_recommender.outfits import Outfit
 
 INTENT_PROMPT = ChatPromptTemplate.from_messages(
     [
@@ -18,7 +19,9 @@ INTENT_PROMPT = ChatPromptTemplate.from_messages(
             "cards: use their IDs, names and prices to resolve follow-ups. Preserve earlier "
             "constraints unless the shopper changes them. Only set a constraint the shopper "
             "actually stated. Prices are in euros. "
-            "A section is the audience, e.g. Menswear for men's clothes.\n"
+            "A section is the audience, e.g. Menswear for men's clothes. Requests to build an "
+            "outfit or look for an occasion, or to swap or save pieces of an outfit, need no "
+            "product search: set wants_products to false.\n"
             "Known product types: {product_types}.\n"
             "Known sections: {sections}.\n"
             "Known colours: {colours}.",
@@ -42,7 +45,15 @@ ANSWER_PROMPT = ChatPromptTemplate.from_messages(
             "audience, type and colour filters. InspectProducts reads exact details of "
             "referenced IDs for questions or comparisons. FindRelated finds pieces that go with "
             "(complement), look like (similar) or upgrade (alternative) one product. "
-            "PersonalPicks uses the linked shopping history. AskShopper asks one clarifying "
+            "PersonalPicks uses the linked shopping history. BuildOutfit plans and fills a "
+            "whole outfit for an occasion under one total budget; use it for any outfit or "
+            "look request, passing the occasion in the shopper's words, the total budget and "
+            "the audience when they gave them. SwapOutfitItem replaces one slot of the current "
+            "outfit ('cheaper shoes', 'another top'). For an outfit, list every slot with the "
+            "piece's name, colour, price and the tool's reason, then the total against the "
+            "budget exactly as the tool states them; never add prices up yourself. If a slot "
+            "could not be filled, say which and why. To save an outfit, propose "
+            "SaveToShortlist with all of its product IDs. AskShopper asks one clarifying "
             "question with quick replies when a request is too vague to search well. "
             "SaveToShortlist and RememberPreferences only propose changes; the shopper approves "
             "them, so say you have proposed them, never that they are done. "
@@ -81,6 +92,27 @@ def render_products(
         if reasons and reasons.get(p.product_id):
             line += " | evidence: " + "; ".join(reasons[p.product_id])
         lines.append(line)
+    return "\n".join(lines)
+
+
+def render_outfit(outfit: Outfit) -> str:
+    """An outfit as the tool result: a header with the money, then one line per slot."""
+    header = f"Outfit for “{outfit.occasion}”"
+    if outfit.audience:
+        header += f" · for {outfit.audience}"
+    header += f" · total €{outfit.total:.2f}"
+    if outfit.budget is not None and outfit.left is not None:
+        header += f" of a €{outfit.budget:.2f} budget"
+        if outfit.left >= 0:
+            header += f" (€{outfit.left:.2f} left)"
+    lines = [header]
+    for slot in outfit.slots:
+        if slot.product is None:
+            lines.append(f"- {slot.label}: not filled. {slot.issue}")
+            continue
+        line = render_products([slot.product], {slot.product.product_id: [slot.reason]})
+        lines.append(f"- {slot.label}: {line.removeprefix('1. ')}")
+    lines += [f"Note: {note}" for note in outfit.notes]
     return "\n".join(lines)
 
 

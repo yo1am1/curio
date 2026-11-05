@@ -3,13 +3,16 @@
 1. Plan: extract a structured search intent, merged with approved session preferences, and
    run a first catalog search.
 2. Act: SearchCatalog, InspectProducts, FindRelated and PersonalPicks read the catalog and the
-   recommenders; AskShopper pauses for a quick reply; SaveToShortlist and RememberPreferences
-   pause for approval unless the shopper opted into auto-approval for that tool.
-3. Verify: prices and product IDs in the final answer are checked against tool evidence.
+   recommenders; BuildOutfit plans and fills a whole outfit under a budget, streaming a step
+   per slot, and SwapOutfitItem changes one of its pieces; AskShopper pauses for a quick
+   reply; SaveToShortlist and RememberPreferences pause for approval unless the shopper opted
+   into auto-approval for that tool.
+3. Verify: prices, outfit totals and product IDs in the final answer are checked against tool
+   evidence.
 """
 
 import time
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
@@ -28,7 +31,12 @@ from clothes_recommender.chat.engine import (
 from clothes_recommender.chat.guardrails import ActionSigner, amounts_in, check_grounding
 from clothes_recommender.chat.intent import IntentExtractor, SearchIntent
 from clothes_recommender.chat.navigator import CatalogNavigator, NoPersonalHistoryError
-from clothes_recommender.chat.prompts import ANSWER_PROMPT, REPAIR_INSTRUCTION, render_products
+from clothes_recommender.chat.prompts import (
+    ANSWER_PROMPT,
+    REPAIR_INSTRUCTION,
+    render_outfit,
+    render_products,
+)
 from clothes_recommender.chat.schemas import (
     AgentStep,
     AppliedEffect,
@@ -41,14 +49,27 @@ from clothes_recommender.chat.schemas import (
 from clothes_recommender.chat.tools import (
     POLICIES,
     TOOLS,
+    BuildOutfit,
     FindRelated,
     InspectProducts,
     PersonalPicks,
     RememberPreferences,
     SaveToShortlist,
     SearchCatalog,
+    SwapOutfitItem,
 )
 from clothes_recommender.domain import Product
+from clothes_recommender.outfits import (
+    SECTION_AUDIENCE,
+    SLOT_LABELS,
+    Audience,
+    FilledSlot,
+    Outfit,
+    OutfitError,
+    OutfitPlanner,
+    OutfitRequest,
+    PlannedSlots,
+)
 from clothes_recommender.search import ProductSearch
 
 __all__ = [
@@ -64,8 +85,13 @@ __all__ = [
 INVALID_ACTION = (
     "Invalid action. Use SearchCatalog with a visual query, InspectProducts or SaveToShortlist "
     "with one to five positive catalog product IDs, FindRelated with one product ID and a "
-    "relation, or AskShopper with a question and two to four options."
+    "relation, BuildOutfit with an occasion (plus an optional total budget, audience and two "
+    "to five distinct slots), SwapOutfitItem with a slot of the current outfit, or AskShopper "
+    "with a question and two to four options."
 )
+# Turn.extras keys: the outfit this turn built or changed, and the one the client sent.
+OUTFIT = "outfit"
+CURRENT_OUTFIT = "current_outfit"
 
 
 class FashionToolkit:
@@ -82,12 +108,14 @@ class FashionToolkit:
         top_k: int,
         intent_extractor: IntentExtractor,
         navigator: CatalogNavigator | None,
+        outfits: OutfitPlanner | None = None,
     ) -> None:
         self._search = search
         self._catalog = catalog
         self._top_k = top_k
         self._intent_extractor = intent_extractor
         self._navigator = navigator
+        self._outfits = outfits or OutfitPlanner(search, catalog)
         self._vocab = {
             name: {value.lower(): value for value in catalog.distinct(name)}
             for name in ("section", "colour")
@@ -105,7 +133,11 @@ class FashionToolkit:
                 "colours": _known(context.preferences.colours, self._vocab["colour"]),
             }
         )
-        return context.model_copy(update={"preferences": preferences})
+        outfit = context.outfit
+        if outfit is not None:
+            pieces = [p for p in outfit.pieces if self._catalog.get(p.product_id) is not None]
+            outfit = outfit.model_copy(update={"pieces": pieces}) if pieces else None
+        return context.model_copy(update={"preferences": preferences, "outfit": outfit})
 
     def history(self, turns: Sequence[ChatTurn]) -> tuple[list[BaseMessage], list[Product]]:
         messages: list[BaseMessage] = []
@@ -180,9 +212,101 @@ class FashionToolkit:
                 return step.summary + " " + _RELATED_HINTS[action.relation], step
         elif isinstance(action, PersonalPicks):
             step = self._personal(turn)
+        elif isinstance(action, BuildOutfit):
+            return self._build_outfit(turn, action)
+        elif isinstance(action, SwapOutfitItem):
+            return self._swap(turn, action)
         else:  # pragma: no cover - POLICIES and TOOLS are defined together
             raise ToolError(INVALID_ACTION)
         return render_products(turn.items, turn.reasons), step
+
+    def _build_outfit(
+        self, turn: Turn[Product], action: BuildOutfit
+    ) -> Generator[AgentStep, None, tuple[str, AgentStep]]:
+        """Plan the slots, then fill them one by one; each stage is a streamed step."""
+        request = OutfitRequest(
+            occasion=action.occasion.strip(),
+            budget=action.budget,
+            audience=action.audience or _audience(turn.intent.sections),
+            slots=tuple(action.slots or ()),
+            max_item_price=turn.context.preferences.max_price,
+        )
+        stages = self._outfits.build(request)
+        while True:
+            try:
+                stage = next(stages)
+            except StopIteration as done:
+                outfit: Outfit = done.value
+                break
+            if isinstance(stage, PlannedSlots):
+                yield _planned_step(request, stage)
+            elif isinstance(stage, FilledSlot):
+                yield _filled_step(stage)
+        self._show_outfit(turn, outfit)
+        filled = len(outfit.products)
+        summary = (
+            f"Outfit ready: {filled} pieces for {_euro(outfit.total)}"
+            if outfit.status == "complete"
+            else f"Filled {filled} of {len(outfit.slots)} slots for {_euro(outfit.total)}"
+        )
+        if outfit.budget is not None:
+            summary += f" of a {_euro(outfit.budget)} budget"
+        step = AgentStep(
+            kind="tool",
+            name="BuildOutfit",
+            summary=summary + ".",
+            status="ok" if outfit.status == "complete" else "skipped",
+            detail={"occasion": outfit.occasion, "total": outfit.total, "status": outfit.status},
+        )
+        return render_outfit(outfit), step
+
+    def _swap(self, turn: Turn[Product], action: SwapOutfitItem) -> tuple[str, AgentStep]:
+        current: Outfit | None = turn.extras.get(OUTFIT) or turn.extras.get(CURRENT_OUTFIT)
+        if current is None:
+            raise ToolError("There is no outfit to change yet. Use BuildOutfit first.")
+        try:
+            swap = self._outfits.swap(
+                current.state,
+                action.slot,
+                action.mode,
+                action.refine,
+                max_item_price=turn.context.preferences.max_price,
+            )
+        except OutfitError as error:
+            raise ToolError(str(error)) from error
+        turn.remember([swap.old])
+        self._show_outfit(turn, swap.outfit)
+        label = SLOT_LABELS[action.slot].lower()
+        detail = {"slot": action.slot, "mode": action.mode, "old_id": swap.old.product_id}
+        if swap.new is None:
+            kind = "cheaper " if action.mode == "cheaper" else "other "
+            summary = f"Found no {kind}{label} within the budget; kept the {swap.old.name}."
+            step = AgentStep(
+                kind="tool", name="SwapOutfitItem", summary=summary, status="skipped", detail=detail
+            )
+            return f"{summary} The outfit is unchanged.\n{render_outfit(swap.outfit)}", step
+        summary = (
+            f"Swapped {label}: {swap.old.name} → {swap.new.name} · {_euro(swap.new.price)}; "
+            f"total {_euro(swap.outfit.total)}."
+        )
+        step = AgentStep(
+            kind="tool",
+            name="SwapOutfitItem",
+            summary=summary,
+            detail=detail | {"new_id": swap.new.product_id},
+        )
+        replaced = (
+            f"Replaced the {swap.old.name} [id {swap.old.product_id}] "
+            f"({_euro(swap.old.price)}) with the {swap.new.name}.\n"
+        )
+        return replaced + render_outfit(swap.outfit), step
+
+    def _show_outfit(self, turn: Turn[Product], outfit: Outfit) -> None:
+        turn.extras[OUTFIT] = outfit
+        turn.show(
+            outfit.products,
+            {s.product.product_id: [s.reason] for s in outfit.slots if s.product and s.reason},
+        )
 
     def _related(self, turn: Turn[Product], action: FindRelated) -> AgentStep:
         product = self._catalog.get(action.product_id)
@@ -298,10 +422,12 @@ class FashionToolkit:
         )
 
     def reply_fields(self, turn: Turn[Product]) -> dict[str, Any]:
-        return {"domain": "fashion", "products": turn.items}
+        return {"domain": "fashion", "products": turn.items, "outfit": turn.extras.get(OUTFIT)}
 
     def suggestions(self, turn: Turn[Product]) -> list[str]:
         """Next-step chips; each one exercises a tool the agent can actually use."""
+        if (outfit := turn.extras.get(OUTFIT)) is not None:
+            return _outfit_suggestions(outfit, turn)
         products = turn.items
         if not products:
             options = ["Show me something under €30", "White sneakers"]
@@ -339,6 +465,10 @@ class FashionToolkit:
                 "remembered preferences (already applied to searches): "
                 + _describe_preferences(context.preferences)
             )
+        if context.outfit is not None and (current := self._outfits.restore(context.outfit)):
+            turn.extras[CURRENT_OUTFIT] = current
+            turn.remember(current.products)
+            parts.append("current outfit (SwapOutfitItem changes it): " + _outfit_line(current))
         shortlist = self._catalog.get_many(dict.fromkeys(context.shortlist))
         turn.remember(shortlist)
         if shortlist:
@@ -352,6 +482,7 @@ class FashionToolkit:
 
     def _allowed_amounts(self, turn: Turn[Product]) -> list[float]:
         intent, preferences = turn.intent, turn.context.preferences
+        outfits = [turn.extras[key] for key in (OUTFIT, CURRENT_OUTFIT) if key in turn.extras]
         return [
             *amounts_in(turn.message),
             *(
@@ -359,6 +490,8 @@ class FashionToolkit:
                 for value in (intent.min_price, intent.max_price, preferences.max_price)
                 if value is not None
             ),
+            # An outfit's total, budget, what is left and what a missing slot would cost.
+            *(amount for outfit in outfits for amount in outfit.amounts()),
         ]
 
 
@@ -372,6 +505,7 @@ class ShoppingAssistant(AgentEngine[Product]):
         intent_extractor: IntentExtractor | None = None,
         *,
         navigator: CatalogNavigator | None = None,
+        outfits: OutfitPlanner | None = None,
         signer: ActionSigner | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -381,7 +515,7 @@ class ShoppingAssistant(AgentEngine[Product]):
             sections=catalog.distinct("section"),
             colours=catalog.distinct("colour"),
         )
-        toolkit = FashionToolkit(search, catalog, top_k, extractor, navigator)
+        toolkit = FashionToolkit(search, catalog, top_k, extractor, navigator, outfits)
         super().__init__(chat_model, toolkit, signer=signer, clock=clock)
         self._navigator = navigator
 
@@ -442,6 +576,81 @@ def _describe_preferences(preferences: ShopperPreferences) -> str:
     if preferences.max_price is not None:
         parts.append(f"budget up to €{preferences.max_price:g}")
     return ", ".join(parts)
+
+
+def _euro(amount: float) -> str:
+    return f"€{amount:.2f}"
+
+
+def _audience(sections: Sequence[str]) -> Audience | None:
+    """The audience the shopper's section filters (or remembered sections) point to."""
+    audiences = {SECTION_AUDIENCE[s] for s in sections if s in SECTION_AUDIENCE}
+    return audiences.pop() if len(audiences) == 1 else None
+
+
+def _planned_step(request: OutfitRequest, planned: PlannedSlots) -> AgentStep:
+    names = [spec.label.lower() for spec in planned.slots]
+    summary = f"Planned {len(names)} slots for “{request.occasion}”: {', '.join(names)}"
+    if planned.audience:
+        source = " (from the best match)" if planned.audience_source == "best match" else ""
+        summary += f" · for {planned.audience}{source}"
+    if request.budget is not None:
+        summary += f" · budget {_euro(request.budget)}"
+    return AgentStep(
+        kind="plan",
+        name="Plan outfit",
+        summary=summary + ".",
+        detail={
+            "slots": [{"slot": spec.slot, "query": spec.query} for spec in planned.slots],
+            "audience": planned.audience,
+            "style": planned.style,
+            "season": planned.season,
+        },
+    )
+
+
+def _filled_step(filled: FilledSlot) -> AgentStep:
+    slot = filled.slot
+    label = slot.label.lower()
+    if slot.product is None:
+        return AgentStep(
+            kind="tool",
+            name="Fill slot",
+            summary=f"Could not fill {label}: {slot.issue}",
+            status="skipped",
+            detail={"slot": slot.slot},
+        )
+    product = slot.product
+    return AgentStep(
+        kind="tool",
+        name="Fill slot",
+        summary=f"Filled {label}: {product.name} · {_euro(product.price)}. {slot.reason}",
+        detail={"slot": slot.slot, "product_id": product.product_id},
+    )
+
+
+def _outfit_line(outfit: Outfit) -> str:
+    pieces = "; ".join(
+        f"{s.slot} [id {s.product.product_id}] {s.product.name} {_euro(s.product.price)}"
+        for s in outfit.slots
+        if s.product is not None
+    )
+    budget = f" of {_euro(outfit.budget)}" if outfit.budget is not None else ""
+    return f"for “{outfit.occasion}”, total {_euro(outfit.total)}{budget}: {pieces}"
+
+
+def _outfit_suggestions(outfit: Outfit, turn: Turn[Product]) -> list[str]:
+    filled = [s for s in outfit.slots if s.product is not None]
+    if not filled:
+        return ["Raise the budget", "Show me something under €30"]
+    priciest = max(filled, key=lambda s: (s.product.price if s.product else 0, s.slot))
+    options = [f"Cheaper {priciest.label.lower()}", f"Another {filled[0].label.lower()}"]
+    saved = set(turn.context.shortlist) | {
+        pid for effect in turn.applied for pid in effect.product_ids
+    }
+    if any(s.product.product_id not in saved for s in filled if s.product):
+        options.append("Save the whole outfit")
+    return options
 
 
 def _search_step(intent: SearchIntent, products: Sequence[Product]) -> AgentStep:

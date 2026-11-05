@@ -15,6 +15,7 @@ from clothes_recommender.books.domain import Book, BookPreferences
 from clothes_recommender.chat.intent import SearchIntent
 from clothes_recommender.cocktails.domain import Cocktail, CocktailPreferences
 from clothes_recommender.domain import Product
+from clothes_recommender.outfits import Outfit, OutfitState
 
 Domain = Literal["fashion", "cocktails", "books"]
 ApprovalTool = Literal[
@@ -158,6 +159,8 @@ class AssistantReply(BaseModel):
     applied: list[AppliedEffect] = Field(default_factory=list)
     grounding: GroundingReport | None = None
     suggestions: list[str] = Field(default_factory=list)
+    # The outfit this turn built or changed; the client keeps `outfit.state` for follow-ups.
+    outfit: Outfit | None = None
 
 
 class TurnContext(BaseModel):
@@ -173,6 +176,8 @@ class TurnContext(BaseModel):
     book_preferences: BookPreferences = Field(default_factory=BookPreferences)
     # The reading list.
     book_shortlist: list[PositiveInt] = Field(default_factory=list, max_length=20)
+    # The latest outfit the fashion agent built, so a follow-up can swap or save its pieces.
+    outfit: OutfitState | None = None
 
 
 class ChatRequest(TurnContext):

@@ -14,6 +14,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt, model_validator
 
+from clothes_recommender.outfits import MAX_SLOTS, Audience, SlotName, SwapMode
+
 
 class Policy(StrEnum):
     READ = "read"
@@ -50,6 +52,54 @@ class PersonalPicks(BaseModel):
     shopper has linked a shopping history; explain the evidence for each pick."""
 
     model_config = ConfigDict(extra="forbid")
+
+
+class BuildOutfit(BaseModel):
+    """Plan a complete outfit for an occasion and fill every slot from the catalog, under
+    one total budget. Plans 3-4 slots for the occasion (e.g. dress, shoes, bag, accessory)
+    unless `slots` names them, prefers pieces bought together with or looking like the
+    pieces already chosen, and reports any slot the budget cannot cover. Use it whenever
+    the shopper asks for an outfit, a look or what to wear somewhere."""
+
+    model_config = ConfigDict(extra="forbid")
+    occasion: str = Field(
+        min_length=2,
+        max_length=200,
+        pattern=r"\S",
+        description="The occasion, season and style in the shopper's words, e.g. "
+        "'summer wedding' or 'office, smart'.",
+    )
+    budget: float | None = Field(
+        default=None, gt=0, le=10_000, description="Total budget in euros for the whole outfit."
+    )
+    audience: Audience | None = Field(
+        default=None, description="Who it is for; leave empty if the shopper did not say."
+    )
+    slots: list[SlotName] | None = Field(
+        default=None,
+        min_length=2,
+        max_length=MAX_SLOTS,
+        description="Only when the shopper names the pieces they want.",
+    )
+
+    @model_validator(mode="after")
+    def _distinct_slots(self) -> "BuildOutfit":
+        if self.slots is not None:
+            self.slots = list(dict.fromkeys(self.slots))
+            if len(self.slots) < 2:
+                raise ValueError("Name at least two different slots")
+        return self
+
+
+class SwapOutfitItem(BaseModel):
+    """Replace one piece of the current outfit, keeping the rest and the total budget:
+    mode 'other' for a different piece, 'cheaper' for a lower-priced one. `refine` adds
+    words for the new piece, e.g. 'in black' or 'flat'."""
+
+    model_config = ConfigDict(extra="forbid")
+    slot: SlotName
+    mode: SwapMode = "other"
+    refine: str = Field(default="", max_length=100)
 
 
 class AskShopper(BaseModel):
@@ -104,6 +154,8 @@ TOOLS: dict[str, type[BaseModel]] = {
         InspectProducts,
         FindRelated,
         PersonalPicks,
+        BuildOutfit,
+        SwapOutfitItem,
         AskShopper,
         SaveToShortlist,
         RememberPreferences,
@@ -115,6 +167,8 @@ POLICIES: dict[str, Policy] = {
     "InspectProducts": Policy.READ,
     "FindRelated": Policy.READ,
     "PersonalPicks": Policy.READ,
+    "BuildOutfit": Policy.READ,
+    "SwapOutfitItem": Policy.READ,
     "AskShopper": Policy.ASK,
     "SaveToShortlist": Policy.APPROVE,
     "RememberPreferences": Policy.APPROVE,

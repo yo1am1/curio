@@ -20,7 +20,7 @@ or narrow exactly what this agent proposed, never forge, widen or replay it in a
 
 import logging
 import time
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -80,6 +80,8 @@ class Turn[T]:
     calls: int = 0
     # After a decision the shopper already answered, the agent may not pause again.
     resuming: bool = False
+    # Domain-owned results of this turn that are not catalog items (e.g. a planned outfit).
+    extras: dict[str, Any] = field(default_factory=dict)
 
     def show(self, items: Iterable[T], reasons: dict[int, list[str]] | None = None) -> None:
         self.items = list(items)
@@ -88,6 +90,10 @@ class Turn[T]:
 
     def remember(self, items: Iterable[T]) -> None:
         self.evidence.update({self.key(item): item for item in items})
+
+
+type ReadOutcome = tuple[str, AgentStep]
+type ReadResult = ReadOutcome | Generator[AgentStep, None, ReadOutcome]
 
 
 class Toolkit[T](Protocol):
@@ -125,8 +131,12 @@ class Toolkit[T](Protocol):
         self, turn: Turn[T], message: str, history: Sequence[BaseMessage]
     ) -> list[BaseMessage]: ...
 
-    def read(self, turn: Turn[T], action: BaseModel) -> tuple[str, AgentStep]:
-        """Run a READ action: the tool result for the model and its trace step."""
+    def read(self, turn: Turn[T], action: BaseModel) -> ReadResult:
+        """Run a READ action: the tool result for the model and its trace step.
+
+        A tool that works in stages may instead return a generator that yields a progress
+        step per stage (streamed as it happens) and returns the result and final step.
+        """
         ...
 
     def apply(
@@ -353,7 +363,10 @@ class AgentEngine[T]:
         policy = self._toolkit.policies[name]
         if policy is Policy.READ:
             try:
-                result, step = self._toolkit.read(turn, action)
+                outcome = self._toolkit.read(turn, action)
+                if isinstance(outcome, Generator):
+                    outcome, started = yield from self._progress(turn, outcome, started)
+                result, step = outcome
             except ToolError as error:
                 result = str(error)
                 step = AgentStep(kind="tool", name=name, summary=result, status="error")
@@ -387,6 +400,19 @@ class AgentEngine[T]:
                 clarification=Clarification(question=action.question, options=action.options),
             )
         return (yield from self._propose(turn, name, call_id, action, messages, started))
+
+    def _progress(
+        self, turn: Turn[T], stages: Generator[AgentStep, None, ReadOutcome], started: float
+    ) -> Generator[StepEvent, None, tuple[ReadOutcome, float]]:
+        """Stream a staged READ tool's progress steps; return its outcome and the time the
+        last stage ended, so the final step is timed from there."""
+        while True:
+            try:
+                step = next(stages)
+            except StopIteration as done:
+                return done.value, started
+            yield self._record(turn, step, started)
+            started = self._clock()
 
     def _propose(
         self,

@@ -37,6 +37,7 @@ from clothes_recommender.cocktails.recommend import CocktailRecommender
 from clothes_recommender.config import Settings
 from clothes_recommender.demo import DemoCustomer, select_demo_customers
 from clothes_recommender.embeddings import ClipEncoder
+from clothes_recommender.outfits import OutfitPlanner
 from clothes_recommender.recommenders.collaborative import CollaborativeRecommender
 from clothes_recommender.recommenders.content_based import ContentBasedRecommender
 from clothes_recommender.recommenders.graph import GraphRecommender
@@ -92,6 +93,11 @@ class FashionServices:
     query_photos_dir: Path | None = None
     evaluation_path: Path | None = None
     learned: LearnedRecommender | None = None
+
+    @cached_property
+    def outfits(self) -> OutfitPlanner:
+        """Outfit builder over the photo index, preferring co-purchased and look-alike pieces."""
+        return OutfitPlanner(self.search, self.catalog, vectors=self.store, links=self.graph)
 
     @cached_property
     def demo_customers(self) -> list[DemoCustomer]:
@@ -237,6 +243,7 @@ def load_fashion(settings: Settings, kit: AgentKit | None) -> FashionServices | 
                 catalog,
                 # The validated ranker when present; collaborative filtering otherwise.
                 navigator=RecommenderNavigator(graph, search, learned or collaborative),
+                outfits=OutfitPlanner(search, catalog, vectors=store, links=graph),
                 signer=kit.signer,
             )
         return FashionServices(
