@@ -100,6 +100,21 @@ def test_golden_queries_find_the_topic_not_the_request_words(api):
     }
 
 
+def test_one_author_or_series_cannot_fill_the_results(api):
+    from collections import Counter
+
+    fantasy = _search(api, "fantasy", 10)
+    assert max(Counter(h["book"]["authors"][0] for h in fantasy).values()) <= 2
+    potter = [h["book"]["title"] for h in fantasy if h["book"]["series"] == "Harry Potter"]
+    assert potter == ["Harry Potter and the Sorcerer's Stone"]
+    seeded = _search(api, "fantasy like The Name of the Wind")
+    authors = Counter(h["book"]["authors"][0] for h in seeded)
+    assert authors["Brandon Sanderson"] <= 2 and len(authors) >= 5
+    assert not {"The Well of Ascension", "The Hero of Ages"} & set(titles(seeded))
+    # Naming the series keeps all of it.
+    assert len([h for h in _search(api, "harry potter", 8) if h["book"]["series"]]) == 8
+
+
 def test_readers_also_liked_because_and_by_author(api):
     similar = api.get("/books/192/similar", params={"other_authors_only": True}).json()
     assert similar and all(h["book"]["authors"][0] != "Patrick Rothfuss" for h in similar)

@@ -119,8 +119,8 @@ numbers books by popularity). It loads in about 2 seconds.
 
 | Feature | How it works |
 |---|---|
-| Search | TF-IDF cosine over title (×3), series, authors, genres (×2), reader shelves and the description (×0.3), scaled by the share of query words a book uses, then by a quality prior (Bayesian-average rating and log popularity) that scales it by 0.65 to 1, so it orders near-ties without overriding relevance. Genre names ("sci-fi", "ya", "classics") become genre filters, the first mood word ("cosy", "dark", "funny") the mood filter, "short" a 250-page limit, and "by <author>" an author filter when the name is in the catalog. Only the topic counts: words about the person or occasion ("gift", "mom", "loves", "long flight") are dropped when anything else describes the book, bare one- or two-digit numbers always are, and a title counts only when it matches two query words or the query names the whole title ("dune", "catch 22"). A reader's age ("for a 10 year old") becomes the Children's genre up to 12 and Young adult up to 17; "world war 2" (or "wwii", "second world war") matches the shelves readers file that war under. |
-| "Like <title>" | "fantasy like The Name of the Wind" seeds the search with that book: candidates are what its readers also liked (75 %) blended with shelf similarity (25 %), its own series is left out, and the other words still have to match. |
+| Search | TF-IDF cosine over title (×3), series, authors, genres (×2), reader shelves and the description (×0.3), scaled by the share of query words a book uses, then by a quality prior (Bayesian-average rating and log popularity) that scales it by 0.65 to 1, so it orders near-ties without overriding relevance. Genre names ("sci-fi", "ya", "classics") become genre filters, the first mood word ("cosy", "dark", "funny") the mood filter, "short" a 250-page limit, and "by <author>" an author filter when the name is in the catalog. Only the topic counts: words about the person or occasion ("gift", "mom", "loves", "long flight") are dropped when anything else describes the book, bare one- or two-digit numbers always are, and a title counts only when it matches two query words or the query names the whole title ("dune", "catch 22"). A reader's age ("for a 10 year old") becomes the Children's genre up to 12 and Young adult up to 17; "world war 2" (or "wwii", "second world war") matches the shelves readers file that war under. Each author appears at most twice and each series once, with its earliest book the search found ("fantasy" shows Harry Potter and the Sorcerer's Stone, not all seven), unless the query names the series or the author. |
+| "Like <title>" | "fantasy like The Name of the Wind" seeds the search with that book: candidates are what its readers also liked (75 %) blended with shelf similarity (25 %), its own series is left out, and the other words still have to match. The same author and series limits apply. |
 | Readers also liked | Item-item collaborative filtering precomputed by `prepare_books` from ~6 M ratings: "liked" is 4 or 5 stars, and the score is an asymmetric cosine `c / (n_i^0.35 · n_j^0.65)` (c readers liked both; n readers liked each), which damps blockbusters every reader liked, shrunk by `c / (c + 10)`; pairs with fewer than 5 shared readers are dropped and each book keeps its 50 best. Books with few links are topped up by shelf similarity. Reasons name the shared readers ("960 readers who liked The Name of the Wind also liked this") and the link (same series, author or shelves). |
 | Because you liked… | The neighbour scores of several liked books, summed; the seeds and their series are left out and each author appears at most twice. |
 | More by this author | The author's books, most rated first, with their series position. |
@@ -133,8 +133,15 @@ crowd labels, not editorial ones. A length filter leaves out the ~9 % of books w
 page count. Probes on the real data, run with `prepare_books` output:
 
 - "fantasy like The Name of the Wind": The Way of Kings, The Final Empire, The Lies of Locke
-  Lamora, The Hero of Ages, The Well of Ascension, Words of Radiance, The Blade Itself, The
-  Warded Man; never The Wise Man's Fear (same series).
+  Lamora, The Blade Itself, The Warded Man, Assassin's Apprentice, The Black Prism, The Eye
+  of the World; never The Wise Man's Fear (same series), at most two Sanderson books and
+  only the first book of each series.
+- "a gift for my mom who loves gardening": The Botany of Desire, The Dirty Life, The
+  Signature of All Things (books shelved as gardening, botany or farming); "something for
+  a 10 year old who loves dragons": My Father's Dragon, The Paper Bag Princess, The Fire
+  Within, How to Train Your Dragon, Dragon Rider (children's books shelved as dragons);
+  "best books about world war 2": The Longest Day, A Bridge Too Far, The Fall of Berlin
+  1945, City of Thieves, The Nightingale (WWII shelves).
 - "short classic novels": The Great Gatsby, Persuasion, Animal Farm, A Little Princess, A
   Study in Scarlet, Alice's Adventures in Wonderland, Of Mice and Men, Fahrenheit 451, all
   Classics of at most 250 pages.

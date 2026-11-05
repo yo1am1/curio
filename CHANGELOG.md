@@ -122,6 +122,11 @@ All notable changes to Curio are recorded here. The format follows
   shelves. Results matched only in the description now say so ("Description mentions …")
   instead of "Loved by readers". Golden-query tests on a small catalog and on the real one
   (E2E). An empty neighbour file no longer crashes the recommender.
+- Book search is diverse: at most two books per author and one per series (its earliest
+  book the search found), in plain and "like <title>" searches. "fantasy" returned seven
+  Harry Potter books in the top 10 and "fantasy like The Name of the Wind" five Sanderson
+  books in the top 6, Mistborn #2 and #3 among them. A query that names the series or the
+  author ("harry potter", "by Brandon Sanderson") keeps all its books.
 
 ### Security
 

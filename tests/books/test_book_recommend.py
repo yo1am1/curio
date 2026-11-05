@@ -59,12 +59,13 @@ def test_mood_words_and_named_moods_browse_by_shelf(book_recommender):
     assert set(ids(search(book_recommender, mood="Dark"))) == {7, 8}
     assert ids(search(book_recommender, mood="dark", genres=["Mystery"])) == [8]
     # An unknown mood name is ignored (the agent validates moods before searching).
-    assert len(search(book_recommender, mood="Unknown mood")) == 10
+    # (9, not 10: The Wise Man's Fear gives way to the first book of its series.)
+    assert len(search(book_recommender, mood="Unknown mood")) == 9
 
 
 def test_text_search_matches_titles_shelves_and_authors(book_recommender):
     magic = search(book_recommender, "magic")
-    assert set(ids(magic)) == {1, 2, 4}
+    assert set(ids(magic)) == {1, 4}  # 2 is the second book of 1's series
     assert all("Shelved as magic" in h.reasons for h in magic)
     assert ids(search(book_recommender, "the way of kings"))[0] == 3
     assert ids(search(book_recommender, "rothfuss")) == [1, 2]
@@ -90,7 +91,7 @@ def test_empty_query_with_genre_ranks_by_genre_strength_then_quality(book_recomm
     assert all(h.reasons == ["Genre: Classics"] for h in hits)
     # Nothing asked: the best-loved books by the quality prior (rating and popularity).
     popular = search(book_recommender, top_k=3)
-    assert ids(popular) == [3, 1, 2]
+    assert ids(popular) == [3, 1, 4]  # 2 continues 1's series
     assert popular[0].reasons == ["Loved by readers: 145,000 Goodreads ratings"]
 
 
@@ -290,3 +291,64 @@ def test_a_title_counts_for_two_query_words_or_the_whole_title(golden):
     # Request words still search when nothing else is asked.
     assert ids(search(golden, "gift"))[0] == 2
     assert set(ids(search(golden, "love"))) >= {3, 5, 6}
+
+
+# --- Diversity: one prolific author or one long series cannot fill the list ---------------
+
+DIVERSE_ROWS = [
+    (1, "Ember Throne", ["Mara Quill"], "The Saga of Stars", "3", 2012, 4.5, 5_000_000, 500,
+     ["Fantasy"], ["epic fantasy"], True),
+    (2, "Ember Crown", ["Mara Quill"], "The Saga of Stars", "2", 2011, 4.4, 4_000_000, 500,
+     ["Fantasy"], ["epic fantasy"], True),
+    (3, "Ember Born", ["Mara Quill"], "The Saga of Stars", "1", 2010, 4.2, 1_000_000, 500,
+     ["Fantasy"], ["epic fantasy"], True),
+    (4, "Glass Harbour", ["Tom Prolific"], None, None, 2001, 4.3, 3_000_000, 400,
+     ["Fantasy"], ["epic fantasy"], True),
+    (5, "Glass River", ["Tom Prolific"], None, None, 2002, 4.3, 2_900_000, 400,
+     ["Fantasy"], ["epic fantasy"], True),
+    (6, "Glass Moon", ["Tom Prolific"], None, None, 2003, 4.3, 2_800_000, 400,
+     ["Fantasy"], ["epic fantasy"], True),
+    (7, "Lone Tower", ["Ida Single"], None, None, 2005, 4.0, 100_000, 300,
+     ["Fantasy"], ["epic fantasy"], True),
+    (8, "The Saga of Stars Box Set", ["Mara Quill"], "The Saga of Stars", "1-3", 2013, 4.6,
+     6_000_000, 1500, ["Fantasy"], ["epic fantasy"], True),
+    (9, "Seed Book", ["Ida Single"], None, None, 2000, 4.0, 50_000, 300,
+     ["Romance"], ["love"], True),
+]  # fmt: skip
+
+
+@pytest.fixture
+def diverse():
+    import pandas as pd
+
+    from clothes_recommender.books.catalog import BookCatalog
+    from tests.conftest import book_frame
+
+    # Readers of Seed Book liked the series' later books and Tom Prolific most.
+    links = pd.DataFrame(
+        [(9, 1, 0.9, 900), (9, 2, 0.8, 800), (9, 4, 0.7, 700), (9, 5, 0.6, 600),
+         (9, 6, 0.5, 500), (9, 3, 0.2, 200), (9, 7, 0.1, 100)],
+        columns=["book_id", "neighbour_id", "score", "co_readers"],
+    )  # fmt: skip
+    return BookRecommender(BookCatalog(book_frame(DIVERSE_ROWS)), links)
+
+
+def test_search_keeps_two_books_per_author_and_the_first_of_a_series(diverse):
+    # By quality alone: box set 8, then 1, 2, 4, 5, 6, 3, 7. The series keeps book 1 (not the
+    # box set, not book 3), and Tom Prolific two books.
+    assert ids(search(diverse, "fantasy")) == [4, 5, 3, 7]
+    assert ids(search(diverse, "epic fantasy", top_k=2)) == [4, 5]
+
+
+def test_seeded_search_is_diverse_too(diverse):
+    hits = search(diverse, "fantasy like Seed Book")
+    assert ids(hits) == [4, 5, 3, 7]
+    assert hits[2].reasons[0] == "200 readers who liked Seed Book also liked this"
+
+
+def test_a_named_series_or_author_keeps_all_its_books(diverse):
+    assert set(ids(search(diverse, "the saga of stars"))) == {1, 2, 3, 8}
+    assert set(ids(search(diverse, "fantasy by Tom Prolific"))) == {4, 5, 6}
+    assert set(ids(search(diverse, "prolific fantasy"))) >= {4, 5, 6}
+    # Other authors stay capped beside a named one.
+    assert ids(search(diverse, "fantasy", author="Mara Quill")) == [8, 1, 2, 3]

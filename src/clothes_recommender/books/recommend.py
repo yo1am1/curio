@@ -26,6 +26,9 @@ Search (`search`):
 - Filters: genres (all must apply), a `MOODS` entry, author, minimum rating, maximum pages
   (books without a known page count are left out), excluded genres and authors. Boosted
   genres (remembered tastes) rank matching books higher without filtering.
+- Results are diverse: at most `MAX_PER_AUTHOR` books per author and one book per series,
+  the earliest in reading order the search found, unless the query names that series or
+  author ("harry potter", "by Brandon Sanderson").
 - An empty query with filters is a browse: books ranked by how strongly they carry the mood
   and by the quality prior.
 
@@ -282,7 +285,8 @@ class BookRecommender:
                 row: score * (1.1 if self._genre_keys[row] & boost else 1.0)
                 for row, score in scores.items()
             }
-        ranked = sorted(scores, key=lambda row: (-round(scores[row], 9), row))[: query.top_k]
+        ranked = sorted(scores, key=lambda row: (-round(scores[row], 9), row))
+        ranked = self._diverse(ranked, query.top_k, query.author, named)
         matched = {w for c in concepts for w in c}
         titled = self._title_ok(np.asarray(ranked, dtype=np.int64), concepts, named)
         return [
@@ -732,6 +736,58 @@ class BookRecommender:
         shared = [t for t in peer.tags if t in self._tag_sets[row]]
         return [f"Both shelved as {_join(shared)}"] if shared else []
 
+    def _diverse(self, ranked: list[int], top_k: int, author: str | None, named: str) -> list[int]:
+        """The first `top_k` of `ranked` with at most MAX_PER_AUTHOR books per author and one
+        book per series, the earliest in reading order the search found. Books of a series
+        or an author the query names ("harry potter", "rothfuss", "by Stephen King") are
+        exempt from both."""
+        padded = f" {named} "
+        author_key = name_key(author) if author else None
+
+        def exempt(row: int) -> bool:
+            book = self._books[row]
+            if author_key is not None and author_key in self._author_keys[row]:
+                return True
+            if book.series and (phrase := _series_phrase(book.series)) and f" {phrase} " in padded:
+                return True
+            return any(
+                f" {name} " in padded
+                or (len(name.split()[-1]) >= 4 and f" {name.split()[-1]} " in padded)
+                for name in (" ".join(tokens(a)) for a in book.authors)
+                if name
+            )
+
+        earliest: dict[tuple[str, str], int] = {}
+        for rank, row in enumerate(ranked):
+            key = self._series_key(row)
+            if key is None or exempt(row):
+                continue
+            order = (*_reading_order(self._books[row].series_position), rank)
+            if key not in earliest or order < earliest[key][0]:
+                earliest[key] = (order, row)  # type: ignore[assignment]
+        first = {key: row for key, (_, row) in earliest.items()}  # type: ignore[misc]
+        per_author: Counter[str] = Counter()
+        kept: list[int] = []
+        for row in ranked:
+            if len(kept) == top_k:
+                break
+            if exempt(row):
+                kept.append(row)
+                continue
+            key = self._series_key(row)
+            if key is not None and first.get(key, row) != row:
+                continue
+            writer = name_key(self._books[row].author)
+            if per_author[writer] >= MAX_PER_AUTHOR:
+                continue
+            per_author[writer] += 1
+            kept.append(row)
+        return kept
+
+    def _series_key(self, row: int) -> tuple[str, str] | None:
+        book = self._books[row]
+        return (name_key(book.series), name_key(book.author)) if book.series else None
+
     def _same_series(self, row: int, other: int) -> bool:
         series = self._books[row].series
         return (
@@ -800,6 +856,34 @@ def _content_words(text: str, described: bool) -> list[str]:
         if w not in REQUEST_WORDS and term(w) not in STOPWORDS and not (w.isdigit() and len(w) <= 2)
     ]
     return content if content or described else words
+
+
+# Words that name a series' kind, not the series ("The Last Dragon Chronicles").
+_SERIES_WORDS = frozenset(
+    {"chronicles", "chronicle", "series", "saga", "trilogy", "cycle", "sequence", "quartet",
+     "books", "book", "novels", "collection", "archive", "the", "a", "an"}
+)  # fmt: skip
+
+
+def _series_phrase(series: str) -> str:
+    """A series name without its leading article and the words for a series ("Dune
+    Chronicles" -> "dune", "The Stormlight Archive" -> "stormlight")."""
+    words = tokens(series)
+    while words and words[0] in _SERIES_WORDS:
+        words = words[1:]
+    while words and words[-1] in _SERIES_WORDS:
+        words = words[:-1]
+    return " ".join(words)
+
+
+def _reading_order(position: str | None) -> tuple[bool, float, bool]:
+    """Sort key for a Goodreads series position: book 1 before 2, a numbered book before a
+    prequel or novella (0, 0.5), a single book before an omnibus ("1-3"), unknown last."""
+    found = re.match(r"\s*(\d+(?:\.\d+)?)", position or "")
+    if found is None:
+        return (True, math.inf, True)
+    start = float(found[1])
+    return (start < 1, start, "-" in (position or ""))
 
 
 def _title_phrase(title: str) -> str:
