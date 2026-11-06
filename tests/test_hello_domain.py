@@ -95,3 +95,13 @@ def test_a_toolkit_may_vet_a_proposal_before_it_is_signed(monkeypatch):
     reply = agent.reply("Save both smoky teas", [])
     assert reply.status == "complete" and reply.pending_action is None
     assert ("SaveTeas", "error") in steps(reply)
+
+
+def test_tea_names_are_checked_in_any_case():
+    invented = "Try **silver needle** [id 4], or SILVER NEEDLE."
+    agent = tea_agent(model(("SearchTeas", {"query": "smoky"}), invented, invented))
+    reply = agent.reply("Something smoky?", [])
+    assert reply.grounding.status == "fallback"
+    assert "silver needle was not returned by any tool" in reply.grounding.issues
+    grounded = tea_agent(model(("SearchTeas", {"query": "smoky"}), "Try lapsang souchong [id 4]."))
+    assert grounded.reply("Something smoky?", []).grounding.status == "verified"

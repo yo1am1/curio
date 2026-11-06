@@ -98,7 +98,7 @@ class TeaToolkit:
 
     def __init__(self, teas: Sequence[Tea] = TEAS) -> None:
         self._teas = {t.tea_id: t for t in teas}
-        self._names = any_of([t.name for t in teas])
+        self._names = any_of([t.name for t in teas], re.IGNORECASE)
 
     def key(self, item: Tea) -> int:
         return item.tea_id
@@ -152,7 +152,7 @@ class TeaToolkit:
         checked, issues = check_ids(text, _TEA_ID, (t.tea_id for t in returned), "tea")
         for name in dict.fromkeys(m.group(0) for m in self._names.finditer(text)):
             checked += 1
-            if name not in {t.name for t in returned}:
+            if name.casefold() not in {t.name.casefold() for t in returned}:
                 issues.append(f"{name} was not returned by any tool")
         return grounding_report(checked, issues)
 

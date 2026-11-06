@@ -118,7 +118,7 @@ class TeaToolkit:
         checked, issues = check_ids(text, _TEA_ID, (t.tea_id for t in returned), "tea")
         for name in dict.fromkeys(m.group(0) for m in self._names.finditer(text)):
             checked += 1
-            if name not in {t.name for t in returned}:
+            if name.casefold() not in {t.name.casefold() for t in returned}:
                 issues.append(f"{name} was not returned by any tool")
         return grounding_report(checked, issues)
 
