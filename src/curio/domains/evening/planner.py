@@ -53,6 +53,8 @@ from curio.domains.evening.themes import (
     Theme,
     ThemeMatch,
     detect_theme,
+    guard_in,
+    mentions,
 )
 from curio.domains.fashion.models import Product
 from curio.domains.fashion.outfits import (
@@ -68,7 +70,14 @@ from curio.domains.fashion.outfits import (
 from curio.domains.pairings.models import MAX_PAIRINGS, BookPairing, Pairing, PairingRequest
 from curio.domains.pairings.pairer import BookCocktailPairer, PairingError
 
-__all__ = ["EveningError", "EveningPlanner", "budget_in", "wants_alcohol_free"]
+__all__ = [
+    "EveningError",
+    "EveningPlanner",
+    "alcohol_free_in",
+    "budget_in",
+    "resolve_alcohol_free",
+    "wants_alcohol_free",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -91,11 +100,21 @@ _BUDGET = re.compile(
     r"\s?(?:€|eur\b|euros?\b)",
     re.IGNORECASE,
 )
+# Words that ask for an alcohol-free evening, and those that make one alcohol-free for
+# safety (a pregnancy, a driver): explicit `alcohol_free=false` overrides only the first.
+# Kids make an evening alcohol-free for safety too, family (`themes.GUARDS`) as asked.
 _ALCOHOL_FREE = re.compile(
-    r"\b(?:alcohol[- ]free|no alcohol|non[- ]alcoholic|sober|mocktails?|dry january|"
-    r"without alcohol|teetotal)\b",
+    r"(?<![\w'])(alcohol[- ]free|no alcohol|non[- ]alcoholic|sober|mocktails?|dry january|"
+    r"without alcohol|teetotal|teetotaller|booze[- ]free|zero[- ]proof)(?![\w'])",
     re.IGNORECASE,
 )
+_SAFETY = re.compile(
+    r"(?<![\w'])(pregnant|pregnancy|expecting(?!\s+(?:guests|friends|company|people|"
+    r"visitors|rain|snow|a crowd))|baby shower|designated driver|driving|(?:i'm|i am) the "
+    r"driver)(?![\w'])",
+    re.IGNORECASE,
+)
+SAFETY_NOTE = "The drink stays alcohol-free: {reason}."
 _WORD = re.compile(r"[a-z0-9]+")
 
 
@@ -109,8 +128,38 @@ def budget_in(text: str) -> float | None:
     return float(match.group(1) or match.group(2)) if match else None
 
 
+def alcohol_free_in(text: str) -> tuple[str, str] | None:
+    """Why `text` makes an evening alcohol-free: ("safety", "you mentioned pregnant") for a
+    pregnancy, a driver or kids, ("asked", ...) for alcohol-free words or a family occasion,
+    else None. Negated mentions ("alcohol-free is boring", "not sober-curious") do not count.
+    """
+    if said := mentions(_SAFETY, text):
+        return "safety", f"you mentioned {said[0].lower()}"
+    found = guard_in(text)
+    if found is not None and found[0] == "kids":
+        return "safety", f"you mentioned {found[1][0].lower()}"
+    if said := mentions(_ALCOHOL_FREE, text):
+        return "asked", f"you asked for {said[0].lower()}"
+    if found is not None and found[0] == "family":
+        return "asked", f"you mentioned {found[1][0].lower()}"
+    return None
+
+
 def wants_alcohol_free(text: str) -> bool:
-    return bool(_ALCOHOL_FREE.search(text))
+    return alcohol_free_in(text) is not None
+
+
+def resolve_alcohol_free(text: str, explicit: bool | None) -> tuple[bool, str | None]:
+    """Whether the evening is alcohol-free, and a note when the text overrode an explicit
+    false. The text's words decide unless `explicit` is given; an explicit false never
+    overrides a safety reason (pregnancy, driving, kids)."""
+    found = alcohol_free_in(text)
+    if found is not None and found[0] == "safety":
+        note = SAFETY_NOTE.format(reason=found[1]) if explicit is False else None
+        return True, note
+    if explicit is not None:
+        return explicit, None
+    return found is not None, None
 
 
 @dataclass(frozen=True)
@@ -154,18 +203,23 @@ class EveningPlanner:
         match = detect_theme(request.occasion, request.mood)
         budget = request.budget if request.budget is not None else budget_in(request.occasion)
         audience = request.audience or audience_of(request.occasion)
+        alcohol_free, alcohol_note = resolve_alcohol_free(
+            f"{request.occasion} {request.mood or ''}", request.alcohol_free
+        )
         state = EveningState(
             occasion=request.occasion,
             mood=request.mood,
             theme=match.theme.id,
             budget=budget,
             audience=audience,
-            alcohol_free=request.alcohol_free or wants_alcohol_free(request.occasion),
+            alcohol_free=alcohol_free,
         )
         tastes = EveningTastes.model_validate(request.model_dump(include=_TASTE_FIELDS))
         outfit, outfit_issue = self._build_outfit(state, match.theme, tastes)
         state = state.model_copy(update={"outfit": outfit.state if outfit else None})
-        return self._compose(state, match, tastes, outfit, outfit_issue)
+        plan = self._compose(state, match, tastes, outfit, outfit_issue)
+        notes = [note for note in (alcohol_note,) if note]
+        return plan.model_copy(update={"notes": [*notes, *plan.notes]}) if notes else plan
 
     def restore(self, state: EveningState, tastes: EveningTastes | None = None) -> EveningPlan:
         """The plan the client holds, re-read from the catalogs; the drink is re-paired (the

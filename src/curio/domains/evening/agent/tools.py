@@ -23,15 +23,16 @@ class PlanEvening(BaseModel):
     pairs with that book, under one theme (cosy, romantic, glamorous, summery, mysterious,
     thoughtful, adventurous or playful), with a reason for each part and a 'why it works'
     line. Pass the occasion in the shopper's words, plus the outfit budget in euros, the
-    audience (women or men), a mood and alcohol_free when they gave them. Remembered tastes
-    apply automatically."""
+    audience (women or men), a mood and alcohol_free when they gave them (true when they ask
+    for alcohol-free; false only when they explicitly want alcohol; leave it out otherwise,
+    and the occasion's words decide). Remembered tastes apply automatically."""
 
     model_config = ConfigDict(extra="forbid")
     occasion: Occasion
     budget: float | None = Field(default=None, gt=0, le=MAX_BUDGET)
     audience: EveningAudience | None = None
     mood: Mood | None = None
-    alcohol_free: bool = False
+    alcohol_free: bool | None = None
 
 
 class SwapEveningPart(BaseModel):

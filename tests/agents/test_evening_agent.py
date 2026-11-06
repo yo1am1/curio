@@ -93,9 +93,7 @@ def test_plan_evening_streams_a_step_per_part_and_a_verified_answer(agent):
         "Draft answer",
         "Grounding check",
     ]
-    assert steps[1].summary == (
-        "Cosy: “rainy Sunday in” mentions “rainy” and “Sunday”, so a warm night in."
-    )
+    assert steps[1].summary == "Cosy: you mentioned rainy and Sunday, so a warm night in."
     assert steps[5].summary == "Planned a cosy evening: outfit, book and drink."
     result = tool_results(seen)[0]
     assert result.startswith("Evening plan for “rainy Sunday in” · theme Cosy")

@@ -44,13 +44,15 @@ class EveningRequest(EveningTastes):
     """Plan an evening: an occasion in free text, plus optional limits and tastes.
 
     A budget ("under €100") or "alcohol-free" written in the occasion counts as if given.
+    `alcohol_free` left out follows the occasion's words; an explicit false overrides them,
+    except when they make the evening alcohol-free for safety (pregnancy, kids, driving).
     """
 
     occasion: Occasion
     budget: float | None = Field(default=None, gt=0, le=MAX_BUDGET)  # for the outfit
     audience: EveningAudience | None = None
     mood: Mood | None = None
-    alcohol_free: bool = False
+    alcohol_free: bool | None = None
 
 
 class EveningState(BaseModel):
@@ -77,7 +79,7 @@ class ThemeInfo(BaseModel):
     label: str  # "Cosy"
     icon: str  # Material icon name
     feeling: str  # "a warm night in"
-    evidence: str  # "“rainy Sunday in” mentions “rainy” and “Sunday”"
+    evidence: str  # "you mentioned rainy and Sunday", read after the label
 
 
 class OutfitPart(BaseModel):

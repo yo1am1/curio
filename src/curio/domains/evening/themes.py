@@ -8,7 +8,7 @@ book, the one that fits the evening best). The table is hand-written and English
 """
 
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -115,6 +115,9 @@ THEMES: tuple[Theme, ...] = (
             "lazy",
             "chill",
             "autumn",
+            "movie night",
+            "film night",
+            "movies",
         ),
         feeling="a warm night in",
         outfit_occasion="casual autumn weekend at home",
@@ -164,8 +167,6 @@ THEMES: tuple[Theme, ...] = (
             "honeymoon",
             "for two",
             "candlelit",
-            "love",
-            "dinner",
         ),
         feeling="an evening for two",
         outfit_occasion="date dinner",
@@ -463,7 +464,12 @@ THEMES: tuple[Theme, ...] = (
             "board games",
             "friends",
             "girls night",
+            "girls' night",
             "boys night",
+            "boys' night",
+            "baby shower",
+            "kids party",
+            "kids' party",
             "comedy",
             "laugh",
             "laughs",
@@ -508,39 +514,168 @@ FALLBACK_BOOKS = BookSearch(min_rating=4.0)
 DEFAULT_THEME = THEMES_BY_ID["cosy"]
 
 
+# Occasions that are never romantic or glamorous, whatever else they say: with kids, with
+# family, or for work. Each has a theme to fall back on when nothing else names one.
+Guard = Literal["kids", "family", "work"]
+GUARDS: dict[Guard, tuple[str, ...]] = {
+    "kids": (
+        "kids",
+        "kid",
+        "kids'",
+        "kiddies",
+        "children",
+        "children's",
+        "childrens",
+        "child",
+        "toddler",
+        "toddlers",
+        "little ones",
+        "family-friendly",
+        "family friendly",
+        "sleepover",
+        "playdate",
+    ),
+    "family": (
+        "family",
+        "families",
+        "parents",
+        "parent",
+        "mum",
+        "mom",
+        "mother",
+        "dad",
+        "father",
+        "in-laws",
+        "in laws",
+        "grandparents",
+        "grandma",
+        "grandpa",
+        "granny",
+        "relatives",
+        "baby shower",
+        "christening",
+        "baptism",
+    ),
+    "work": (
+        "work",
+        "business",
+        "client",
+        "clients",
+        "colleague",
+        "colleagues",
+        "coworkers",
+        "co-workers",
+        "office",
+        "team",
+        "networking",
+        "conference",
+        "boss",
+        "meeting",
+    ),
+}
+GUARDED_THEMES: frozenset[str] = frozenset({"romantic", "glamorous"})
+GUARD_FALLBACK: dict[Guard, ThemeId] = {
+    "kids": "playful",
+    "family": "thoughtful",
+    "work": "thoughtful",
+}
+GUARD_LABELS: dict[Guard, str] = {
+    "kids": "an evening with kids",
+    "family": "a family occasion",
+    "work": "a work occasion",
+}
+
+
 @dataclass(frozen=True)
 class ThemeMatch:
     theme: Theme
     # The words that chose it, as written ("rainy", "Sunday"); empty for the default.
     words: tuple[str, ...]
-    source: Literal["mood", "occasion", "default"]
+    source: Literal["mood", "occasion", "guard", "default"]
+    # Why romance and glamour are off the table ("kids", "family", "work"), if they are.
+    guard: Guard | None = None
 
     def evidence(self, occasion: str) -> str:
-        """Why this theme: "“rainy Sunday in” mentions rainy and Sunday"."""
+        """Why this theme, in plain words ("you mentioned rainy and Sunday"); it reads after
+        the theme's label: "Cosy: you mentioned rainy and Sunday"."""
+        if self.source == "mood" and self.words:
+            return f"you asked for a {self.words[0].lower()} mood"
+        if self.source == "guard" and self.guard is not None:
+            said = _and_words(self.words[:2])
+            return f"{GUARD_LABELS[self.guard]} (you mentioned {said})"
         if not self.words:
-            return f"“{occasion}” names no theme, so Curio plans {self.theme.feeling}"
-        said = " and ".join(f"“{word}”" for word in self.words[:3])
-        where = "the mood" if self.source == "mood" else f"“{occasion}”"
-        return f"{where} mentions {said}"
+            return "the occasion names no theme"
+        return f"you mentioned {_and_words(self.words[:3])}"
 
 
-_PATTERNS = {
-    theme.id: re.compile(
+def _and_words(words: Sequence[str]) -> str:
+    words = list(words)
+    return ", ".join(words[:-1]) + " and " + words[-1] if len(words) > 1 else "".join(words)
+
+
+def _pattern(words: Iterable[str]) -> re.Pattern[str]:
+    return re.compile(
         r"(?<![\w'])("
-        + "|".join(map(re.escape, sorted(theme.words, key=len, reverse=True)))
+        + "|".join(map(re.escape, sorted(words, key=len, reverse=True)))
         + r")(?![\w'])",
         re.IGNORECASE,
     )
-    for theme in THEMES
-}
 
 
-def _matches(text: str) -> list[tuple[Theme, tuple[str, ...]]]:
-    """Themes whose words `text` uses, most words first (ties in table order)."""
+_PATTERNS = {theme.id: _pattern(theme.words) for theme in THEMES}
+_GUARD_PATTERNS = {guard: _pattern(words) for guard, words in GUARDS.items()}
+# "not a date", "no kids tonight", "without alcohol is boring": a mention that says the
+# opposite. Checked on the words just before a match, and on what follows it.
+_NEGATED_BEFORE = re.compile(
+    r"(?:\b(?:not|no|never|without|nothing|hate|hates|skip|isn't|isnt|aren't|wasn't|"
+    r"don't|dont|doesn't|won't)\b|\bnot\s+(?:really|very|too)\b)"
+    r"(?:\s+(?:a|an|the|any|really|very|so|too|being|into|for))?\s*[\w'-]*\s*$",
+    re.IGNORECASE,
+)
+_NEGATED_AFTER = re.compile(
+    r"^[\s,-]*(?:is|are|'s|feels?|sounds?|seems?)?\s*(?:so\s+|too\s+|really\s+)?"
+    r"(?:boring|lame|dull|overrated|no fun|not (?:for me|fun|happening|my thing)|sucks?)\b",
+    re.IGNORECASE,
+)
+NEGATION_WINDOW = 24
+
+
+def negated(text: str, start: int, end: int) -> bool:
+    """Whether the mention at text[start:end] is negated ("not a date", "no kids",
+    "alcohol-free is boring")."""
+    before = text[max(0, start - NEGATION_WINDOW) : start]
+    return bool(_NEGATED_BEFORE.search(before) or _NEGATED_AFTER.match(text[end:]))
+
+
+def mentions(pattern: re.Pattern[str], text: str) -> tuple[str, ...]:
+    """The distinct words `pattern` finds in `text` that are not negated, as written (a
+    typographic apostrophe counts as a plain one)."""
+    text = text.replace("\u2019", "'")
+    return tuple(
+        dict.fromkeys(
+            m.group(1) for m in pattern.finditer(text) if not negated(text, m.start(), m.end())
+        )
+    )
+
+
+def guard_in(text: str) -> tuple[Guard, tuple[str, ...]] | None:
+    """The first guard `text` mentions (kids before family before work), with its words."""
+    for guard, pattern in _GUARD_PATTERNS.items():
+        if words := mentions(pattern, text):
+            return guard, words
+    return None
+
+
+def _matches(
+    text: str, blocked: frozenset[str] = frozenset()
+) -> list[tuple[Theme, tuple[str, ...]]]:
+    """Themes whose words `text` uses (negated mentions aside), most words first (ties in
+    table order); `blocked` themes never match."""
     found = []
     for position, theme in enumerate(THEMES):
-        words = tuple(dict.fromkeys(m.group(1) for m in _PATTERNS[theme.id].finditer(text)))
-        if words:
+        if theme.id in blocked:
+            continue
+        if words := mentions(_PATTERNS[theme.id], text):
             found.append((len(words), position, theme, words))
     found.sort(key=lambda item: (-item[0], item[1]))
     return [(theme, words) for _, _, theme, words in found]
@@ -548,13 +683,23 @@ def _matches(text: str) -> list[tuple[Theme, tuple[str, ...]]]:
 
 def detect_theme(occasion: str, mood: str | None = None) -> ThemeMatch:
     """The theme of an evening: a mood that names one wins, then the occasion's words (the
-    theme with most matching words, ties in table order), else the cosy default."""
-    if mood and (found := _matches(mood)):
-        return ThemeMatch(found[0][0], found[0][1], "mood")
-    if mood and (theme := THEMES_BY_ID.get(mood.strip().casefold())):
-        return ThemeMatch(theme, (mood.strip(),), "mood")
-    if found := _matches(occasion):
-        return ThemeMatch(found[0][0], found[0][1], "occasion")
+    theme with most matching words, ties in table order), else the cosy default.
+
+    An occasion with kids, with family or for work (`GUARDS`) is never romantic or
+    glamorous, even when it says "dinner", "party" or "birthday", or the mood asks for it:
+    its other words decide, else the guard's own theme (`GUARD_FALLBACK`).
+    """
+    found_guard = guard_in(f"{occasion} {mood or ''}")
+    guard, guard_words = found_guard if found_guard else (None, ())
+    blocked = GUARDED_THEMES if guard else frozenset()
+    if mood and (found := _matches(mood, blocked)):
+        return ThemeMatch(found[0][0], found[0][1], "mood", guard)
+    if mood and (theme := THEMES_BY_ID.get(mood.strip().casefold())) and theme.id not in blocked:
+        return ThemeMatch(theme, (mood.strip(),), "mood", guard)
+    if found := _matches(occasion, blocked):
+        return ThemeMatch(found[0][0], found[0][1], "occasion", guard)
+    if guard is not None:
+        return ThemeMatch(THEMES_BY_ID[GUARD_FALLBACK[guard]], guard_words, "guard", guard)
     return ThemeMatch(DEFAULT_THEME, (), "default")
 
 

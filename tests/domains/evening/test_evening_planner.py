@@ -12,7 +12,9 @@ from curio.domains.evening.planner import (
     DRINK_NEEDS_COCKTAILS,
     OUTFIT_NEEDS_FASHION,
     EveningError,
+    alcohol_free_in,
     budget_in,
+    resolve_alcohol_free,
     wants_alcohol_free,
 )
 from curio.domains.evening.themes import THEMES, detect_theme
@@ -54,7 +56,7 @@ def paired(pairer, plan_, **fields) -> set[int]:
     [
         ("rainy Sunday in", "cosy", ("rainy", "Sunday")),
         ("date night", "romantic", ("date night",)),
-        ("first date dinner", "romantic", ("first date", "dinner")),
+        ("first date dinner", "romantic", ("first date",)),
         ("summer garden party", "summery", ("summer", "garden")),
         ("New Year's Eve party", "glamorous", ("New Year's Eve", "party")),
         ("book club", "thoughtful", ("book club",)),
@@ -80,7 +82,7 @@ def test_a_mood_wins_and_an_occasion_without_theme_words_is_cosy():
 def test_the_theme_drives_the_outfit_book_and_drink(planner):
     cosy = plan(planner, "rainy Sunday in")
     assert cosy.theme.id == "cosy"
-    assert cosy.theme.evidence == "“rainy Sunday in” mentions “rainy” and “Sunday”"
+    assert cosy.theme.evidence == "you mentioned rainy and Sunday"
     assert [s.slot for s in cosy.outfit.outfit.slots] == ["top", "bottom", "outerwear"]
     assert cosy.outfit.outfit.slots[0].product.name == "Chunky Knit Sweater"
     assert cosy.book.book.title == "The Name of the Wind"
@@ -344,3 +346,90 @@ def test_tastes_and_state_are_bounded():
         EveningState(occasion="date", theme="sleepy")
     with pytest.raises(ValueError):
         EveningTastes(unknown=True)
+
+
+# --- Who the evening is for: never romantic with family, kids or at work ---------------------
+
+
+@pytest.mark.parametrize(
+    ("occasion", "theme"),
+    [
+        ("dinner with my parents", "thoughtful"),
+        ("business dinner", "thoughtful"),
+        ("client dinner party", "thoughtful"),
+        ("kids birthday party", "playful"),
+        ("children's birthday party", "playful"),
+        ("family movie night", "cosy"),
+        ("baby shower", "playful"),
+        ("anniversary dinner with my parents", "thoughtful"),
+        ("a romantic night out with the kids", "playful"),
+    ],
+)
+def test_family_kids_and_work_occasions_are_never_romantic_or_glamorous(occasion, theme):
+    match = detect_theme(occasion)
+    assert match.theme.id == theme
+    assert detect_theme(occasion, "romantic").theme.id not in ("romantic", "glamorous")
+
+
+def test_dinner_and_love_alone_are_not_romantic():
+    assert detect_theme("dinner").theme.id == "cosy"
+    assert detect_theme("I love board games").theme.id == "playful"
+    assert detect_theme("dinner for two").theme.id == "romantic"
+
+
+def test_negated_mentions_do_not_count():
+    assert detect_theme("not a date, just dinner with friends").theme.id == "playful"
+    assert detect_theme("date night, no kids").theme.id == "romantic"
+    assert not wants_alcohol_free("alcohol-free is boring, a party")
+    assert not wants_alcohol_free("I'm not sober-curious")
+    assert not wants_alcohol_free("no mocktails please")
+    assert wants_alcohol_free("a sober night")
+
+
+def test_the_theme_evidence_reads_naturally():
+    assert detect_theme("Date night").evidence("Date night") == "you mentioned Date night"
+    assert detect_theme("business dinner").evidence("business dinner") == (
+        "a work occasion (you mentioned business)"
+    )
+    assert detect_theme("dinner", "spooky").evidence("dinner") == "you asked for a spooky mood"
+    assert detect_theme("Tuesday").evidence("Tuesday") == "the occasion names no theme"
+
+
+@pytest.mark.parametrize(
+    "occasion",
+    [
+        "kids birthday party",
+        "family movie night",
+        "dinner with my parents",
+        "baby shower",
+        "girls' night in, I'm pregnant",
+        "pregnancy announcement dinner",
+        "we're expecting! date night",
+        "date night, I'm the designated driver",
+        "dinner party, I'm driving",
+    ],
+)
+def test_kids_family_pregnancy_and_driving_make_the_evening_alcohol_free(planner, occasion):
+    evening = plan(planner, occasion)
+    assert evening.state.alcohol_free
+    assert evening.drink is None or evening.drink.cocktail.alcohol_free
+
+
+def test_an_explicit_alcohol_free_false_overrides_words_but_never_safety(planner):
+    assert resolve_alcohol_free("book club, alcohol-free", False) == (False, None)
+    assert resolve_alcohol_free("dinner with my parents", False) == (False, None)
+    assert resolve_alcohol_free("dinner with my parents", None) == (True, None)
+    assert resolve_alcohol_free("murder mystery night", None) == (False, None)
+    assert resolve_alcohol_free("murder mystery night", True) == (True, None)
+    for occasion, said in (
+        ("kids birthday party", "kids"),
+        ("date night, I'm pregnant", "pregnant"),
+        ("date night, I'm driving", "driving"),
+    ):
+        free, note = resolve_alcohol_free(occasion, False)
+        assert free and note == f"The drink stays alcohol-free: you mentioned {said}."
+    evening = plan(planner, "kids birthday party", alcohol_free=False)
+    assert evening.state.alcohol_free
+    assert evening.notes[0] == "The drink stays alcohol-free: you mentioned kids."
+    assert not plan(planner, "book club, alcohol-free", alcohol_free=False).state.alcohol_free
+    assert not alcohol_free_in("expecting guests for a summer party")

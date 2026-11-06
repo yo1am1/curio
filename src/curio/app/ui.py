@@ -3623,7 +3623,8 @@ def evening_cards(plan: dict, *, key: str, chat: bool = False, active: bool = Tr
     theme = plan["theme"]
     with st.container(horizontal=True, vertical_alignment="center", key=f"evening_theme_{key}"):
         st.badge(theme["label"], icon=f":material/{theme['icon']}:", color="violet")
-        st.caption(plain(f"{theme['evidence']}: {theme['feeling']}."))
+        evidence = theme["evidence"]
+        st.caption(plain(f"{evidence[:1].upper()}{evidence[1:]}, so {theme['feeling']}."))
     with st.container(key=f"evening_why_{key}"):
         st.markdown(f":material/auto_awesome: **Why it works** · {plain(plan['why'])}")
     # The outfit lists several pieces, so it gets the widest card.
