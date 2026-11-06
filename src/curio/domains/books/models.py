@@ -8,11 +8,18 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field, PositiveInt, StringConstraints
 
+from curio.domains.books.taxonomy import EXCLUDED_SHELVES
+
 SOURCE_NAME = "goodbooks-10k"
 # One genre, mood or author name in a filter or a remembered taste: stripped and bounded, so
 # a client cannot send huge strings into search filters or the assistant's prompt.
 GenreTerm = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
 AuthorTerm = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+MAX_EXCLUDED_SHELVES = 60
+
+
+def _excluded_shelves() -> list[str]:
+    return list(EXCLUDED_SHELVES)
 
 
 class Book(BaseModel):
@@ -77,6 +84,11 @@ class BookQuery(BaseModel):
     max_pages: int | None = Field(default=None, ge=1, le=5000)
     exclude_genres: list[GenreTerm] = Field(default_factory=list, max_length=10)
     exclude_authors: list[AuthorTerm] = Field(default_factory=list, max_length=10)
+    # Reader shelves that keep a book out (`taxonomy.EXCLUDED_SHELVES` by default: erotica,
+    # BDSM, abuse...). The recommender lifts the ones the query text asks for ("steamy").
+    exclude_tags: list[GenreTerm] = Field(
+        default_factory=_excluded_shelves, max_length=MAX_EXCLUDED_SHELVES
+    )
     # Soft preference: matching books rank higher and say so; nothing is filtered out.
     boost_genres: list[GenreTerm] = Field(default_factory=list, max_length=10)
     top_k: PositiveInt = Field(default=10, le=50)

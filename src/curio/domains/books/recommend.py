@@ -52,11 +52,14 @@ from scipy import sparse
 from curio.domains.books.catalog import BookCatalog, name_key
 from curio.domains.books.models import Book, BookHit, BookQuery
 from curio.domains.books.taxonomy import (
+    EXCLUDED_SHELVES,
     GENRE_WORDS,
     MOOD_WORDS,
     MOODS,
     SHORT_PAGES,
     Mood,
+    asked_shelves,
+    sensitive_shelves,
 )
 
 # Words per field; repeated words count again, so a title word outweighs a description word.
@@ -169,6 +172,8 @@ PRIOR_RATINGS = 1_000
 RELEVANCE_SHARE = 0.65
 # "like <title>" blends readers-also-liked with shelf similarity this way.
 NEIGHBOUR_SHARE = 0.75
+# A series whose books carry an excluded shelf this often is kept out as a whole.
+SERIES_SHELF_SHARE = 0.4
 _TOKEN = re.compile(r"[a-z0-9]+")
 _SEED = re.compile(
     r"\b(?:like|similar to|in the vein of|fans? of|readers of|reminds? me of|as good as|"
@@ -219,6 +224,7 @@ class BookRecommender:
         self._genre_keys = [frozenset(name_key(g) for g in b.genres) for b in self._books]
         self._author_keys = [frozenset(name_key(a) for a in b.authors) for b in self._books]
         self._tag_sets = [frozenset(b.tags) for b in self._books]
+        self._sensitive = _series_shelves(self._books, self._tag_sets)
         self._quality = quality(self._books)
         self._vocabulary, self._documents, self._titles = _tfidf(
             [_fields(b) for b in self._books], [_title_words(b) for b in self._books]
@@ -271,7 +277,12 @@ class BookRecommender:
             query = query.model_copy(update={"max_pages": SHORT_PAGES})
         words = [w for w in words if w not in SHORT_WORDS]
         mood = self._mood(query.mood)
-        candidates = [row for row in range(len(self._books)) if self._allowed(row, query, mood)]
+        blocked = self._blocked(query, seed, named)
+        candidates = [
+            row
+            for row in range(len(self._books))
+            if self._allowed(row, query, mood) and not self._hidden(row, blocked, named)
+        ]
         if seed is not None:
             candidates = [
                 r for r in candidates if r != seed.row and not self._same_series(r, seed.row)
@@ -306,15 +317,20 @@ class BookRecommender:
         other_authors_only: bool = False,
         exclude_genres: Sequence[str] = (),
         exclude_authors: Sequence[str] = (),
+        exclude_tags: Sequence[str] = EXCLUDED_SHELVES,
     ) -> list[BookHit]:
-        """Books readers of `book_id` also liked, topped up with shelf-similar books."""
+        """Books readers of `book_id` also liked, topped up with shelf-similar books. Books on
+        `exclude_tags` shelves are left out, except the shelves the book itself carries."""
         row = self._row.get(book_id)
         if row is None or top_k < 1:
             return []
         excluded = _ExcludeFilter(exclude_genres, exclude_authors)
+        blocked = frozenset(exclude_tags) - sensitive_shelves(self._sensitive[row])
 
         def keep(other: int) -> bool:
             if other == row or excluded.hits(self._books[other]):
+                return False
+            if self._sensitive[other] & blocked:
                 return False
             return not (other_authors_only and self._author_keys[other] & self._author_keys[row])
 
@@ -340,14 +356,18 @@ class BookRecommender:
         *,
         exclude_genres: Sequence[str] = (),
         exclude_authors: Sequence[str] = (),
+        exclude_tags: Sequence[str] = EXCLUDED_SHELVES,
     ) -> list[BookHit]:
         """Books the readers of several liked books also liked, summed over the seeds; the
         seeds and their series are left out, and each author appears at most MAX_PER_AUTHOR
-        times so one prolific author cannot fill the list."""
+        times so one prolific author cannot fill the list. Books on `exclude_tags` shelves
+        are left out, except the shelves the liked books carry themselves."""
         seeds = list(dict.fromkeys(self._row[b] for b in liked if b in self._row))
         if not seeds or top_k < 1:
             return []
         excluded = _ExcludeFilter(exclude_genres, exclude_authors)
+        lifted = sensitive_shelves(t for seed in seeds for t in self._sensitive[seed])
+        blocked = frozenset(exclude_tags) - lifted
         totals: Counter[int] = Counter()
         best: dict[int, tuple[float, int, int]] = {}
         for seed in seeds:
@@ -363,6 +383,7 @@ class BookRecommender:
                 if row not in seeds
                 and not any(self._same_series(row, seed) for seed in seeds)
                 and not excluded.hits(self._books[row])
+                and not self._sensitive[row] & blocked
             ),
             key=lambda row: (-round(totals[row], 9), row),
         )
@@ -491,6 +512,25 @@ class BookRecommender:
         if mood is not None and mood[1].shelves and mood[1].max_pages is None:
             return self._mood_strength(row, mood[1]) > 0
         return True
+
+    def _blocked(self, query: BookQuery, seed: _Seed | None, named: str) -> frozenset[str]:
+        """The excluded shelves this search keeps out: the query's `exclude_tags`, minus the
+        groups its words ask for ("steamy"), the shelves of the book a "like <title>" names,
+        and all of them when it names an author ("by E L James" asks for that author)."""
+        if query.author or not query.exclude_tags:
+            return frozenset()
+        blocked = frozenset(query.exclude_tags) - asked_shelves(query.query)
+        if seed is not None:
+            blocked -= sensitive_shelves(self._sensitive[seed.row])
+        return blocked
+
+    def _hidden(self, row: int, blocked: frozenset[str], named: str) -> bool:
+        """Whether a book stays out for an excluded shelf; a book whose whole title the query
+        names ("fifty shades of grey") is what was asked for, so it stays in."""
+        if not blocked or not self._sensitive[row] & blocked:
+            return False
+        phrase = self._title_phrases[row]
+        return not (phrase and (" " in phrase or phrase == named) and f" {phrase} " in f" {named} ")
 
     def _genre_strength(self, row: int, wanted: Sequence[str]) -> float:
         """Mean of 1 / (1 + position) of the wanted genres in the book's genres (strongest
@@ -892,6 +932,26 @@ def _title_phrase(title: str) -> str:
     if len(words) > 1 and words[0] in ("the", "a", "an"):
         words = words[1:]
     return " ".join(words)
+
+
+def _series_shelves(books: Sequence[Book], tags: Sequence[frozenset[str]]) -> list[frozenset[str]]:
+    """Each book's sensitive shelves (`EXCLUDED_SHELVES`), plus its series' when at least
+    SERIES_SHELF_SHARE of the series carries them: readers shelve a few volumes of an erotic
+    series as erotica and the rest only as romance (Fifty Shades Darker)."""
+    excluded = frozenset(EXCLUDED_SHELVES)
+    own = [t & excluded for t in tags]
+    series: dict[tuple[str, str], list[int]] = defaultdict(list)
+    for row, book in enumerate(books):
+        if book.series:
+            series[(name_key(book.series), name_key(book.author))].append(row)
+    shared = list(own)
+    for rows in series.values():
+        flagged = [row for row in rows if own[row]]
+        if flagged and len(flagged) >= SERIES_SHELF_SHARE * len(rows):
+            shelves = frozenset().union(*(own[row] for row in flagged))
+            for row in rows:
+                shared[row] = own[row] | shelves
+    return shared
 
 
 def quality(books: Sequence[Book]) -> np.ndarray:

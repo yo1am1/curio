@@ -8,7 +8,7 @@ shelves, used by search and the Books page.
 """
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 # Display genre -> shelf names that count towards it.
@@ -206,3 +206,106 @@ def genres_for(shelf_counts: Mapping[str, int]) -> list[str]:
         key=lambda genre: (-strength[genre], genre),
     )
     return ranked[:MAX_GENRES]
+
+
+# --- Content safety ------------------------------------------------------------------------------
+
+# Reader shelves (as `shelf_label` writes them) that keep a book out of results nobody asked
+# for: Curio is a public demo, so search, browse and "readers also liked" never surface
+# sexual or abuse-centred books unprompted. Each group lists its shelves and the query
+# phrases that ask for it ("erotica", "dark romance"): a query that names the group lifts it.
+SENSITIVE_SHELVES: Mapping[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "sexual": (
+        (
+            "erotica",
+            "erotic",
+            "erotic romance",
+            "erotic fiction",
+            "romance erotica",
+            "erotica bdsm",
+            "dark erotica",
+            "bdsm",
+            "kink",
+            "smut",
+            "steamy",
+            "sex",
+            "sexy",
+            "sexuality",
+            "hot",
+            "hot hot hot",
+            "menage",
+            "taboo",
+            "incest",
+            "dark romance",
+            "adult content",
+            "adult fare",
+            "sex work",
+        ),
+        (
+            "erotica",
+            "erotic",
+            "bdsm",
+            "kink",
+            "kinky",
+            "smut",
+            "smutty",
+            "steamy",
+            "spicy",
+            "sexy",
+            "sex",
+            "sexual",
+            "sexuality",
+            "menage",
+            "taboo",
+            "dark romance",
+            "adult content",
+        ),
+    ),
+    "abuse": (
+        (
+            "abuse",
+            "child abuse",
+            "domestic abuse",
+            "domestic violence",
+            "drug abuse",
+            "rape",
+            "self harm",
+        ),
+        ("abuse", "abused", "rape", "domestic violence", "self harm", "self-harm"),
+    ),
+}
+EXCLUDED_SHELVES: tuple[str, ...] = tuple(
+    shelf for shelves, _ in SENSITIVE_SHELVES.values() for shelf in shelves
+)
+_ASKS_FOR = {
+    group: re.compile(
+        r"(?<![\w'])(?:"
+        + "|".join(re.escape(w) for w in sorted(words, key=len, reverse=True))
+        + r")(?![\w'])",
+        re.IGNORECASE,
+    )
+    for group, (_, words) in SENSITIVE_SHELVES.items()
+}
+
+
+def asked_shelves(text: str) -> frozenset[str]:
+    """The sensitive shelves a request explicitly asks for ("steamy romance" asks for the
+    sexual group, so its shelves are no longer excluded)."""
+    return frozenset(
+        shelf
+        for group, (shelves, _) in SENSITIVE_SHELVES.items()
+        if _ASKS_FOR[group].search(text)
+        for shelf in shelves
+    )
+
+
+def sensitive_shelves(tags: Iterable[str]) -> frozenset[str]:
+    """Every shelf of the sensitive groups `tags` touch: a seed book shelved as erotica lifts
+    the whole sexual group for "readers also liked" it."""
+    tags = set(tags)
+    return frozenset(
+        shelf
+        for shelves, _ in SENSITIVE_SHELVES.values()
+        if tags & set(shelves)
+        for shelf in shelves
+    )
