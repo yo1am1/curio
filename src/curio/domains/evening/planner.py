@@ -20,6 +20,7 @@ The planner is deterministic and offline: equal inputs give the same evening.
 """
 
 import logging
+import math
 import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -48,6 +49,7 @@ from curio.domains.evening.models import (
 )
 from curio.domains.evening.themes import (
     FALLBACK_BOOKS,
+    KIDS_BOOKS,
     THEMES_BY_ID,
     BookSearch,
     Theme,
@@ -92,7 +94,14 @@ DEFAULT_AUDIENCE: EveningAudience = "women"
 AUDIENCE_NOTE = "Planned in womenswear; choose men for a menswear look."
 # Books tried for a drink before the plan says none pairs.
 MAX_BOOKS_TO_PAIR = 3
-BOOK_CANDIDATES = 8
+# Hits read from each book search before the evening's own ranking: a search with words
+# keeps its most relevant few, a genre or mood browse reads widely so the best-known books
+# of the genre are among them.
+BOOK_CANDIDATES = 12
+BROWSE_CANDIDATES = 40
+# An evening reads a book many people know: the first of these floors (Goodreads ratings)
+# that any candidate reaches applies, so a theme with only niche books still gets one.
+POPULARITY_FLOORS = (100_000, 25_000, 0)
 SEASONS = ("summer", "winter", "autumn", "spring")
 _BUDGET = re.compile(
     r"(?:under|below|less than|up to|within|max(?:imum)?|budget(?: of| is)?)\s*€\s?(\d{1,4})"
@@ -389,21 +398,28 @@ class EveningPlanner:
         return outfit, None
 
     def _book_candidates(
-        self, theme: Theme, tastes: EveningTastes, skipped: Iterable[int]
+        self, match: ThemeMatch, tastes: EveningTastes, skipped: Iterable[int]
     ) -> list[tuple[Book, BookSearch]]:
+        """The theme's books, best first: well-known ones (`POPULARITY_FLOORS`), then the
+        theme's searches in order (mainstream first), books that open their series (or
+        stand alone), and the quality prior (rating times log popularity)."""
         assert self._books is not None and self._catalog is not None
         prefs = tastes.book_preferences
         avoided = [g for g in map(self._catalog.canonical_genre, prefs.avoided_genres) if g]
         liked = [g for g in map(self._catalog.canonical_genre, prefs.liked_genres) if g]
         authors = [a for a in map(self._catalog.canonical_author, prefs.avoided_authors) if a]
         skip = set(skipped)
-        found: dict[int, tuple[Book, BookSearch]] = {}
-        for search in (*theme.books, FALLBACK_BOOKS):
+        searches = list(match.theme.books)
+        if match.guard == "kids":
+            searches.insert(0, KIDS_BOOKS)
+        found: dict[int, tuple[Book, BookSearch, int]] = {}
+        for index, search in enumerate((*searches, FALLBACK_BOOKS)):
             if len(found) >= MAX_BOOKS_TO_PAIR and search is FALLBACK_BOOKS:
                 break
             if set(search.genres) & set(avoided):
                 continue  # a remembered avoidance wins over the theme's genre
-            query = search.to_query(BOOK_CANDIDATES + len(skip))
+            wanted = BOOK_CANDIDATES if search.query else BROWSE_CANDIDATES
+            query = search.to_query(min(wanted + len(skip), 50))
             query = BookQuery.model_validate(
                 query.model_dump()
                 | {
@@ -414,8 +430,27 @@ class EveningPlanner:
             )
             for hit in self._books.search(query):
                 if hit.book.book_id not in skip:
-                    found.setdefault(hit.book.book_id, (hit.book, search))
-        return list(found.values())
+                    found.setdefault(hit.book.book_id, (hit.book, search, index))
+        if not found:
+            return []
+        floor = next(
+            f for f in POPULARITY_FLOORS if any(b.ratings_count >= f for b, _, _ in found.values())
+        )
+        liked_keys = {g.casefold() for g in liked}
+
+        def rank(item: tuple[Book, BookSearch, int]) -> tuple:
+            book, _, index = item
+            loved = any(g.casefold() in liked_keys for g in book.genres)
+            return (
+                book.ratings_count < floor,
+                index,
+                not _opens_series(book),
+                not loved,
+                -_prior(book),
+                book.book_id,
+            )
+
+        return [(book, search) for book, search, _ in sorted(found.values(), key=rank)]
 
     def _pair(
         self,
@@ -484,7 +519,7 @@ class EveningPlanner:
             candidates = (
                 [held]
                 if held is not None
-                else [b for b, _ in self._book_candidates(theme, tastes, state.skipped_books)]
+                else [b for b, _ in self._book_candidates(match, tastes, state.skipped_books)]
             )
             if not candidates:
                 missing.append(
@@ -593,6 +628,17 @@ def _fit(cocktail: Cocktail, theme: Theme) -> list[str]:
         elif glass in words:
             fit.append(f"served in a {cocktail.glass.lower()}")
     return list(dict.fromkeys(fit))[:3]
+
+
+def _opens_series(book: Book) -> bool:
+    """A book read on its own: no series, or the first book of one."""
+    position = (book.series_position or "1").strip()
+    return position in ("1", "1.0") or position.startswith("1-")
+
+
+def _prior(book: Book) -> float:
+    """The evening's quality prior: the Goodreads average times log popularity."""
+    return book.average_rating * math.log10(book.ratings_count + 10)
 
 
 def _euro(amount: float) -> str:

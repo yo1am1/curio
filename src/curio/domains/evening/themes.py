@@ -33,14 +33,17 @@ class BookSearch:
     mood: str | None = None
     min_rating: float | None = None
     exclude_genres: tuple[str, ...] = ()
+    # Children's books are left out of an evening read, except for an evening with kids.
+    for_children: bool = False
 
     def to_query(self, top_k: int) -> BookQuery:
+        left_out = () if self.for_children else EVENING_EXCLUDED_GENRES
         return BookQuery(
             query=self.query,
             genres=list(self.genres),
             mood=self.mood,
             min_rating=self.min_rating,
-            exclude_genres=[*EVENING_EXCLUDED_GENRES, *self.exclude_genres],
+            exclude_genres=[*left_out, *self.exclude_genres],
             top_k=top_k,
         )
 
@@ -183,8 +186,10 @@ THEMES: tuple[Theme, ...] = (
             ("accessory", "leather belt"),
         ),
         books=(
+            # Mainstream first: the classic love stories everyone knows.
+            BookSearch(genres=("Romance", "Classics"), min_rating=4.0),
             BookSearch(mood="Romantic", min_rating=4.2, exclude_genres=("Young adult",)),
-            BookSearch(genres=("Romance",)),
+            BookSearch(genres=("Romance",), exclude_genres=("Young adult",)),
         ),
         drink_words=(
             "champagne",
@@ -510,6 +515,8 @@ THEMES: tuple[Theme, ...] = (
 THEMES_BY_ID: dict[str, Theme] = {theme.id: theme for theme in THEMES}
 # Tried after a theme's own searches, so an evening always has a well-rated book.
 FALLBACK_BOOKS = BookSearch(min_rating=4.0)
+# An evening with kids reads a well-loved children's book first.
+KIDS_BOOKS = BookSearch(genres=("Children's",), min_rating=4.0, for_children=True)
 # With no theme word in the occasion or mood, an evening is planned cosy.
 DEFAULT_THEME = THEMES_BY_ID["cosy"]
 
