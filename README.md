@@ -16,7 +16,7 @@ against the data.
 
 [Quick start](#quick-start) · [Engineering highlights](#engineering-highlights) ·
 [Ask Curio](#ask-curio) · [Fashion](#fashion) · [Cocktails](#cocktails) · [Books](#books) ·
-[Under the hood](#under-the-hood) · [Changelog](CHANGELOG.md)
+[Under the hood](#under-the-hood) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 </div>
 
@@ -299,6 +299,20 @@ by that licence:
   Curio does not relicense them, and neither Curio's licence nor cocktail_advisor's covers
   them. Check TheCocktailDB's terms before any commercial use. Drink photos are loaded
   directly from thecocktaildb.com, and the cocktail pages credit "Recipe data: TheCocktailDB".
+
+## Contributing and releases
+
+Changes reach `main` only through pull requests with green CI and a
+[Conventional Commit](https://www.conventionalcommits.org/) title, merged by squash. Every
+version on `main` is released automatically once CI passes: a tag, a GitHub release with the
+changelog notes, and a container image:
+
+```bash
+docker pull ghcr.io/yo1am1/curio:latest
+```
+
+[How to contribute](CONTRIBUTING.md) · [Security policy](SECURITY.md) ·
+[Repository rulesets](.github/rulesets/README.md)
 
 ## Contributors
 

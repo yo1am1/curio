@@ -1,0 +1,41 @@
+name: Bug report
+description: Something does not work as the README or the docs describe.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. scripts/quickstart.sh
+        2. Books → search "…"
+        3. …
+    validations:
+      required: true
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Area
+      options: [Fashion, Cocktails, Books, Agent / chat, API, Quick start / Docker, Other]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: A release tag (e.g. v1.2.1) or a commit SHA.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: API log lines, the agent's step trace, or a screenshot. Remove any keys.
+      render: text
