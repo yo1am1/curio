@@ -1,13 +1,14 @@
-"""Record the README overview GIF (docs/screenshots/curio-overview.gif) from a running stack.
+"""Record the README overview animation (docs/screenshots/curio-overview.webp) from a stack.
 
 Start the stack as in scripts/capture_readme.py (the scripted LLM stub, the API and the UI),
 then run:
 
-    uv run python -m scripts.record_overview --out docs/screenshots/curio-overview.gif
+    uv run python -m scripts.record_overview --out docs/screenshots/curio-overview.webp
 
-Chrome's screencast (over CDP) records the frames of a short tour, and ffmpeg turns them
-into a palette-optimised GIF, keeping each frame's real duration.
-Each scene shows a caption so the GIF reads without sound or narration.
+Chrome's screencast (over CDP) records the frames of a short tour, and ffmpeg turns them into
+an animated WebP with transparent rounded corners (like every README image), keeping each
+frame's real duration. GIF would need a 1-bit alpha that defeats its frame-diff compression.
+Each scene shows a caption so the animation reads without sound or narration.
 """
 
 import argparse
@@ -20,11 +21,13 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
+from scripts.readme_images import corner_mask
+
 parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
 parser.add_argument("--ui-url", default="http://127.0.0.1:8501")
-parser.add_argument("--out", type=Path, default=Path("docs/screenshots/curio-overview.gif"))
+parser.add_argument("--out", type=Path, default=Path("docs/screenshots/curio-overview.webp"))
 parser.add_argument("--executable-path", help="Chromium binary (default: Playwright's).")
-parser.add_argument("--width", type=int, default=960, help="GIF width in pixels.")
+parser.add_argument("--width", type=int, default=960, help="Animation width in pixels.")
 parser.add_argument("--fps", type=int, default=10)
 ARGS = parser.parse_args()
 UI = ARGS.ui_url
@@ -149,29 +152,49 @@ def tour(p) -> None:
     p.wait_for_timeout(3000)
 
 
-def to_gif(frames: list[tuple[Path, float]], out: Path, workdir: Path) -> None:
-    """Assemble timestamped frames into a GIF; each frame lasts until the next one."""
+def to_webp(frames: list[tuple[Path, float]], out: Path, workdir: Path) -> None:
+    """Assemble timestamped frames into an animated WebP with rounded transparent corners."""
     out.parent.mkdir(parents=True, exist_ok=True)
     lines = ["ffconcat version 1.0"]
     ends = [stamp for _, stamp in frames[1:]] + [frames[-1][1] + 1.5]
     for (path, stamp), following in zip(frames, ends, strict=True):
-        # Cap each frame so a slow step never stalls the GIF; the tour's pauses stay shorter.
+        # Cap each frame so a slow step never stalls the tour.
         duration = min(max(following - stamp, 0.02), MAX_FRAME_SECONDS)
         lines += [f"file '{path.name}'", f"duration {duration:.3f}"]
     lines.append(f"file '{frames[-1][0].name}'")
     playlist = workdir / "frames.ffconcat"
     playlist.write_text("\n".join(lines) + "\n")
-    scale = f"fps={ARGS.fps},scale={ARGS.width}:-1:flags=lanczos"
-    palette = workdir / "palette.png"
-    base = ["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(playlist)]
-    subprocess.run([*base, "-vf", f"{scale},palettegen=stats_mode=diff", str(palette)], check=True)
+    height = round(VIEWPORT["height"] * ARGS.width / VIEWPORT["width"])
+    mask = workdir / "mask.png"
+    corner_mask((ARGS.width, height)).save(mask)
+    graph = (
+        f"[0:v]fps={ARGS.fps},scale={ARGS.width}:{height}:flags=lanczos,format=rgba[v];"
+        "[1:v]format=gray[m];[v][m]alphamerge=shortest=1"
+    )
     subprocess.run(
         [
-            *base,
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
             "-i",
-            str(palette),
-            "-lavfi",
-            f"{scale}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle",
+            str(playlist),
+            "-loop",
+            "1",
+            "-i",
+            str(mask),
+            "-filter_complex",
+            graph,
+            "-c:v",
+            "libwebp_anim",
+            "-quality",
+            "78",
+            "-compression_level",
+            "6",
             "-loop",
             "0",
             str(out),
@@ -182,7 +205,7 @@ def to_gif(frames: list[tuple[Path, float]], out: Path, workdir: Path) -> None:
 
 def main() -> None:
     if shutil.which("ffmpeg") is None:
-        raise SystemExit("ffmpeg is required to build the GIF")
+        raise SystemExit("ffmpeg (with libwebp) is required to build the animation")
     with tempfile.TemporaryDirectory() as tmp, sync_playwright() as pw:
         workdir = Path(tmp)
         frames: list[tuple[Path, float]] = []
@@ -220,7 +243,7 @@ def main() -> None:
             browser.close()
         if not frames:
             raise SystemExit("No frames were recorded")
-        to_gif(frames, ARGS.out, workdir)
+        to_webp(frames, ARGS.out, workdir)
     size = ARGS.out.stat().st_size / 1_000_000
     print(f"Wrote {ARGS.out} ({size:.1f} MB, {len(frames)} frames)")
 

@@ -12,7 +12,7 @@ against the data.
 ![Python 3.13](https://img.shields.io/badge/python-3.13-3776ab)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Streamlit-009688)
 
-![A 40-second tour: the agent answering with its steps, an outfit under a budget, a cocktail paired with The Great Gatsby and "What can I make?"](docs/screenshots/curio-overview.gif)
+![A 40-second tour: the agent answering with its steps, an outfit under a budget, a cocktail paired with The Great Gatsby and "What can I make?"](docs/screenshots/curio-overview.webp)
 
 [Quick start](#quick-start) · [Engineering highlights](#engineering-highlights) ·
 [Ask Curio](#ask-curio) · [Fashion](#fashion) · [Cocktails](#cocktails) · [Books](#books) ·
@@ -82,7 +82,7 @@ preferences. It is available from the conversation home and a floating panel on 
 pages.
 [How the agent works](docs/agent-architecture.md).
 
-![Curio answering "Black trousers under €30" with verified prices and product cards](docs/screenshots/curio-agent.jpg)
+![Curio answering "Black trousers under €30" with verified prices and product cards](docs/screenshots/curio-agent.webp)
 
 Ask for an outfit ("a summer outfit for a wedding under €80") and Curio plans the pieces for
 the occasion (dress, shoes, bag, earrings), fills each from the photo index within the
@@ -90,26 +90,26 @@ budget, prefers pieces real shoppers bought together, and says why it chose each
 total is checked against the prices like any other figure. Swap a piece or ask for a cheaper
 one, or save the whole outfit through the same approval.
 
-![An outfit for a summer wedding: four pieces with photos and reasons, €77.96 of €80](docs/screenshots/curio-outfit.jpg)
+![An outfit for a summer wedding: four pieces with photos and reasons, €77.96 of €80](docs/screenshots/curio-outfit.webp)
 
 Saving to the shortlist or remembering a preference is only proposed. You approve it,
 untick what you don't want, or decline. Approved memory, such as a budget, applies to
 later searches, and the step trace shows where it came from.
 
-![Approval card for saving two pieces, with one unticked](docs/screenshots/curio-approval.jpg)
+![Approval card for saving two pieces, with one unticked](docs/screenshots/curio-approval.webp)
 
-![A remembered €40 budget applied to the next search, shown in the step trace](docs/screenshots/curio-memory.jpg)
+![A remembered €40 budget applied to the next search, shown in the step trace](docs/screenshots/curio-memory.webp)
 
 The same agent works for cocktails. Here a remembered alcohol-free preference filters
 every search.
 
-![Cocktail answer filtered by a remembered alcohol-free preference](docs/screenshots/curio-cocktail-agent.jpg)
+![Cocktail answer filtered by a remembered alcohol-free preference](docs/screenshots/curio-cocktail-agent.webp)
 
 And for books: a remembered "no horror" applies to every search, and the ratings and the
 catalog titles in the answer are checked against what the tools returned. Plot, year and
 page claims in prose are not checked.
 
-![Book answer for "Fantasy like The Name of the Wind" with a remembered taste](docs/screenshots/curio-book-agent.jpg)
+![Book answer for "Fantasy like The Name of the Wind" with a remembered taste](docs/screenshots/curio-book-agent.webp)
 
 In these chat screenshots the replies come from the scripted test model in
 `tests/e2e/llm_stub.py`, used because no LLM was configured. The catalog, tool results,
@@ -117,31 +117,31 @@ step trace, price checks and approvals are the real system.
 
 ## Fashion
 
-![Personalized fashion picks with the evidence behind each one](docs/screenshots/curio-fashion.jpg)
+![Personalized fashion picks with the evidence behind each one](docs/screenshots/curio-fashion.webp)
 
 ### Search by description or photo
 
 Search in everyday language, upload a photo, or try an example garment.
 
-![Description search results](docs/screenshots/curio-discover-text.jpg)
+![Description search results](docs/screenshots/curio-discover-text.webp)
 
-![Photo search results](docs/screenshots/curio-discover-photo.jpg)
+![Photo search results](docs/screenshots/curio-discover-photo.webp)
 
 ### Explore product connections
 
 Browse co-purchased pieces, visually similar products and higher-priced alternatives.
 Open a product to inspect its details and the evidence behind its recommendations.
 
-![Product connections](docs/screenshots/curio-connections.jpg)
+![Product connections](docs/screenshots/curio-connections.webp)
 
-![Product details with pieces bought together](docs/screenshots/curio-product-detail.jpg)
+![Product details with pieces bought together](docs/screenshots/curio-product-detail.webp)
 
 ### On your phone
 
-![Fashion feed on mobile](docs/screenshots/curio-mobile.jpg)
+![Fashion feed on mobile](docs/screenshots/curio-mobile.webp)
 
-[Conversation home](docs/screenshots/curio-home.jpg) ·
-[Mobile conversation home](docs/screenshots/curio-home-mobile.jpg)
+[Conversation home](docs/screenshots/curio-home.webp) ·
+[Mobile conversation home](docs/screenshots/curio-home-mobile.webp)
 
 ## Cocktails
 
@@ -150,12 +150,12 @@ alcohol and category, and open a recipe to see its method and similar drinks. Ea
 result says why it matched. Alcohol-free means TheCocktailDB's "Non alcoholic" label;
 "Alcohol optional" recipes count as alcoholic.
 
-![Cocktail search for "Something fresh with lime and mint"](docs/screenshots/curio-cocktails.jpg)
+![Cocktail search for "Something fresh with lime and mint"](docs/screenshots/curio-cocktails.webp)
 
 "What can I make?" ranks drinks by the ingredients you have, shows what is missing and
 lets you allow up to three missing ingredients.
 
-![What can I make? with gin, lime and tonic water](docs/screenshots/curio-cocktails-pantry.jpg)
+![What can I make? with gin, lime and tonic water](docs/screenshots/curio-cocktails-pantry.webp)
 
 Ingredient filters and avoided ingredients only cover the recipe's listed ingredients.
 They are not an allergen or dietary guarantee. Please drink responsibly.
@@ -167,14 +167,14 @@ from what that book's readers also loved; "short classic novels" keeps classics 
 250 pages; "cosy mystery" browses by mood. Every result says why it is there, for example
 "960 readers who liked The Name of the Wind also liked this".
 
-![Book search for "Fantasy like The Name of the Wind"](docs/screenshots/curio-books.jpg)
+![Book search for "Fantasy like The Name of the Wind"](docs/screenshots/curio-books.webp)
 
 Open a book to see its cover, Goodreads rating, genres, description, what its readers also
 liked and more by the author, then save it to your reading list or ask Curio about it.
 "Because you liked…" combines several books you loved, and "Browse by mood" lists the
 best-loved Cosy, Dark, Funny or Epic reads.
 
-![Book dialog with readers-also-liked and more by the author](docs/screenshots/curio-book-detail.jpg)
+![Book dialog with readers-also-liked and more by the author](docs/screenshots/curio-book-detail.webp)
 
 Ratings are Goodreads averages. Genres and moods come from readers' Goodreads shelves, so
 they are crowd labels rather than editorial ones.
@@ -194,7 +194,7 @@ my reading list". Children's and young-adult books, and anyone whose remembered 
 taste is alcohol-free, only ever get alcohol-free drinks. The pairing is deterministic and
 offline: no model, no download.
 
-![Drinks paired with The Great Gatsby, each with the book and recipe evidence](docs/screenshots/curio-pairing.jpg)
+![Drinks paired with The Great Gatsby, each with the book and recipe evidence](docs/screenshots/curio-pairing.webp)
 
 ## Under the hood
 
@@ -282,8 +282,8 @@ by that licence:
   terms may also apply to them. Covers and book descriptions belong to their publishers and
   Goodreads and are not covered by CC BY-SA: when you run Curio, covers are loaded directly
   from Goodreads by your browser, and descriptions stay in your local prepared file. The
-  exception is four README screenshots (`docs/screenshots/curio-books.jpg`,
-  `curio-book-detail.jpg`, `curio-book-agent.jpg` and `curio-pairing.jpg`), which show book
+  exception is four README screenshots (`docs/screenshots/curio-books.webp`,
+  `curio-book-detail.webp`, `curio-book-agent.webp` and `curio-pairing.webp`), which show book
   covers and a description excerpt for illustration only; that material remains its owners' and is not
   licensed by this repository. The prepared files are not part of this repository; if you
   share them, credit goodbooks-10k and share them under CC BY-SA 4.0. The book pages credit

@@ -8,9 +8,18 @@ All notable changes to Curio are recorded here. The format follows
 
 ### Added
 
-- README overview GIF (`docs/screenshots/curio-overview.gif`), recorded by the new
+- README overview animation (`docs/screenshots/curio-overview.webp`), recorded by the new
   `scripts.record_overview`, plus a centred header with release, licence and Python
   badges, a contents line and a domain table.
+
+### Changed
+
+- Every README image has rounded corners, matching the architecture diagram: screenshots
+  are WebP with transparent corners (`scripts.readme_images`, used by
+  `scripts.capture_readme`), about a third smaller than the JPEGs they replace; the overview
+  is an animated WebP (1 MB) rather than a 4 MB GIF.
+- Removed 22 superseded development screenshots from `docs/screenshots`;
+  `scripts.take_screenshots` now writes to `e2e-artifacts/dev-screenshots/` by default.
 
 ## [1.2.0] - 2026-11-05
 

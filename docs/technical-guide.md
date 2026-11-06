@@ -297,7 +297,7 @@ relicense it, and the Apache-2.0 licence covers this repository's code only. Cov
 Goodreads' (or Open Library's) servers and are loaded by the browser; they and the book
 descriptions are the publishers' and Goodreads' material, not covered by CC BY-SA. The
 prepared files stay on your machine. The only copies in this repository are three README
-screenshots (`curio-books.jpg`, `curio-book-detail.jpg`, `curio-book-agent.jpg`), which show
+screenshots (`curio-books.webp`, `curio-book-detail.webp`, `curio-book-agent.webp`), which show
 covers and a description excerpt for illustration only; they are not licensed by this
 repository. If you share them, they are adaptations of goodbooks-10k: credit it and share
 them under CC BY-SA 4.0. The UI credits "Book data: goodbooks-10k from Goodreads (CC BY-SA
@@ -777,13 +777,16 @@ uv run python -m scripts.take_screenshots --example 5 --skip-chat --out data/scr
 
 `take_screenshots` writes development captures (`mvp-*`, `text-search`, `cocktails-*`, ...)
 and checks layout invariants on the way. The curated README images
-(`docs/screenshots/curio-*.jpg`) come from `scripts.capture_readme`, which drives the
+(`docs/screenshots/curio-*.webp`, with rounded transparent corners from
+`scripts.readme_images`) come from `scripts.capture_readme`, which drives the
 running stack through the same flows; its docstring lists the commands. The current images
 use the H&M sample prepared from the Hugging Face mirror (14,280 of 14,300 products photographed) and
 the real recipe catalog; chat replies come from the scripted stub, as the README says.
-The overview GIF (`docs/screenshots/curio-overview.gif`) comes from `scripts.record_overview`
-against the same stack: it warms the models, records a captioned tour with Chrome's
-screencast and builds a palette-optimised GIF with ffmpeg (about 40 s and 4 MB).
+The overview animation (`docs/screenshots/curio-overview.webp`) comes from
+`scripts.record_overview` against the same stack: it warms the models, records a captioned
+tour with Chrome's screencast and builds an animated WebP with the same rounded corners
+with ffmpeg (about 40 s and 1 MB). `take_screenshots` writes its development captures to
+`e2e-artifacts/dev-screenshots/`, outside version control.
 
 ### End-to-end tests
 

@@ -37,7 +37,7 @@ _VISIBLE_PHOTOS_LOADED = """minimum => {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--ui-url", default="http://127.0.0.1:8501")
-    parser.add_argument("--out", type=Path, default=Path("docs/screenshots"))
+    parser.add_argument("--out", type=Path, default=Path("e2e-artifacts/dev-screenshots"))
     parser.add_argument("--channel", default="chrome", help='Browser channel; "" for Chromium.')
     parser.add_argument("--executable-path", help="Browser binary, overriding --channel.")
     parser.add_argument("--query-image", type=Path, help="Photo for image search.")

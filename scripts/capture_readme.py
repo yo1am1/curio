@@ -1,4 +1,4 @@
-"""Capture the curated README screenshots (docs/screenshots/curio-*.jpg).
+"""Capture the curated README screenshots (docs/screenshots/curio-*.webp, rounded corners).
 
 Start the stack on prepared data first; chat needs an LLM, and the README captions say when
 the scripted stub in tests/e2e/llm_stub.py was used:
@@ -20,6 +20,8 @@ from pathlib import Path
 
 from PIL import Image
 from playwright.sync_api import sync_playwright
+
+from scripts.readme_images import save_rounded_webp
 
 parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
 parser.add_argument("--ui-url", default="http://127.0.0.1:8501")
@@ -60,7 +62,7 @@ def save(p, name, width=1440, clip=None):
     im = Image.open(raw).convert("RGB")
     raw.unlink()
     im = im.resize((width, round(im.height * width / im.width)), Image.LANCZOS)
-    im.save(OUT / f"{name}.jpg", quality=84, optimize=True, progressive=True)
+    save_rounded_webp(im, OUT / name)
 
 
 def show_last_answer(p):
