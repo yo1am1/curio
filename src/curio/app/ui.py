@@ -3538,23 +3538,23 @@ def evening_outfit_card(plan: dict, key: str, chat: bool, active: bool) -> None:
                     st.caption(f"**{slot['label']}**: {plain(slot.get('issue', ''))}")
                     continue
                 if (photo := product_photo(product["product_id"])) is not None:
-                    st.image(photo, width=64)
+                    st.image(photo, width=56)
                 with st.container(gap=None, width="stretch"):
                     st.text(product["name"])
                     st.caption(f"{slot['label']} · €{product['price']:.2f} · {product['colour']}")
-                if active:
-                    label = slot["label"].lower()
-                    with st.container(gap=None, width="content"):
-                        evening_button(
-                            "Swap", f"evening_swap_{key}_{slot['slot']}", chat,
-                            f"Another {label} for my evening", swap_evening, "outfit", slot["slot"],
-                            help=f"Another {label}",
-                        )  # fmt: skip
-                        evening_button(
-                            "Cheaper", f"evening_cheaper_{key}_{slot['slot']}", chat,
-                            f"Cheaper {label}", swap_evening, "outfit", slot["slot"], "cheaper",
-                            help=f"A cheaper {label}",
-                        )  # fmt: skip
+                    if active:
+                        label = slot["label"].lower()
+                        with st.container(horizontal=True, gap="small"):
+                            evening_button(
+                                "Swap", f"evening_swap_{key}_{slot['slot']}", chat,
+                                f"Another {label} for my evening", swap_evening, "outfit",
+                                slot["slot"], help=f"Another {label}",
+                            )  # fmt: skip
+                            evening_button(
+                                "Cheaper", f"evening_cheaper_{key}_{slot['slot']}", chat,
+                                f"Cheaper {label}", swap_evening, "outfit", slot["slot"],
+                                "cheaper", help=f"A cheaper {label}",
+                            )  # fmt: skip
         total, budget = outfit["total"], outfit.get("budget")
         if budget:
             st.progress(min(total / budget, 1.0), text=budget_line(total, budget))
@@ -3626,7 +3626,8 @@ def evening_cards(plan: dict, *, key: str, chat: bool = False, active: bool = Tr
         st.caption(plain(f"{theme['evidence']}: {theme['feeling']}."))
     with st.container(key=f"evening_why_{key}"):
         st.markdown(f":material/auto_awesome: **Why it works** · {plain(plan['why'])}")
-    outfit, book, drink = st.columns(3, gap="medium")
+    # The outfit lists several pieces, so it gets the widest card.
+    outfit, book, drink = st.columns([1.3, 1, 1], gap="medium")
     with outfit:
         evening_outfit_card(plan, key, chat, active)
     with book:
