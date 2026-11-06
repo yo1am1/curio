@@ -5,7 +5,7 @@ weeks. The end-to-end challenger improves observed hit rate and recall, but MAP 
 are uneven and uncertain against v1. **No model is promoted.** Serving data, model,
 index and configuration remain unchanged.
 
-![Candidate reach and ranking comparison](research/retrieval-ablation.png)
+![Candidate reach and ranking comparison](retrieval-ablation.png)
 
 ## Prepared inputs and source verification
 
@@ -28,7 +28,7 @@ new prepared bundle reproduces the retained data. [Pinned source](https://huggin
 
 ## Channels and chronology
 
-[retrieval_channels.py](../scripts/retrieval_channels.py) implements three fixed,
+[retrieval_channels.py](../../../scripts/retrieval_channels.py) implements three fixed,
 offline-only channels, with at most 50 candidates each:
 
 - **Family:** actual shared `product_code`, recent personal seeds and recent catalog
@@ -44,7 +44,7 @@ past-observed catalog items and return no popularity fillers. The existing base
 pool still includes buy-again. Original future-informed cohort/catalog selection
 is unchanged; comparisons remain conditional on this sample and catalog.
 
-[compare_retrieval.py](../scripts/compare_retrieval.py) appends explicit experimental
+[compare_retrieval.py](../../../scripts/compare_retrieval.py) appends explicit experimental
 IDs through the shared feature builder. Normal serving requests pass no extras.
 All eligible users and their complete unique purchased-item truth remain in every
 metric, including targets unreachable by any channel.
@@ -135,7 +135,7 @@ The repeat control was computed afterward on identical cohorts, then added as a
 reporting-only harness control; no challenger was retuned. A missing optional
 LightGBM now fails before expensive preparation/model work.
 
-[Aggregate results and run protocol](research/retrieval-ablation.json) retain exact
+[Aggregate results and run protocol](retrieval-ablation.json) retain exact
 metrics, paired intervals, source counts, timings and code hashes from the run.
 No raw IDs, individual predictions or model binaries are committed. Retained
 serving input/model SHA-256 hashes were independently verified unchanged.

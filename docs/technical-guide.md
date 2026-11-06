@@ -45,6 +45,13 @@ title-cases shouty names and collapses spaces; it changes 2,062 of the 8,054 dis
 `Product.display_name` carries it in every API response, and the UI and the agents' text use
 it, while `name` stays the raw catalog name in the data and IDs. Grounding accepts either.
 
+**Data behind the screenshots.** The fashion images use 5,000 historical customers and a
+photo index covering 14,280 of the 14,300 catalog products (the mirror lacks 20 photos),
+prepared from the public Hugging Face mirror of the H&M data. A product without a photo
+shows a placeholder. Prices are approximate historical values; there is no live stock or
+checkout. The holdout results for the learned ranker, and their uncertainty, are under
+[Offline evaluation](#offline-evaluation).
+
 ### Outfit builder
 
 `src/curio/domains/fashion/outfits.py` holds the planner, used by the agent's `BuildOutfit` and
@@ -120,6 +127,7 @@ model, index or network call at serving time. `CocktailRecommender`
 | Similar drinks | IDF-weighted overlap of ingredient families ("Lime" ~ "Lime juice", "White rum" ~ "Light rum"). |
 | What can I make? | Ranks recipes that miss only mixers or garnish first and those missing their base spirit (`SPIRIT_WORDS`: gin, rum, vodka, whiskey…) last, then by fewest missing ingredients, then coverage. Matching ignores case and plurals and uses a small explicit alias table (`PANTRY_ALIASES`: a lime covers lime juice and peel, "rum" covers the common styles); a few staples (ice, water) count as available. Up to three missing ingredients can be allowed. |
 | Crude names | Drinks whose names are crude, sexual or a slur (`CRUDE_NAMES`: "After sex", "Orgasm", "Zipperhead"…) are left out of search, similar drinks and "What can I make?", unless the search names the drink; pairings never offer them. |
+| Shots | Shot-style drinks (`is_shot`: the "Shot" category, and shots, slammers or flaming drinks by name, such as Jello shots) are left out of "What can I make?" and of search, unless the request asks for shots (`asks_for_shots`: shot, shooter, slammer), filters on the Shot category or names the drink. The cocktail agent's WhatCanIMake includes them when the shopper's message asks for shots; pairings never offer them. |
 | Cocktail agent | The shared agent engine with cocktail tools: SearchCocktails, InspectCocktails, SimilarCocktails, WhatCanIMake, SaveCocktails and RememberTastes. See [agent architecture](agent-architecture.md). |
 
 Alcohol-free means TheCocktailDB's "Non alcoholic" label only. "Optional alcohol" recipes
@@ -351,8 +359,8 @@ relicense it, and the Apache-2.0 licence covers this repository's code only. Cov
 Goodreads' (or Open Library's) servers and are loaded by the browser; they and the book
 descriptions are the publishers' and Goodreads' material, not covered by CC BY-SA. The
 prepared files stay on your machine. The only copies in this repository are the README
-images `curio-books.webp`, `curio-pairing.webp`, `curio-evening.webp` and `curio-overview.webp`,
-which show covers and a description excerpt for illustration only; they are not licensed by this
+images `curio-pairing.webp`, `curio-evening.webp` and `curio-overview.webp`, which show
+covers and a description excerpt for illustration only; they are not licensed by this
 repository. If you share them, they are adaptations of goodbooks-10k: credit it and share
 them under CC BY-SA 4.0. The UI credits "Book data: goodbooks-10k from Goodreads (CC BY-SA
 4.0)" and links each book to its Goodreads page.
@@ -463,7 +471,6 @@ scripts/classify_product_types.py # Reviewable H&M-to-Shopify category decisions
 scripts/evaluate.py # Chronological holdout evaluation; JSON results for the Model quality page
 scripts/prepare_cocktails.py # Download the pinned recipe CSV, write data/cocktails.parquet
 scripts/prepare_books.py # Download pinned goodbooks-10k, write books + book_neighbours.parquet
-scripts/take_screenshots.py # Development captures of every page with Playwright
 ```
 
 ### Domain registry
@@ -761,25 +768,25 @@ reaches the holdout cutoff. On the 819-customer final week, observed MAP@12 is
 0.0302 versus 0.0248 for deterministic buy-again; hit rate is 13.9% versus 11.1%.
 The paired bootstrap interval crosses zero, so this does not establish superiority
 from that week alone. Full evidence and the three earlier validations are in the
-[recommendation audit](recommendation-audit.md).
-A [further BPR, sampling and training-scale iteration](recommendation-iteration2.md)
+[recommendation audit](research/fashion/recommendation-audit.md).
+A [further BPR, sampling and training-scale iteration](research/fashion/recommendation-iteration2.md)
 tested seven new designs. More supervision reached MAP .036754 on one development
 week but regressed on the other; no design passed both weeks or was promoted.
-A [ranking follow-up and customer-disjoint check](recommendation-ranking-followup.md)
+A [ranking follow-up and customer-disjoint check](research/fashion/recommendation-ranking-followup.md)
 raised observed scores again; the frozen challenger still failed its promotion gates.
-The [complementary retrieval experiment](recommendation-retrieval.md) adds
+The [complementary retrieval experiment](research/fashion/recommendation-retrieval.md) adds
 family, recent-basket and latent channels: candidate reach improves on both development
 weeks, but the ranking challenger remains unpromoted.
-The [fixed-pool provenance experiment](recommendation-provenance.md) adds an
+The [fixed-pool provenance experiment](research/fashion/recommendation-provenance.md) adds an
 opt-in versioned feature contract; its mixed development results were not promoted.
-See the [quality research and implementation direction](recommendation-research.md)
+See the [quality research and implementation direction](research/fashion/recommendation-research.md)
 for the retrieval bottleneck, dataset comparison and next experiments.
 
 The full holdout, including repeat purchases, is now the primary comparison.
 `strategy=repeat` exposes the strong recent-purchases plus best-sellers baseline.
 Evaluation reports customer hit rate and macro recall@12 beside MAP@12, and keeps
 unrestricted popularity separate from new-item-only popularity. See the current
-[recommendation audit](recommendation-audit.md) for reproduced validation and
+[recommendation audit](research/fashion/recommendation-audit.md) for reproduced validation and
 MVP work; the earlier new-item benchmark below describes the previous branch state.
 Use `--holdout-end YYYY-MM-DD` to reproduce earlier validation weeks.
 
@@ -794,7 +801,7 @@ uv run python -m scripts.evaluate --data-dir data --qdrant-path .qdrant --output
 
 The following results describe the earlier system, before repeat-aware ranking.
 For the current learned model and buy-again comparison, see the beginning of this
-section and the [recommendation audit](recommendation-audit.md).
+section and the [recommendation audit](research/fashion/recommendation-audit.md).
 
 The last seven calendar days (2020-09-16 to 09-22) are held out. Popularity, collaborative
 filtering and co-purchase links are rebuilt from every shopper's purchases before that
@@ -848,8 +855,8 @@ population estimate or a competition leaderboard score. In evaluation, co-purcha
 counts only baskets with catalog products. CLIP image vectors are fixed features, but index
 provenance is not recorded.
 
-The development workflow and remaining validation are recorded in
-[engineering workflow](engineering-workflow.md).
+How the project was built and reviewed is summarised in
+[how it was built](how-it-was-built.md).
 
 ## Development
 
@@ -858,23 +865,16 @@ uv run pytest                        # fast, offline unit tests (fake encoder, i
 uv run pytest -m integration        # tests that download the real CLIP model
 uv run pytest -m e2e tests/e2e      # browser end-to-end run over prepared data (below)
 uv run ruff check . && uv run ruff format --check .
-
-# Development captures of every page (API + UI running; uses the local Google Chrome)
-uv run python -m scripts.take_screenshots --example 5 --skip-chat --out data/screenshots
 ```
 
-`take_screenshots` writes development captures (`mvp-*`, `text-search`, `cocktails-*`, ...)
-and checks layout invariants on the way. The curated README images
-(`docs/screenshots/curio-*.webp`, with rounded transparent corners from
-`scripts.readme_images`) come from `scripts.capture_readme`, which drives the
-running stack through the same flows; its docstring lists the commands. The current images
-use the H&M sample prepared from the Hugging Face mirror (14,280 of 14,300 products photographed) and
-the real recipe catalog; chat replies come from the scripted stub, as the README says.
-The overview animation (`docs/screenshots/curio-overview.webp`) comes from
-`scripts.record_overview` against the same stack: it warms the models, records a captioned
-tour with Chrome's screencast and builds an animated WebP with the same rounded corners
-with ffmpeg (about 40 s and 1 MB). `take_screenshots` writes its development captures to
-`e2e-artifacts/dev-screenshots/`, outside version control.
+The README images (`docs/screenshots/curio-*.webp`, with rounded transparent corners from
+`scripts.readme_images`) come from `scripts.capture_readme`, which drives a running stack;
+its docstring lists the commands. They use the H&M sample prepared from the Hugging Face
+mirror (14,280 of 14,300 products photographed), goodbooks-10k and the real recipe catalog;
+chat replies come from the scripted stub, as the README says. The overview animation
+(`docs/screenshots/curio-overview.webp`) comes from `scripts.record_overview` against the
+same stack: it warms the models, records a captioned tour with Chrome's screencast and
+builds an animated WebP with the same rounded corners with ffmpeg (about 40 s).
 
 ### End-to-end tests
 

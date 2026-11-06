@@ -5,7 +5,7 @@ Seven new designs tested BPR, recalled-negative sampling, more training customer
 and more labeled weeks. None justified consuming the new confirmation cohort.
 The serving model remains unchanged; the newly reserved 20,000 shoppers are unscored.
 
-![Incremental MAP for all new designs](research/iteration2.png)
+![Incremental MAP for all new designs](iteration2.png)
 
 ## Research that led to the tests
 
@@ -108,7 +108,7 @@ Recalled positive rows / total training candidate rows across all requested snap
 | Expanded / five | 8,657 / 2,521,847 | 8,801 / 2,580,423 |
 
 Exact hit rates, macro recalls, iteration counts and paired per-customer MAP 95%
-intervals are in the [aggregate evidence](research/iteration2.json). Development
+intervals are in the [aggregate evidence](iteration2.json). Development
 intervals describe these reused weeks; they do not correct for earlier trials,
 repeated customers or model selection. More supervision is not a guaranteed gain.
 

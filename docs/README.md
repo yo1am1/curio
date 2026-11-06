@@ -1,45 +1,34 @@
 # Curio documentation
 
-[Project overview and screenshots](../README.md) · [Changelog](../CHANGELOG.md) ·
+[Project overview](../README.md) · [Changelog](../CHANGELOG.md) ·
 [Architecture diagram](architecture.svg)
 
 ## Guides
 
-- [Technical guide](technical-guide.md): data preparation for every domain, local setup,
-  Docker, the code layout, the API, tests and releases.
-- [Agent architecture](agent-architecture.md): the domain-free engine, the fashion,
-  cocktail, book and evening toolkits, tool policies, signed approvals, grounding checks and
-  the review behind them.
-- [Multi-domain contract](multidomain-contract.md): the data layouts, Python interfaces,
-  agent tools, API and UI rules for cocktails, books, outfits, the book → drink pairing and
-  Plan my evening.
-- [Hello, domain](../examples/hello_domain/teas.py): a complete tea domain on the engine, in
-  one file.
+- [Technical guide](technical-guide.md): data preparation, local setup, Docker, the code
+  layout, the API, tests and releases.
+- [Agent architecture](agent-architecture.md): the engine, the toolkits, tool policies,
+  signed approvals and grounding checks.
+- [Multi-domain contract](multidomain-contract.md): data layouts, Python interfaces, agent
+  tools, API and UI rules for cocktails, books, outfits, pairings and Plan my evening.
+- [Hello, domain](../examples/hello_domain/teas.py): a complete tea domain in one file.
+- [Data and licences](data-and-licences.md): where each dataset comes from and its terms.
+- [How it was built](how-it-was-built.md): the review loops, test gates and release
+  automation.
 
-## Research notes
+## Fashion research notes
 
-How the fashion recommender was evaluated and tuned. These records document tested ideas and
-their limits. An improvement on one validation week does not mean a model was promoted to
-the running app.
+How the fashion recommender was evaluated and tuned, including the ideas that did not hold.
+A gain on one validation week does not mean a model was promoted to the app.
 
-- [Recommendation audit](recommendation-audit.md): repeat-aware ranking, baselines,
-  chronological evaluation and uncertainty. The README's evaluation numbers come from here.
-- [Research direction](recommendation-research.md): retrieval bottlenecks, dataset
-  comparisons and proposed experiments.
-- [Initial tuning](recommendation-tuning.md)
-- [BPR, sampling and training scale](recommendation-iteration2.md)
-- [Ranking and customer-disjoint confirmation](recommendation-ranking-followup.md)
-- [Complementary retrieval](recommendation-retrieval.md)
-- [Candidate provenance](recommendation-provenance.md)
-- [`research/`](research): the JSON results and charts behind these notes.
+- [Recommendation audit](research/fashion/recommendation-audit.md): baselines,
+  chronological evaluation and uncertainty. The README's numbers come from here.
+- [Research direction](research/fashion/recommendation-research.md): retrieval bottlenecks
+  and proposed experiments.
+- [Initial tuning](research/fashion/recommendation-tuning.md)
+- [BPR, sampling and training scale](research/fashion/recommendation-iteration2.md)
+- [Ranking and customer-disjoint confirmation](research/fashion/recommendation-ranking-followup.md)
+- [Complementary retrieval](research/fashion/recommendation-retrieval.md)
+- [Candidate provenance](research/fashion/recommendation-provenance.md)
 
-Fashion uses historical research data, approximate prices and a photo index covering 14,280
-of 14,300 products. Cocktails use 425 recipes from TheCocktailDB, whose data terms are
-TheCocktailDB's own. Books use goodbooks-10k (CC BY-SA 4.0, collected from Goodreads). No
-hosted demo is available.
-
-## History
-
-[Engineering workflow](engineering-workflow.md) and [session handoff](session-handoff.md)
-are chronological records of how Curio was built. Their test counts, branch names, paths
-and screenshots describe the work at the time; they are not current setup instructions.
+The JSON results and charts behind these notes sit beside them in `research/fashion/`.

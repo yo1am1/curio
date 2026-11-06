@@ -4,7 +4,7 @@ Observed scores increased again, but the selected challenger still fails the fro
 promotion requirements. Development gains did not fully carry over to newly scored
 customers. **No serving model, dataset, index or configuration was changed.**
 
-![Development and customer-disjoint results](research/ranking-followup.png)
+![Development and customer-disjoint results](ranking-followup.png)
 
 ## The bounded experiment
 
@@ -14,7 +14,7 @@ two fit an initial model, the third selects iterations, then all three are refit
 Target labels never select rounds or fit models. The cap stays 400 rounds, patience
 30, 31 leaves/depth 6, minimum leaf size 50, learning rate .05, L2=1, seed 42, two threads.
 
-[compare_rankers.py](../scripts/compare_rankers.py) tested exactly three new arms:
+[compare_rankers.py](../../../scripts/compare_rankers.py) tested exactly three new arms:
 
 1. **Loss selection:** original 24 expanded-pool features, binary objective, selecting
    rounds by earlier-week binary log loss rather than MAP.
@@ -24,7 +24,7 @@ Target labels never select rounds or fit models. The cap stays 400 rounds, patie
    15, selecting rounds by earlier-week full-truth MAP. Empty candidate groups are
    omitted from fitting groups but their customers remain in evaluation.
 
-The [temporal feature block](../scripts/ranking_features.py) uses past-only 1/7/28-day
+The [temporal feature block](../../../scripts/ranking_features.py) uses past-only 1/7/28-day
 sales counts, observed sale ages, weekly trend, online share, normalized transaction
 prices and missing-price flags, historical customer budget, purchase recency/frequency,
 and family/color/department affinity. It never uses full-period catalog median prices.
@@ -168,7 +168,7 @@ same protocol restarted **before any fits or outcomes**; no model/label rule cha
 The confirmation helper was added after protocol freeze to implement its rules; the
 selected fitter/candidate algorithms and declared gates stayed unchanged.
 
-[Aggregate results, frozen protocol and all slices](research/ranking-followup.json)
+[Aggregate results, frozen protocol and all slices](ranking-followup.json)
 retain exact numbers and provenance. Serving input/model hashes were verified
 unchanged. **446 offline tests passed**, one integration test deselected, Ruff lint
 and formatting passed. No production rollout, full load test or online utility study

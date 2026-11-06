@@ -1,1 +1,1 @@
-"""A complete Curio domain in about 150 lines: see `teas.py`."""
+"""A complete Curio domain in one file: see `teas.py`."""

@@ -8,9 +8,9 @@ The limited tuning round failed its promotion gate. That does **not** establish 
 
 MAP@12 measures the positions of exact articles purchased the following week. It is not satisfaction or a purchase probability. For example, one relevant article at rank three gives AP 1/3; if only one of ten customers gets that result, their MAP is .0333. A useful substitute can receive zero purchase credit.
 
-The official H&M scoring excludes customers who do not purchase in the target period, just as our evaluator does. Official scoring also includes target-active customers without training history; ours requires prior purchases. Thus inactive-customer averaging does not explain a leaderboard difference. Our smaller prepared catalog, selected customers and earlier evaluation week prevent direct comparisons. [Official evaluation](https://www.kaggle.com/c/h-and-m-personalized-fashion-recommendations/), [local evaluator](../scripts/evaluate.py).
+The official H&M scoring excludes customers who do not purchase in the target period, just as our evaluator does. Official scoring also includes target-active customers without training history; ours requires prior purchases. Thus inactive-customer averaging does not explain a leaderboard difference. Our smaller prepared catalog, selected customers and earlier evaluation week prevent direct comparisons. [Official evaluation](https://www.kaggle.com/c/h-and-m-personalized-fashion-recommendations/), [local evaluator](../../../scripts/evaluate.py).
 
-A cosine similarity of .3 and a negative learned ranking score have different meanings again. The former measures embedding alignment; the latter is a linear model output used for ordering. Neither is a calibrated quality percentage. See [encoder](../src/curio/domains/fashion/embeddings.py) and [ranker](../src/curio/domains/fashion/recommenders/learned.py). The original [CLIP paper](https://proceedings.mlr.press/v139/radford21a/radford21a.pdf) does not make our returned raw cosine a relevance probability.
+A cosine similarity of .3 and a negative learned ranking score have different meanings again. The former measures embedding alignment; the latter is a linear model output used for ordering. Neither is a calibrated quality percentage. See [encoder](../../../src/curio/domains/fashion/embeddings.py) and [ranker](../../../src/curio/domains/fashion/recommenders/learned.py). The original [CLIP paper](https://proceedings.mlr.press/v139/radford21a/radford21a.pdf) does not make our returned raw cosine a relevance probability.
 
 Small decimals are normal for this particular prediction task, but that alone does not make our system good. The second-place authors reported ensemble leaderboard MAP .0368 and used two to three months of history. Their result is an author report on a different population/week, not a target or ceiling for our subset. The previously quoted approximate winning .038 was not independently verified as an exact private score. [Original second-place report](https://www.kaggle.com/competitions/h-and-m-personalized-fashion-recommendations/writeups/hello-world-2nd-place-solution).
 
@@ -24,7 +24,7 @@ A read-only replay of the **already inspected** September 16–22, 2020 benchmar
 | Present in generated candidates | 424 | 15.69% |
 | Correctly recommended in top 12 | 139 | 5.14% |
 
-![Purchase retrieval bottleneck](research/retrieval-bottleneck.png)
+![Purchase retrieval bottleneck](retrieval-bottleneck.png)
 
 There were 819 eligible buyers, 114 with any correct recommendation: **hit rate 13.92%**, MAP **.030179**, macro recall **7.63%**. Pair-weighted recall is 5.14%; it differs from macro recall because the latter gives each customer equal weight. Median pool size was 104.
 
@@ -36,7 +36,7 @@ The data is larger than the 5,000-user UI sample suggests: **3,035,225 crowd tra
 
 ## What preparation discards
 
-Direct inspection of [prepare_data.py](../scripts/prepare_data.py) establishes these limitations:
+Direct inspection of [prepare_data.py](../../../scripts/prepare_data.py) establishes these limitations:
 
 - Transactions discard sales channel and per-event prices. The displayed product price is a full-period median, so it must not become a purported historical as-of feature.
 - Customers retain ID and age, dropping postal code and membership/activity fields. Current v1 does not use age.
