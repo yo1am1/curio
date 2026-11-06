@@ -13,6 +13,9 @@ The rule:
 
 A domain that needs another one's feature takes it through an extension point it defines
 (the book agent's `DrinkPairing`, which `pairings` implements and the app plugs in).
+
+Dynamic imports count too: `importlib.import_module("curio.…")` and `__import__("curio.…")`
+with a string literal are read like import statements.
 """
 
 import ast
@@ -35,8 +38,25 @@ def module_name(path: Path) -> str:
     return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
 
 
+_DYNAMIC_IMPORTS = frozenset({"import_module", "__import__"})
+
+
+def _dynamic_import(node: ast.AST) -> str | None:
+    """The "curio.…" module a dynamic import call names with a string literal, if any."""
+    if not isinstance(node, ast.Call) or not node.args:
+        return None
+    func = node.func
+    name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+    first = node.args[0]
+    literal = first.value if isinstance(first, ast.Constant) else None
+    if name in _DYNAMIC_IMPORTS and isinstance(literal, str) and literal.startswith("curio."):
+        return literal
+    return None
+
+
 def imports(path: Path) -> list[tuple[int, str]]:
-    """Every module `path` imports, as (line, absolute dotted name)."""
+    """Every module `path` imports, as (line, absolute dotted name), including dynamic
+    imports of a "curio.…" string literal."""
     package = module_name(path).split(".")
     if path.name != "__init__.py":
         package = package[:-1]
@@ -52,6 +72,8 @@ def imports(path: Path) -> list[tuple[int, str]]:
             # `from curio import app` imports curio.app.
             found += [(node.lineno, f"{base}.{alias.name}") for alias in node.names]
             found.append((node.lineno, base))
+        elif (dynamic := _dynamic_import(node)) is not None:
+            found.append((node.lineno, dynamic))
     return found
 
 
@@ -110,6 +132,29 @@ def test_the_check_sees_relative_and_nested_imports(tmp_path, monkeypatch):
     found = violations(package, ("curio.domains", "curio.app"))
     lines = {int(v.split(" imports ")[0].rsplit(":", 1)[1]) for v in found}
     assert lines == {1, 3, 4}
+
+
+def test_the_check_sees_dynamic_imports_of_curio_modules(tmp_path, monkeypatch):
+    package = tmp_path / "curio" / "domains" / "books"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    (package / "sneaky.py").write_text(
+        "import importlib\n"
+        "from importlib import import_module\n"
+        "def later():\n"
+        "    importlib.import_module('curio.domains.cocktails.catalog')\n"
+        "    import_module('curio.app.api')\n"
+        "    __import__('curio.domains.evening')\n"
+        "    importlib.import_module('json')\n"
+        "    importlib.import_module(name_from_config)\n"
+    )
+    monkeypatch.setitem(globals(), "SRC", tmp_path)
+    found = violations(package, ("curio.app", "curio.domains.cocktails", "curio.domains.evening"))
+    assert [v.split(":", 1)[1] for v in found] == [
+        "4 imports curio.domains.cocktails.catalog",
+        "5 imports curio.app.api",
+        "6 imports curio.domains.evening",
+    ]
 
 
 def test_sniffio_does_not_take_curio_for_the_async_library():
