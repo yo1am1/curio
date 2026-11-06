@@ -45,6 +45,19 @@ All notable changes to Curio are recorded here. The format follows
 
 ### Changed
 
+- **Curio is presented as one engine for trustworthy recommendation agents**, proven on three
+  deliberately different domains that compose. The README leads with the engine: why three
+  domains (visual retrieval, hard constraints, collaborative filtering), what the engine
+  guarantees, a domain added in one file (`examples/hello_domain/teas.py`), Plan my evening,
+  then one short section per domain. It keeps ten screenshots instead of twenty; the
+  unreferenced ones are deleted and `scripts.capture_readme` no longer writes them.
+- `docs/architecture.svg` is redrawn for the three layers: `curio.app` over the domain-free
+  `curio.engine`, the fashion, cocktail and book toolkits, and the composed pairings and
+  evening domains, with the LLM beside the engine.
+- The overview animation (`scripts.record_overview`) now tours the agent's steps, Plan my
+  evening, the book → drink pairing and photo search; captions show above dialogs.
+- `docs/README.md` is an index of guides and research notes, with the session handoff and
+  engineering workflow listed as history.
 - **The Python package is now `curio`** (`src/curio`), not `clothes_recommender`: imports,
   `uvicorn curio.api:create_app`, `streamlit run src/curio/ui.py`, the Docker image, the
   Compose services, `scripts/quickstart.sh` and CI use the new name. The PyPI project stays

@@ -326,9 +326,9 @@ Goodreads, so Goodreads' own terms may also apply to that content; Curio does no
 relicense it, and the Apache-2.0 licence covers this repository's code only. Covers stay on
 Goodreads' (or Open Library's) servers and are loaded by the browser; they and the book
 descriptions are the publishers' and Goodreads' material, not covered by CC BY-SA. The
-prepared files stay on your machine. The only copies in this repository are three README
-screenshots (`curio-books.webp`, `curio-book-detail.webp`, `curio-book-agent.webp`), which show
-covers and a description excerpt for illustration only; they are not licensed by this
+prepared files stay on your machine. The only copies in this repository are the README
+images `curio-books.webp`, `curio-pairing.webp`, `curio-evening.webp` and `curio-overview.webp`,
+which show covers and a description excerpt for illustration only; they are not licensed by this
 repository. If you share them, they are adaptations of goodbooks-10k: credit it and share
 them under CC BY-SA 4.0. The UI credits "Book data: goodbooks-10k from Goodreads (CC BY-SA
 4.0)" and links each book to its Goodreads page.

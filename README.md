@@ -2,9 +2,8 @@
 
 # Curio
 
-**One tool-using AI agent, three recommendation domains: fashion, cocktails and books.**<br>
-It plans, calls catalog tools, asks before changing anything, and checks every answer
-against the data.
+**An engine for trustworthy recommendation agents: plan, act, verify, and ask before changing
+anything.**
 
 [![CI](https://github.com/yo1am1/curio/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yo1am1/curio/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/yo1am1/curio?color=a0412d)](https://github.com/yo1am1/curio/releases/latest)
@@ -12,255 +11,236 @@ against the data.
 ![Python 3.13](https://img.shields.io/badge/python-3.13-3776ab)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Streamlit-009688)
 
-![A 40-second tour: the agent answering with its steps, an outfit under a budget, a cocktail paired with The Great Gatsby and "What can I make?"](docs/screenshots/curio-overview.webp)
-
-[Quick start](#quick-start) · [Engineering highlights](#engineering-highlights) ·
-[Ask Curio](#ask-curio) · [Fashion](#fashion) · [Cocktails](#cocktails) · [Books](#books) ·
-[Under the hood](#under-the-hood) · [Changelog](CHANGELOG.md)
+[Why three domains](#why-three-domains) · [The engine](#the-engine) ·
+[Add a domain](#add-a-domain-in-150-lines) · [Plan my evening](#plan-my-evening) ·
+[Domains](#fashion) · [Quick start](#quick-start) · [Under the hood](#under-the-hood) ·
+[Changelog](CHANGELOG.md)
 
 </div>
 
-| Domain | What it does | Data |
-|---|---|---|
-| **Fashion** | Personalized picks with evidence, photo search, product connections, outfits under a budget | 14,300 H&M products, 5,000 real shoppers, CLIP photo index |
-| **Cocktails** | Recipe search, similar drinks, "What can I make?" from your pantry | 425 TheCocktailDB recipes, offline |
-| **Books** | "Readers who liked this also liked", "Because you liked…", mood browsing | 10,000 goodbooks-10k titles, ~6M ratings |
+Curio is one agent engine and three recommendation domains built on it: fashion, cocktails
+and books. Each domain stresses a different recommendation problem. The engine stays the
+same for all three, and the domains compose: "Plan my evening" builds an outfit, a book and a
+drink paired with that book from one sentence.
 
-All three share one agent engine, and books and cocktails meet: Curio pours a drink to read
-with, for one book or your whole reading list, and says why.
+![A 40-second tour: the agent answering with its steps, Plan my evening producing an outfit, a book and a drink, a drink paired with The Great Gatsby, and photo search](docs/screenshots/curio-overview.webp)
 
 Try it in one command, with no large download: `docker compose --profile demo up --build`
 ([quick start](#quick-start)).
 
-## Engineering highlights
+## Why three domains
 
-![Architecture: clients, FastAPI, the shared agent engine and one toolkit per domain](docs/architecture.svg)
+The domains were picked to be different from each other. The engine runs all three, and
+holds no code from any of them.
 
-- **One agent engine, three domains.** Fashion, cocktails and books plug into the same
-  plan → act → verify loop through a typed `Toolkit` protocol. Adding the books domain needed
-  no change to the loop.
-- **Human in the loop.** Tools are policy-gated as read, ask or approve. State changes
-  become HMAC-signed proposals bound to the tool, arguments, request and time. You can approve
-  or narrow them, but never widen or replay them across domains.
-- **Cross-domain reasoning.** A deterministic pairer maps a book's genres, reader shelves and
-  setting words to a flavour profile and scores the 425 recipes with the cocktail search
-  index, so "what should I drink with The Big Sleep?" gets bourbon and bitters with the
-  evidence from both catalogs. Children's and young-adult books only ever get alcohol-free
-  drinks, and the agent's drink names are verified like its book titles.
-- **Grounded answers.** Every price, ID, rating and catalog title in an answer is checked
+| Domain | The recommendation problem | Data |
+|---|---|---|
+| **Fashion** | Visual retrieval with CLIP and Qdrant, purchase history, co-purchases and a learned ranker | 14,300 H&M products, 5,000 real shoppers, a photo index of 14,280 images |
+| **Cocktails** | Hard constraints: what your pantry covers, missing ingredients, alcohol-free | 425 TheCocktailDB recipes, offline |
+| **Books** | Item-item collaborative filtering on about 6 million ratings, with author and series caps | 10,000 goodbooks-10k titles |
+| **Composed** | Book → drink pairing (books + cocktails), and Plan my evening (all three) | The catalogs above |
+
+## The engine
+
+![Architecture: curio.app over the domain-free curio.engine, the fashion, cocktail and book toolkits, and the composed pairings and evening domains](docs/architecture.svg)
+
+- **Plan → act → verify.** `AgentEngine` runs every turn. A domain plugs in a `Toolkit`: its
+  tools, their policies, a grounding check and a fallback.
+- **Policy-gated tools.** A tool is READ (runs), ASK (pauses with a question) or APPROVE
+  (only proposes). Proposals are HMAC-signed and bound to the tool, arguments, domain and
+  time. You can approve or narrow one, never widen or replay it.
+- **Grounding.** Every price, ID, rating, title and drink name in an answer is checked
   against what the tools returned. A failed check gets one self-correction, then a
-  deterministic fallback, and the result is shown in the UI.
-- **Bounded and observable.** Each turn allows at most five tool calls and 90 seconds, and
-  every step streams to the UI as NDJSON.
+  deterministic fallback built from catalog facts.
+- **Budgets and streaming.** A turn allows five tool calls and 90 seconds. Every step
+  streams to the UI as NDJSON, so you see what the agent did.
 - **Stateless server.** The client holds the shortlist, memory and outfit. Client-held text
-  is display-only and never treated as evidence.
-- **Real recommenders.** Fashion uses CLIP and Qdrant search, co-purchase and graph
-  recommenders and a learned ranker evaluated on a holdout. Books use item-item
-  collaborative filtering from about 6 million ratings, with author and series diversity
-  caps. The outfit builder spreads a total budget across slots, using co-purchase
-  coherence.
-- **Reproducible data.** Every dataset is downloaded from a pinned commit and checked by
-  SHA-256. The server runs any subset of prepared domains and explains what is missing.
-- **Tested like a product.** About 1,160 offline tests plus a browser end-to-end suite of
-  66 tests. It runs real uvicorn and Streamlit in Chromium on real data, with a
-  scripted OpenAI-compatible LLM. CI also boots the quick-start stack.
-
-## Ask Curio
-
-Describe what you want, set a budget, then refine your search or compare items. In
-fashion the agent searches the catalog, finds pieces bought together or alike, and ranks
-picks from a linked shopping history. In cocktails it searches recipes, finds similar
-drinks and matches what you have at home. In books it finds what readers of a book you
-loved also loved, lists an author's books and remembers genres or authors you avoid. Each
-answer shows the steps it took. Prices, product, drink and book IDs, drink names, recipe
-amounts and book ratings are checked against the tool results before you see them, and so
-are book titles from the catalog. A title that is not in the catalog is not checked, nor is
-a one-word title that is short ("It") or not marked as a title (bold, italic, quoted, next
-to its ID or followed by its author), since it reads as an ordinary word. It asks a quick
-question when a request is vague, and asks before saving to your shortlist or remembering
-preferences. It is available from the conversation home and a floating panel on browsing
-pages.
-[How the agent works](docs/agent-architecture.md).
+  is display-only and never counts as evidence.
+- **Enforced layering.** `curio.engine` imports no domain. Each `curio.domains.<name>`
+  imports the engine and itself. `curio.app` wires them together. A test parses every import
+  to keep it that way.
 
 ![Curio answering "Black trousers under €30" with verified prices and product cards](docs/screenshots/curio-agent.webp)
 
-Ask for an outfit ("a summer outfit for a wedding under €80") and Curio plans the pieces for
-the occasion (dress, shoes, bag, earrings), fills each from the photo index within the
-budget, prefers pieces real shoppers bought together, and says why it chose each one. The
-total is checked against the prices like any other figure. Swap a piece or ask for a cheaper
-one, or save the whole outfit through the same approval.
-
-![An outfit for a summer wedding: four pieces with photos and reasons, €77.96 of €80](docs/screenshots/curio-outfit.webp)
-
-Saving to the shortlist or remembering a preference is only proposed. You approve it,
-untick what you don't want, or decline. Approved memory, such as a budget, applies to
-later searches, and the step trace shows where it came from.
+Saving or remembering anything is only proposed. You approve it, untick what you don't want,
+or decline.
 
 ![Approval card for saving two pieces, with one unticked](docs/screenshots/curio-approval.webp)
 
-![A remembered €40 budget applied to the next search, shown in the step trace](docs/screenshots/curio-memory.webp)
+In the chat screenshots the replies come from the scripted test model in
+`tests/e2e/llm_stub.py`, because no LLM was configured. The catalog, tool results, step
+trace, checks and approvals are the real system.
+[How the agent works](docs/agent-architecture.md).
 
-The same agent works for cocktails. Here a remembered alcohol-free preference filters
-every search.
+## Add a domain in ~150 lines
 
-![Cocktail answer filtered by a remembered alcohol-free preference](docs/screenshots/curio-cocktail-agent.webp)
+[`examples/hello_domain/teas.py`](examples/hello_domain/teas.py) is a complete domain in one
+171-line file: twelve teas, a search tool, a save tool behind approval and a grounding check.
+The engine does the rest. Trimmed:
 
-And for books: a remembered "no horror" applies to every search, and the ratings and the
-catalog titles in the answer are checked against what the tools returned. Plot, year and
-page claims in prose are not checked.
+```python
+class SearchTeas(BaseModel):
+    """Find teas by name, kind or flavour words, e.g. 'smoky black'."""
 
-![Book answer for "Fantasy like The Name of the Wind" with a remembered taste](docs/screenshots/curio-book-agent.webp)
+    query: str = Field(min_length=1, max_length=100, pattern=r"\S")
 
-In these chat screenshots the replies come from the scripted test model in
-`tests/e2e/llm_stub.py`, used because no LLM was configured. The catalog, tool results,
-step trace, price checks and approvals are the real system.
 
-## Fashion
+class SaveTeas(BaseModel):
+    """Propose saving teas to the shopper's list. The shopper approves it first."""
 
-![Personalized fashion picks with the evidence behind each one](docs/screenshots/curio-fashion.webp)
+    tea_ids: list[PositiveInt] = Field(min_length=1, max_length=5)
 
-### Search by description or photo
 
-Search in everyday language, upload a photo, or try an example garment.
+class TeaToolkit:
+    tools: ClassVar = {schema.__name__: schema for schema in (SearchTeas, AskShopper, SaveTeas)}
+    policies: ClassVar = dict(
+        SearchTeas=Policy.READ, AskShopper=Policy.ASK, SaveTeas=Policy.APPROVE
+    )
 
-![Description search results](docs/screenshots/curio-discover-text.webp)
+    def read(self, turn: Turn[Tea], action: SearchTeas) -> tuple[str, AgentStep]:
+        words = action.query.lower().split()
+        text = {t.tea_id: f"{t.name} {t.kind} {t.notes}".lower() for t in self._teas.values()}
+        turn.show([t for t in self._teas.values() if any(w in text[t.tea_id] for w in words)][:5])
+        step = AgentStep(kind="tool", name="SearchTeas", summary=f"Found {len(turn.items)} teas.")
+        return _lines(turn.items) or "(none)", step
 
-![Photo search results](docs/screenshots/curio-discover-photo.webp)
+    def apply(self, action: SaveTeas, *, dry_run: bool = False) -> tuple[TeaEffect, list[Tea], str]:
+        teas = self.proposed({"tea_ids": list(dict.fromkeys(action.tea_ids))})
+        if not teas:
+            raise ToolError("None of those tea IDs exist.")
+        verb = "Would save" if dry_run else "Saved"
+        names = ", ".join(t.name for t in teas)
+        return TeaEffect(tea_ids=[t.tea_id for t in teas]), teas, f"{verb} {names}."
 
-### Explore product connections
+    def check(self, turn: Turn[Tea], text: str) -> GroundingReport:
+        """Every tea ID, and every catalog tea name, must be one a tool returned."""
+        returned = list(turn.evidence.values())
+        checked, issues = check_ids(text, _TEA_ID, (t.tea_id for t in returned), "tea")
+        for name in dict.fromkeys(m.group(0) for m in self._names.finditer(text)):
+            checked += 1
+            if name not in {t.name for t in returned}:
+                issues.append(f"{name} was not returned by any tool")
+        return grounding_report(checked, issues)
 
-Browse co-purchased pieces, visually similar products and higher-priced alternatives.
-Open a product to inspect its details and the evidence behind its recommendations.
+    # ... plus prompt, history, fallback, reply fields and suggestions
 
-![Product connections](docs/screenshots/curio-connections.webp)
 
-![Product details with pieces bought together](docs/screenshots/curio-product-detail.webp)
+def tea_agent(chat_model: BaseChatModel, *, signer: ActionSigner | None = None):
+    schemas = Schemas(context=TeaContext, reply=TeaReply)
+    return AgentEngine(chat_model, TeaToolkit(), signer=signer, schemas=schemas)
+```
 
-### On your phone
+Its tests drive the real engine with a scripted model: a grounded answer, an invented tea
+caught by the check, and a signed proposal that is narrowed and approved, while widened or
+forged ones are refused.
 
-![Fashion feed on mobile](docs/screenshots/curio-mobile.webp)
+```bash
+uv run pytest tests/test_hello_domain.py tests/test_architecture.py
+```
 
-[Conversation home](docs/screenshots/curio-home.webp) ·
-[Mobile conversation home](docs/screenshots/curio-home-mobile.webp)
+[`tests/test_architecture.py`](tests/test_architecture.py) is the second half: it fails if
+the engine imports a domain, or if a domain imports another one outside the two composed
+domains.
 
-## Cocktails
-
-Search recipes by name, flavour words ("fresh", "creamy") or ingredients, filter by
-alcohol and category, and open a recipe to see its method and similar drinks. Each
-result says why it matched. Alcohol-free means TheCocktailDB's "Non alcoholic" label;
-"Alcohol optional" recipes count as alcoholic.
-
-![Cocktail search for "Something fresh with lime and mint"](docs/screenshots/curio-cocktails.webp)
-
-"What can I make?" ranks drinks by the ingredients you have, shows what is missing and
-lets you allow up to three missing ingredients.
-
-![What can I make? with gin, lime and tonic water](docs/screenshots/curio-cocktails-pantry.webp)
-
-Ingredient filters and avoided ingredients only cover the recipe's listed ingredients.
-They are not an allergen or dietary guarantee. Please drink responsibly.
-
-## Books
-
-Search by title, author, topic, genre or mood. "Fantasy like The Name of the Wind" starts
-from what that book's readers also loved; "short classic novels" keeps classics of at most
-250 pages; "cosy mystery" browses by mood. Every result says why it is there, for example
-"960 readers who liked The Name of the Wind also liked this".
-
-![Book search for "Fantasy like The Name of the Wind"](docs/screenshots/curio-books.webp)
-
-Open a book to see its cover, Goodreads rating, genres, description, what its readers also
-liked and more by the author, then save it to your reading list or ask Curio about it.
-"Because you liked…" combines several books you loved, and "Browse by mood" lists the
-best-loved Cosy, Dark, Funny or Epic reads.
-
-![Book dialog with readers-also-liked and more by the author](docs/screenshots/curio-book-detail.webp)
-
-Ratings are Goodreads averages. Genres and moods come from readers' Goodreads shelves, so
-they are crowd labels rather than editorial ones.
-
-### Pair a book with a cocktail
-
-"Pour me something to read with." In the book dialog, "Pair a drink" shows three drinks
-from the recipe catalog, each with the reason it was chosen: the book's evidence (genres,
-shelves, a setting such as Paris or an era such as the Jazz Age) and the recipe's
-("Mystery · shelved as noir → a bitter, spirit-forward whiskey drink: Old Fashioned (Bourbon,
-Angostura Bitters)"). A few authors bring their own drink: The Great Gatsby gets the gin
-rickeys Tom Buchanan mixes, Casino Royale the Vesper. "Another pairing" gives a different
-set, and "Alcohol-free only" keeps to recipes marked alcohol-free. The Books page pours
-"Your reading list's cocktail" from the reading list and liked genres (avoided genres never
-count), and the book agent answers "what should I drink with Dune?" or "pair a cocktail with
-my reading list". Children's and young-adult books, and anyone whose remembered cocktail
-taste is alcohol-free, only ever get alcohol-free drinks. The pairing is deterministic and
-offline: no model, no download.
-
-![Drinks paired with The Great Gatsby, each with the book and recipe evidence](docs/screenshots/curio-pairing.webp)
-
-### Plan my evening
+## Plan my evening
 
 The Evening tab composes all three domains. Tell Curio the occasion ("rainy Sunday in",
-"date night under €100", "book club, alcohol-free") and it picks one theme, then plans an
-outfit, a book and a drink the pairer pairs with that book, each with its reason, plus one
-line on why they go together. Swap any part, then save the evening after approving it. In
-the quick-start demo, without fashion data, it plans the book and the drink and says the
-outfit needs the fashion catalogue.
+"date night under €100", "book club, alcohol-free"). It picks one theme, then plans an outfit
+from the fashion catalog, a book from the book recommender and a drink the pairer pairs with
+that book. Each part has a reason, and one line says why they go together. Swap any part,
+then save the whole evening through one approval. Without fashion data, as in the
+quick-start demo, it plans the book and the drink and says the outfit needs the fashion
+catalog.
 
 ![A rainy Sunday in: a knit outfit, The Name of the Wind and a Honey Bee, with why they go together](docs/screenshots/curio-evening.webp)
 
-## Under the hood
+### Pair a book with a drink
 
-Streamlit UI → FastAPI → a shared agent engine with one toolkit per domain. The code has
-three layers: `curio.engine` (the loop, policies, signed proposals and grounding; it imports
-no domain), `curio.domains` (fashion, cocktails, books and the book → drink pairing, each
-with its own agent package) and `curio.app` (settings, the domain registry, the API and the
-UI). [`examples/hello_domain`](examples/hello_domain) is a complete small domain on the same
-engine.
-Fashion uses CLIP search, Qdrant, purchase-based recommenders and a learned ranker.
-Cocktails use an in-memory TF-IDF and ingredient-overlap recommender, and books an
-in-memory TF-IDF search plus item-item collaborative filtering precomputed from goodbooks-10k
-ratings (numpy and scipy only); neither needs a model or a network call to serve.
+In the book dialog, "Pair a drink" maps the book's genres, reader shelves and setting words
+(Paris, the Jazz Age) to a flavour profile and scores the 425 recipes. Each drink comes with
+the evidence from both catalogs. The Great Gatsby gets the gin rickeys Tom Buchanan mixes.
+Children's and young-adult books, and anyone who asked for alcohol-free, only get
+alcohol-free drinks. The pairing is deterministic and offline. The book agent answers "what
+should I drink with Dune?" with the same pairer, and its drink names are checked like its
+titles.
 
-The fashion screenshots use 5,000 historical customers and a photo index covering 14,280
-of the 14,300 catalog products (the mirror lacks 20 photos), prepared from the public
-Hugging Face mirror of the H&M data. A product without a photo shows a placeholder. Prices are approximate historical values;
-there is no live stock or checkout.
+![Drinks paired with The Great Gatsby, each with the book and recipe evidence](docs/screenshots/curio-pairing.webp)
 
-On the 819-customer holdout, MAP@12 was 0.0302 versus 0.0248 for buy-again;
-customer hit rate was 13.9% versus 11.1%. The uncertainty interval crosses zero,
-so this result alone does not establish superiority. [Evaluation and limitations](docs/recommendation-audit.md).
-Model quality remains available at `/quality`, outside shopping navigation.
+## Fashion
 
-## Run locally
+The feed ranks picks from a shopper's purchase history with a learned ranker, and each pick
+says why it is there ("61 shoppers who bought this also bought…", "Buy again").
 
-### Quick start
+![Personalized fashion picks with the evidence behind each one](docs/screenshots/curio-fashion.webp)
 
-One command gives you a working Curio with the cocktail domain, without the 3.5 GB H&M
-download. With Docker:
+Search by description or by photo. Photo search embeds the image with CLIP and finds the
+nearest products in Qdrant.
+
+![Photo search results for an example garment](docs/screenshots/curio-discover-photo.webp)
+
+Ask for an outfit ("a summer outfit for a wedding under €80"). Curio plans the slots for the
+occasion, fills each from the photo index within the budget, prefers pieces real shoppers
+bought together, and checks the total like any other price.
+
+![An outfit for a summer wedding: four pieces with photos and reasons, €77.96 of €80](docs/screenshots/curio-outfit.webp)
+
+## Cocktails
+
+"What can I make?" ranks drinks by the ingredients you have, shows what is missing and lets
+you allow up to three missing ingredients. Recipe search takes names, flavour words or
+ingredients.
+
+![What can I make? with gin, lime and tonic water](docs/screenshots/curio-cocktails-pantry.webp)
+
+A remembered preference becomes a hard filter on every search. Here, alcohol-free:
+
+![Cocktail answer filtered by a remembered alcohol-free preference](docs/screenshots/curio-cocktail-agent.webp)
+
+Alcohol-free means TheCocktailDB's "Non alcoholic" label; "Alcohol optional" recipes count
+as alcoholic. Ingredient filters cover the recipe's listed ingredients only. They are not an
+allergen or dietary guarantee. Please drink responsibly.
+
+## Books
+
+Search by title, author, genre or mood. "Fantasy like The Name of the Wind" starts from what
+that book's readers also loved, and each result says how many did. "Because you liked…"
+combines several books, and the book agent remembers genres and authors you avoid.
+
+![Book search for "Fantasy like The Name of the Wind"](docs/screenshots/curio-books.webp)
+
+Ratings are Goodreads averages. Genres and moods come from readers' Goodreads shelves, so
+they are crowd labels.
+
+## Quick start
+
+One command gives you Curio with cocktails, books and Plan my evening (without the outfit),
+and no 3.5 GB H&M download. With Docker:
 
 ```bash
-docker compose --profile demo up --build
+DEMO_BOOKS=1 docker compose --profile demo up --build
 ```
 
 Or with [uv](https://docs.astral.sh/uv/) and no Docker:
 
 ```bash
-scripts/quickstart.sh
+CURIO_BOOKS=1 scripts/quickstart.sh
 ```
 
 Both prepare the cocktail recipes on the first run (a checksum-verified ~400 KB download)
-and start the API and the UI. Open http://localhost:8501 (the quick start serves this
-computer only; `UI_HOST=0.0.0.0` opens the UI to your network). Recipe search, similar drinks and
-"What can I make?" work straight away. For books too, run
-`DEMO_BOOKS=1 docker compose --profile demo up --build` or `CURIO_BOOKS=1 scripts/quickstart.sh`:
-the first run also prepares goodbooks-10k (a checksum-verified ~150 MB download, under a
-minute). Chat needs an LLM: copy `.env.example` to `.env` and
-set `LLM_MODEL` (plus `LLM_API_KEY` / `LLM_BASE_URL`); until then the app says how to
-enable it. The Docker demo can also run a local model with Ollama
+and, with the books flag, goodbooks-10k (~150 MB, under a minute). Leave the flag out for
+cocktails only. Open http://localhost:8501. The quick start serves this computer only;
+`UI_HOST=0.0.0.0` opens the UI to your network. Search and recommendations work without an
+LLM. Chat needs one: copy `.env.example` to `.env` and set `LLM_MODEL` (plus `LLM_API_KEY` /
+`LLM_BASE_URL`). The Docker demo can also run a local model with Ollama
 ([details](docs/technical-guide.md#quick-start)).
 
-### Fashion
+Every release is also a container image:
 
-Fashion is opt-in, because its data is large: [prepare the H&M data and image
+```bash
+docker pull ghcr.io/yo1am1/curio:latest
+```
+
+Fashion is opt-in because its data is large: [prepare the H&M data and image
 index](docs/technical-guide.md#fashion-data), then run the full stack:
 
 ```bash
@@ -271,14 +251,41 @@ uv run streamlit run src/curio/app/ui.py     # in a second terminal
 ```
 
 With Docker, `docker compose --profile fashion up --build` starts it. Every domain is
-optional: the API serves whichever domains are prepared, and the UI opens on the first one
-available. Search, recommendations and the cocktail pages work without an LLM.
+optional: the API serves whichever domains are prepared.
 
-[Data, architecture, Docker and API reference](docs/technical-guide.md) ·
+## Under the hood
+
+Fashion uses CLIP search in Qdrant, co-purchase and graph recommenders, collaborative
+filtering and a learned ranker. Cocktails use an in-memory TF-IDF and ingredient-overlap
+recommender. Books use TF-IDF search plus item-item collaborative filtering precomputed from
+goodbooks-10k ratings (numpy and scipy only). Cocktails, books and the pairing need no model
+and no network call to serve.
+
+The fashion screenshots use 5,000 historical customers and a photo index covering 14,280 of
+the 14,300 catalog products (the mirror lacks 20 photos), prepared from the public Hugging
+Face mirror of the H&M data. A product without a photo shows a placeholder. Prices are
+approximate historical values; there is no live stock or checkout.
+
+On the 819-customer holdout, MAP@12 was 0.0302 versus 0.0248 for buy-again;
+customer hit rate was 13.9% versus 11.1%. The uncertainty interval crosses zero,
+so this result alone does not establish superiority. [Evaluation and limitations](docs/recommendation-audit.md).
+Model quality remains available at `/quality`, outside shopping navigation.
+
+Tests: about 1,285 offline tests, and a browser suite of 75 end-to-end tests that runs the
+real uvicorn and Streamlit in Chromium on the real data, with a scripted OpenAI-compatible
+LLM. Every dataset is downloaded from a pinned commit and checked by SHA-256.
+
+[Technical guide](docs/technical-guide.md) · [Agent architecture](docs/agent-architecture.md) ·
 [LLM setup](docs/technical-guide.md#llm-configuration) ·
 [Tests and development](docs/technical-guide.md#development) ·
-[Changelog](CHANGELOG.md) ·
-[Documentation and research](docs/README.md)
+[All documentation and research notes](docs/README.md)
+
+## How it's built and released
+
+CI runs lint, format, the offline tests and a quick-start boot on every pull request and
+every push to `main`. When CI passes on `main` with a new version, a tag, a GitHub release
+with the changelog notes and the container image are published automatically.
+[Security policy](SECURITY.md).
 
 ## Data and licences
 
@@ -298,12 +305,13 @@ by that licence:
   terms may also apply to them. Covers and book descriptions belong to their publishers and
   Goodreads and are not covered by CC BY-SA: when you run Curio, covers are loaded directly
   from Goodreads by your browser, and descriptions stay in your local prepared file. The
-  exception is four README screenshots (`docs/screenshots/curio-books.webp`,
-  `curio-book-detail.webp`, `curio-book-agent.webp` and `curio-pairing.webp`), which show book
-  covers and a description excerpt for illustration only; that material remains its owners' and is not
-  licensed by this repository. The prepared files are not part of this repository; if you
-  share them, credit goodbooks-10k and share them under CC BY-SA 4.0. The book pages credit
-  "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.0)" and link each book to Goodreads.
+  exception is the README images that show book covers or a description excerpt
+  (`docs/screenshots/curio-books.webp`, `curio-pairing.webp`, `curio-evening.webp` and the
+  overview animation `curio-overview.webp`), for illustration only; that material remains
+  its owners' and is not licensed by this repository. The prepared files are not part of
+  this repository; if you share them, credit goodbooks-10k and share them under CC BY-SA
+  4.0. The book pages credit "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.0)" and
+  link each book to Goodreads.
 - **Book covers missing from Goodreads** come from the [Open Library Covers
   API](https://openlibrary.org/dev/docs/api/covers) by ISBN, loaded by your browser; the
   book pages credit "Some covers: Open Library" and the book dialog links each such cover
@@ -315,20 +323,6 @@ by that licence:
   Curio does not relicense them, and neither Curio's licence nor cocktail_advisor's covers
   them. Check TheCocktailDB's terms before any commercial use. Drink photos are loaded
   directly from thecocktaildb.com, and the cocktail pages credit "Recipe data: TheCocktailDB".
-
-## How it's built and released
-
-CI runs lint, format, the offline tests and a quick-start boot on every pull request and
-every push to `main`. When CI passes on `main` with a new version, a tag, a GitHub release
-with the changelog notes and a container image are published automatically:
-
-```bash
-docker pull ghcr.io/yo1am1/curio:latest
-```
-
-[Security policy](SECURITY.md)
-
-## Contributors
 
 Created and maintained by [Yehor Trepalin](https://github.com/yo1am1).
 AI development assistance: Claude Code, Codex and Antigravity.
