@@ -6,6 +6,8 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-06
+
 ### Highlights
 
 - Curio is now an engine for trustworthy recommendation agents, proven on fashion, cocktails
@@ -508,7 +510,8 @@ product connections from co-purchases and Shopify categories, offline evaluation
 tool-using shopping assistant with a conversation home and floating panel. How it was
 built is summarised in [docs/how-it-was-built.md](docs/how-it-was-built.md).
 
-[Unreleased]: https://github.com/yo1am1/curio/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/yo1am1/curio/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/yo1am1/curio/compare/v1.3.0...v2.0.0
 [1.3.0]: https://github.com/yo1am1/curio/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/yo1am1/curio/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/yo1am1/curio/compare/v1.1.0...v1.2.0
