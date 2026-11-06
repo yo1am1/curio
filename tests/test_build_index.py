@@ -8,9 +8,9 @@ import pytest
 from PIL import Image
 from qdrant_client import QdrantClient
 
-from clothes_recommender.catalog import ProductCatalog
-from clothes_recommender.domain import ProductFilter
-from clothes_recommender.vector_store import ProductVectorStore
+from curio.catalog import ProductCatalog
+from curio.domain import ProductFilter
+from curio.vector_store import ProductVectorStore
 from scripts import build_index
 
 

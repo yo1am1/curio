@@ -11,9 +11,9 @@ import pandas as pd
 from scipy.sparse import csr_array
 from scipy.sparse.linalg import svds
 
-from clothes_recommender.catalog import CustomerData
-from clothes_recommender.domain import ScoredProduct
-from clothes_recommender.recommenders.base import UnknownUserError
+from curio.catalog import CustomerData
+from curio.domain import ScoredProduct
+from curio.recommenders.base import UnknownUserError
 
 CHANNELS = ("family", "recent_basket", "latent")
 RECENT_DAYS = 28

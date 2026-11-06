@@ -11,15 +11,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from clothes_recommender.catalog import CustomerData, ProductCatalog, load_shopper_purchases
-from clothes_recommender.recommenders.collaborative import CollaborativeRecommender
-from clothes_recommender.recommenders.learned import (
+from curio.catalog import CustomerData, ProductCatalog, load_shopper_purchases
+from curio.recommenders.collaborative import CollaborativeRecommender
+from curio.recommenders.learned import (
     LearnedRecommender,
     RankerModel,
     feature_names,
     fit,
 )
-from clothes_recommender.recommenders.popularity import PopularityRecommender
+from curio.recommenders.popularity import PopularityRecommender
 from scripts.evaluate import chronological_split
 from scripts.fetch_photos import atomic_write
 

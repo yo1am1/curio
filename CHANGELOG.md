@@ -6,6 +6,14 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The Python package is now `curio`** (`src/curio`), not `clothes_recommender`: imports,
+  `uvicorn curio.api:create_app`, `streamlit run src/curio/ui.py`, the Docker image, the
+  Compose services, `scripts/quickstart.sh` and CI use the new name. The PyPI project stays
+  `curio-recommendations`. A small `curio.meta` shim keeps sniffio (anyio, httpx) from
+  mistaking this package for the Curio async library, which shares the import name.
+
 ### Fixed
 
 - Release: the image job publishes whenever ghcr.io lacks the current version's image, not

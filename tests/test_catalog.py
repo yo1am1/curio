@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
-from clothes_recommender.catalog import CustomerData, DataFileMissingError, ProductCatalog
+from curio.catalog import CustomerData, DataFileMissingError, ProductCatalog
 
 
 def _product_row(product_id: int, product_type: str) -> dict[str, object]:

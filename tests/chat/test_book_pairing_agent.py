@@ -4,14 +4,14 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.runnables import RunnableLambda
 
-from clothes_recommender.books.domain import BookPreferences
-from clothes_recommender.books.recommend import BookRecommender
-from clothes_recommender.chat.book_agent import PAIRING_UNAVAILABLE, BookAssistant
-from clothes_recommender.chat.guardrails import BookGroundingCheck, PairedDrinkCheck
-from clothes_recommender.chat.schemas import ChatTurn, TurnContext
-from clothes_recommender.cocktails.domain import CocktailPreferences
-from clothes_recommender.cocktails.recommend import CocktailRecommender
-from clothes_recommender.pairings.pairer import BookCocktailPairer
+from curio.books.domain import BookPreferences
+from curio.books.recommend import BookRecommender
+from curio.chat.book_agent import PAIRING_UNAVAILABLE, BookAssistant
+from curio.chat.guardrails import BookGroundingCheck, PairedDrinkCheck
+from curio.chat.schemas import ChatTurn, TurnContext
+from curio.cocktails.domain import CocktailPreferences
+from curio.cocktails.recommend import CocktailRecommender
+from curio.pairings.pairer import BookCocktailPairer
 from tests.conftest import book_neighbours_frame
 from tests.pairings.conftest import pairing_books, pairing_cocktails
 
@@ -249,7 +249,7 @@ def test_drinks_from_an_earlier_turn_are_not_evidence(agent):
 
 def test_titles_the_pairers_reasons_cite_count_as_evidence(agent, chat_model_replying):
     """A lore line cites another book (The Long Goodbye in the real table); answers may too."""
-    from clothes_recommender.pairings.themes import Lore
+    from curio.pairings.themes import Lore
 
     books, cocktails = pairing_books(), pairing_cocktails()
     lore = [Lore("Raymond Chandler", "Old Fashioned", "Marlowe orders one in Pride and Prejudice")]

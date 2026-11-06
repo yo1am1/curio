@@ -7,24 +7,24 @@ import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import RunnableLambda
 
-from clothes_recommender.chat.assistant import ShoppingAssistant
-from clothes_recommender.chat.cocktail_agent import CocktailAssistant, CocktailToolkit
-from clothes_recommender.chat.guardrails import (
+from curio.chat.assistant import ShoppingAssistant
+from curio.chat.cocktail_agent import CocktailAssistant, CocktailToolkit
+from curio.chat.guardrails import (
     ActionSigner,
     CocktailGroundingCheck,
     InvalidActionError,
     measures_in,
     narrow_args,
 )
-from clothes_recommender.chat.prompts import COCKTAIL_ANSWER_PROMPT, alcohol_label
-from clothes_recommender.chat.schemas import (
+from curio.chat.prompts import COCKTAIL_ANSWER_PROMPT, alcohol_label
+from curio.chat.schemas import (
     ActionDecision,
     ShopperPreferences,
     TurnContext,
 )
-from clothes_recommender.cocktails.catalog import CocktailCatalog
-from clothes_recommender.cocktails.recommend import CocktailRecommender
-from clothes_recommender.domain import ScoredProduct
+from curio.cocktails.catalog import CocktailCatalog
+from curio.cocktails.recommend import CocktailRecommender
+from curio.domain import ScoredProduct
 
 NO_SEARCH = {"query": "", "wants_products": False}
 

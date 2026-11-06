@@ -3,11 +3,11 @@ from datetime import date, timedelta
 import pandas as pd
 import pytest
 
-from clothes_recommender.catalog import CustomerData, ProductCatalog
-from clothes_recommender.demo import select_demo_customers
-from clothes_recommender.domain import Product, ScoredProduct
-from clothes_recommender.recommenders.graph import GraphRecommender
-from clothes_recommender.recommenders.popularity import PopularityRecommender
+from curio.catalog import CustomerData, ProductCatalog
+from curio.demo import select_demo_customers
+from curio.domain import Product, ScoredProduct
+from curio.recommenders.graph import GraphRecommender
+from curio.recommenders.popularity import PopularityRecommender
 
 
 def product(pid: int, section: str = "Ladieswear", group: str = "Garment Upper body") -> dict:

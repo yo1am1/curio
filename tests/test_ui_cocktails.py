@@ -6,8 +6,8 @@ import httpx
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from clothes_recommender import ui
-from clothes_recommender.chat.schemas import ChatRequest
+from curio import ui
+from curio.chat.schemas import ChatRequest
 
 MOJITO = {
     "drink_id": 1,
@@ -144,15 +144,13 @@ def bodies(calls, path: str) -> list:
 
 
 def run_main():
-    from clothes_recommender import ui
+    from curio import ui
 
     ui.main()
 
 
 def cocktail_app(script: str, **state) -> AppTest:
-    app = AppTest.from_string(
-        f"from clothes_recommender import ui; ui.{script}", default_timeout=10
-    )
+    app = AppTest.from_string(f"from curio import ui; ui.{script}", default_timeout=10)
     app.session_state["domain"] = "cocktails"
     for key, value in state.items():
         app.session_state[key] = value
@@ -305,7 +303,7 @@ def test_served_domains_reads_new_and_legacy_health():
 def run_navigation():
     import streamlit as st
 
-    from clothes_recommender import ui
+    from curio import ui
 
     def describe(pages):
         return [(page.title, page.url_path, page.visibility) for page in pages]
@@ -453,9 +451,7 @@ def test_recipe_dialog_lists_measures_credit_similar_drinks_and_saves(api):
 
 
 def test_recipe_dialog_hands_off_to_cocktail_chat(api):
-    app = AppTest.from_string(
-        "from clothes_recommender import ui; ui.cocktail_details(1)", default_timeout=10
-    )
+    app = AppTest.from_string("from curio import ui; ui.cocktail_details(1)", default_timeout=10)
     app.session_state["domain"] = "cocktails"
     app.run()
     app.button(key="cocktail_detail_ask_1").click().run()
@@ -655,7 +651,7 @@ def test_cocktail_popup_uses_cocktail_copy_and_its_own_history(api):
 def test_fashion_payload_omits_the_domain(api):
     calls, state = api
     state["replies"] = [reply(products=[], cocktails=[], domain="fashion")]
-    app = AppTest.from_string("from clothes_recommender import ui; ui.chat_tab()").run()
+    app = AppTest.from_string("from curio import ui; ui.chat_tab()").run()
     app.chat_input[0].set_value("A coat").run()
     assert not app.exception
     assert bodies(calls, "/chat/stream")[-1] == {"message": "A coat", "history": []}

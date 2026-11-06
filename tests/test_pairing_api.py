@@ -6,13 +6,13 @@ from unittest.mock import Mock
 import pytest
 from fastapi.testclient import TestClient
 
-from clothes_recommender import services as service_module
-from clothes_recommender.api import create_app
-from clothes_recommender.books.recommend import BookRecommender
-from clothes_recommender.cocktails.recommend import CocktailRecommender
-from clothes_recommender.config import Settings
-from clothes_recommender.pairings.pairer import BookCocktailPairer
-from clothes_recommender.services import (
+from curio import services as service_module
+from curio.api import create_app
+from curio.books.recommend import BookRecommender
+from curio.cocktails.recommend import CocktailRecommender
+from curio.config import Settings
+from curio.pairings.pairer import BookCocktailPairer
+from curio.services import (
     BOOKS_MISSING,
     COCKTAILS_MISSING,
     BookServices,

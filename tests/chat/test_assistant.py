@@ -2,11 +2,11 @@ from collections.abc import Sequence
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
-from clothes_recommender.catalog import ProductCatalog
-from clothes_recommender.chat.assistant import MAX_HISTORY_TURNS, ChatTurn, ShoppingAssistant
-from clothes_recommender.chat.intent import SearchIntent
-from clothes_recommender.chat.prompts import render_products
-from clothes_recommender.domain import ProductFilter, ScoredProduct
+from curio.catalog import ProductCatalog
+from curio.chat.assistant import MAX_HISTORY_TURNS, ChatTurn, ShoppingAssistant
+from curio.chat.intent import SearchIntent
+from curio.chat.prompts import render_products
+from curio.domain import ProductFilter, ScoredProduct
 
 
 class RecordingExtractor:

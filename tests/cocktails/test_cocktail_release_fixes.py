@@ -9,10 +9,10 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
-from clothes_recommender.cocktails import recommend
-from clothes_recommender.cocktails.catalog import CocktailCatalog
-from clothes_recommender.cocktails.domain import CocktailHit, CocktailPreferences, CocktailQuery
-from clothes_recommender.cocktails.recommend import CocktailRecommender
+from curio.cocktails import recommend
+from curio.cocktails.catalog import CocktailCatalog
+from curio.cocktails.domain import CocktailHit, CocktailPreferences, CocktailQuery
+from curio.cocktails.recommend import CocktailRecommender
 from tests.conftest import cocktail_frame
 
 REAL_CATALOG = Path(__file__).resolve().parents[2] / "data" / "cocktails.parquet"

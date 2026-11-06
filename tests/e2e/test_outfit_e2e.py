@@ -8,7 +8,7 @@ import httpx
 import pytest
 from playwright.sync_api import expect
 
-from clothes_recommender.outfits import SLOT_TYPES
+from curio.outfits import SLOT_TYPES
 from tests.e2e.test_ui_e2e import chat_turns, visible_photos
 
 OCCASIONS = [

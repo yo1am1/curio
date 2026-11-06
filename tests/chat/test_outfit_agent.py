@@ -2,16 +2,16 @@
 
 from langchain_core.messages import AIMessage
 
-from clothes_recommender.chat.assistant import FashionToolkit, ShoppingAssistant
-from clothes_recommender.chat.engine import Turn
-from clothes_recommender.chat.intent import SearchIntent
-from clothes_recommender.chat.schemas import (
+from curio.chat.assistant import FashionToolkit, ShoppingAssistant
+from curio.chat.engine import Turn
+from curio.chat.intent import SearchIntent
+from curio.chat.schemas import (
     ReplyEvent,
     ShopperPreferences,
     StepEvent,
     TurnContext,
 )
-from clothes_recommender.outfits import OutfitPiece, OutfitState
+from curio.outfits import OutfitPiece, OutfitState
 
 NO_SEARCH = {"query": "", "wants_products": False}
 WEDDING = {"occasion": "summer wedding", "budget": 80, "audience": "women"}
@@ -242,8 +242,8 @@ def test_invalid_outfit_calls_are_rejected(chat_model_replying, outfit_search, o
 def test_a_staged_tool_that_fails_midway_keeps_its_streamed_steps(
     chat_model_replying, outfit_search, outfit_catalog, monkeypatch
 ):
-    from clothes_recommender.chat.engine import ToolError
-    from clothes_recommender.outfits import OutfitPlanner, PlannedSlots, plan_slots
+    from curio.chat.engine import ToolError
+    from curio.outfits import OutfitPlanner, PlannedSlots, plan_slots
 
     def failing(self, request):
         yield PlannedSlots(tuple(plan_slots("wedding", "women")), "women", "request", "", "")

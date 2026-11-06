@@ -7,8 +7,8 @@ import httpx
 import pandas as pd
 import pytest
 
-from clothes_recommender.books.catalog import COLUMNS, NEIGHBOUR_COLUMNS, BookCatalog
-from clothes_recommender.books.recommend import BookRecommender
+from curio.books.catalog import COLUMNS, NEIGHBOUR_COLUMNS, BookCatalog
+from curio.books.recommend import BookRecommender
 from scripts import prepare_books
 from scripts.prepare_books import (
     BOOKS_CSV,

@@ -2,13 +2,13 @@
 
 import pytest
 
-from clothes_recommender.books.catalog import (
+from curio.books.catalog import (
     BookCatalog,
     BookDataMissingError,
     name_key,
     trusted_cover_url,
 )
-from clothes_recommender.books.taxonomy import genres_for, is_descriptive, shelf_label
+from curio.books.taxonomy import genres_for, is_descriptive, shelf_label
 from tests.conftest import book_frame
 
 
@@ -116,7 +116,7 @@ def test_genres_come_from_shelf_shares_strongest_first():
 
 
 def test_isbns_are_recovered_from_goodbooks_mangled_columns():
-    from clothes_recommender.books.catalog import isbn13, open_library_cover_url
+    from curio.books.catalog import isbn13, open_library_cover_url
 
     # The ISBN-10 lost its leading zero. The ISBN-13 float is rounded to 12 digits
     # (9780553804676 -> 9.78055380468e+12), so it is never used.
@@ -134,7 +134,7 @@ def test_isbns_are_recovered_from_goodbooks_mangled_columns():
 
 
 def test_a_catalog_prepared_without_isbns_still_loads():
-    from clothes_recommender.books.catalog import BookCatalog
+    from curio.books.catalog import BookCatalog
     from tests.conftest import book_frame
 
     old = book_frame()

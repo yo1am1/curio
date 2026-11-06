@@ -52,7 +52,7 @@ if [[ "${CURIO_BOOKS:-0}" == 1 && ! ( -s data/books.parquet && -s data/book_neig
 fi
 
 say "Starting the API on ${API_URL} (domains: ${ENABLED_DOMAINS})"
-uv run --no-sync uvicorn clothes_recommender.api:create_app --factory \
+uv run --no-sync uvicorn curio.api:create_app --factory \
     --host 127.0.0.1 --port "$API_PORT" &
 api_pid=$!
 trap 'kill "$api_pid" 2>/dev/null || true; wait "$api_pid" 2>/dev/null || true' EXIT INT TERM
@@ -108,6 +108,6 @@ fi
 ui_url_host="$UI_HOST"
 [[ "$UI_HOST" == 0.0.0.0 || "$UI_HOST" == localhost ]] && ui_url_host=127.0.0.1
 say "Curio is ready: open http://${ui_url_host}:${UI_PORT} (Ctrl+C stops both servers)"
-uv run --no-sync streamlit run src/clothes_recommender/ui.py \
+uv run --no-sync streamlit run src/curio/ui.py \
     --server.address "$UI_HOST" --server.port "$UI_PORT" --server.headless true \
     --browser.gatherUsageStats false

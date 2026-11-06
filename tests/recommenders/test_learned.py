@@ -4,10 +4,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from clothes_recommender.catalog import CustomerData
-from clothes_recommender.recommenders.base import UnknownUserError
-from clothes_recommender.recommenders.collaborative import CollaborativeRecommender
-from clothes_recommender.recommenders.learned import (
+from curio.catalog import CustomerData
+from curio.recommenders.base import UnknownUserError
+from curio.recommenders.collaborative import CollaborativeRecommender
+from curio.recommenders.learned import (
     FEATURES,
     PROVENANCE_FEATURES,
     LearnedRecommender,
@@ -15,7 +15,7 @@ from clothes_recommender.recommenders.learned import (
     fit,
     load_model,
 )
-from clothes_recommender.recommenders.popularity import PopularityRecommender
+from curio.recommenders.popularity import PopularityRecommender
 from scripts.train_ranker import train
 
 
@@ -120,7 +120,7 @@ def test_provenance_preserves_pool_and_v1_features_with_overlapping_sources(samp
             columns=["user_id", "product_id", "purchase_date"],
         ),
     )
-    from clothes_recommender.domain import ScoredProduct
+    from curio.domain import ScoredProduct
 
     cf = Mock()
     cf.recommend.return_value = [ScoredProduct(3, 4), ScoredProduct(2, 3)]
@@ -156,7 +156,7 @@ def test_provenance_preserves_pool_and_v1_features_with_overlapping_sources(samp
 def test_source_repeat_marks_actual_retrieval_not_all_history(sample_products):
     from unittest.mock import Mock
 
-    from clothes_recommender.catalog import ProductCatalog
+    from curio.catalog import ProductCatalog
 
     catalog = ProductCatalog(
         pd.DataFrame(

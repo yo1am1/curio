@@ -2,10 +2,10 @@ from datetime import date
 
 import pytest
 
-from clothes_recommender.domain import ScoredProduct
-from clothes_recommender.recommenders.base import UnknownUserError
-from clothes_recommender.recommenders.popularity import PopularityRecommender
-from clothes_recommender.recommenders.repeat import RepeatPurchaseRecommender
+from curio.domain import ScoredProduct
+from curio.recommenders.base import UnknownUserError
+from curio.recommenders.popularity import PopularityRecommender
+from curio.recommenders.repeat import RepeatPurchaseRecommender
 
 
 def test_recent_unique_purchases_then_popularity_with_deterministic_ties(make_customers):

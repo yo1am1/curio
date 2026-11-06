@@ -2,12 +2,12 @@
 
 from langchain_core.messages import AIMessage
 
-from clothes_recommender.chat.assistant import ShoppingAssistant
-from clothes_recommender.chat.cocktail_agent import CocktailToolkit
-from clothes_recommender.chat.engine import _merged
-from clothes_recommender.chat.schemas import CocktailPreferences, ShopperPreferences, TurnContext
-from clothes_recommender.cocktails.recommend import CocktailRecommender
-from clothes_recommender.domain import ScoredProduct
+from curio.chat.assistant import ShoppingAssistant
+from curio.chat.cocktail_agent import CocktailToolkit
+from curio.chat.engine import _merged
+from curio.chat.schemas import CocktailPreferences, ShopperPreferences, TurnContext
+from curio.cocktails.recommend import CocktailRecommender
+from curio.domain import ScoredProduct
 
 NO_SEARCH = {"query": "", "wants_products": False}
 

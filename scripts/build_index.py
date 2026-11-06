@@ -15,11 +15,11 @@ from pathlib import Path
 from PIL import Image
 from tqdm import tqdm
 
-from clothes_recommender.catalog import ProductCatalog
-from clothes_recommender.config import get_settings
-from clothes_recommender.domain import Encoder, Product
-from clothes_recommender.embeddings import ClipEncoder
-from clothes_recommender.vector_store import ProductVectorStore
+from curio.catalog import ProductCatalog
+from curio.config import get_settings
+from curio.domain import Encoder, Product
+from curio.embeddings import ClipEncoder
+from curio.vector_store import ProductVectorStore
 
 logger = logging.getLogger(__name__)
 

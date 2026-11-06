@@ -10,10 +10,10 @@ import pytest
 from fastapi.testclient import TestClient
 from qdrant_client import QdrantClient
 
-from clothes_recommender import services as service_module
-from clothes_recommender.api import create_app
-from clothes_recommender.catalog import CustomerData
-from clothes_recommender.vector_store import ProductVectorStore
+from curio import services as service_module
+from curio.api import create_app
+from curio.catalog import CustomerData
+from curio.vector_store import ProductVectorStore
 
 
 @pytest.fixture
@@ -125,7 +125,7 @@ def test_initialization_failure_closes_owned_store(construction, monkeypatch, st
 
 @pytest.mark.parametrize("version,width", [(1, 10), (2, 15)])
 def test_service_loads_versioned_ranker(construction, version, width):
-    from clothes_recommender.recommenders.learned import RankerModel
+    from curio.recommenders.learned import RankerModel
 
     model = RankerModel(
         feature_version=version,
@@ -176,7 +176,7 @@ def test_broken_cocktail_file_does_not_break_fashion(construction, caplog):
 
 
 def test_llm_builds_both_assistants_with_one_model_and_signer(construction, monkeypatch):
-    from clothes_recommender.chat.cocktail_agent import CocktailAssistant
+    from curio.chat.cocktail_agent import CocktailAssistant
     from tests.chat.conftest import FakeToolCallingChatModel
     from tests.conftest import cocktail_frame
 

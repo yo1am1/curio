@@ -40,14 +40,14 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from clothes_recommender.books.catalog import (
+from curio.books.catalog import (
     NEIGHBOUR_COLUMNS,
     OUTPUT_COLUMNS,
     isbn13,
     trusted_cover_url,
 )
-from clothes_recommender.books.taxonomy import MAX_TAGS, genres_for, is_descriptive, shelf_label
-from clothes_recommender.config import get_settings
+from curio.books.taxonomy import MAX_TAGS, genres_for, is_descriptive, shelf_label
+from curio.config import get_settings
 
 SOURCE_COMMIT = "6dd165b555a7b47b2dd36743a425776e641ff50c"
 DEFAULT_SOURCE = f"https://raw.githubusercontent.com/zygmuntz/goodbooks-10k/{SOURCE_COMMIT}"

@@ -1,9 +1,9 @@
 import pytest
 from PIL import Image
 
-from clothes_recommender.domain import Encoder, Product, ProductFilter
-from clothes_recommender.search import ProductSearch
-from clothes_recommender.vector_store import ProductVectorStore
+from curio.domain import Encoder, Product, ProductFilter
+from curio.search import ProductSearch
+from curio.vector_store import ProductVectorStore
 
 
 @pytest.fixture

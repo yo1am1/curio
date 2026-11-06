@@ -2,8 +2,8 @@ import logging
 
 import pytest
 
-from clothes_recommender.chat.intent import IntentExtractor, SearchIntent
-from clothes_recommender.domain import ProductFilter
+from curio.chat.intent import IntentExtractor, SearchIntent
+from curio.domain import ProductFilter
 
 PRODUCT_TYPES = ["Dress", "Sneakers", "Trousers"]
 SECTIONS = ["Ladieswear", "Menswear"]

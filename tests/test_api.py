@@ -8,17 +8,17 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from clothes_recommender.api import create_app
-from clothes_recommender.catalog import CustomerData, ProductCatalog
-from clothes_recommender.chat.assistant import AssistantReply
-from clothes_recommender.chat.intent import SearchIntent
-from clothes_recommender.recommenders.collaborative import CollaborativeRecommender
-from clothes_recommender.recommenders.content_based import ContentBasedRecommender
-from clothes_recommender.recommenders.graph import GraphRecommender
-from clothes_recommender.recommenders.popularity import PopularityRecommender
-from clothes_recommender.recommenders.repeat import RepeatPurchaseRecommender
-from clothes_recommender.search import ProductSearch
-from clothes_recommender.services import FashionServices, Services
+from curio.api import create_app
+from curio.catalog import CustomerData, ProductCatalog
+from curio.chat.assistant import AssistantReply
+from curio.chat.intent import SearchIntent
+from curio.recommenders.collaborative import CollaborativeRecommender
+from curio.recommenders.content_based import ContentBasedRecommender
+from curio.recommenders.graph import GraphRecommender
+from curio.recommenders.popularity import PopularityRecommender
+from curio.recommenders.repeat import RepeatPurchaseRecommender
+from curio.search import ProductSearch
+from curio.services import FashionServices, Services
 from tests.conftest import serve, with_cocktails, with_fashion
 
 
@@ -75,8 +75,8 @@ def client(services) -> Iterator[TestClient]:
 
 
 def test_health_reports_index_size_and_chat_status(client) -> None:
-    from clothes_recommender.api import CHAT_DISABLED
-    from clothes_recommender.services import BOOKS_MISSING, COCKTAILS_MISSING
+    from curio.api import CHAT_DISABLED
+    from curio.services import BOOKS_MISSING, COCKTAILS_MISSING
 
     assert client.get("/health").json() == {
         "status": "ok",
@@ -305,7 +305,7 @@ def test_repeat_strategy_includes_purchase_and_grounded_reason(client):
 def test_learned_strategy_requires_model_and_returns_grounded_hits(services):
     import numpy as np
 
-    from clothes_recommender.recommenders.learned import FEATURES, LearnedRecommender
+    from curio.recommenders.learned import FEATURES, LearnedRecommender
 
     with TestClient(create_app(services)) as client:
         assert (
@@ -347,7 +347,7 @@ def test_chat_returns_retryable_rate_limit_without_provider_details(services):
 def _agent_services(services, *replies):
     from langchain_core.messages import AIMessage
 
-    from clothes_recommender.chat.assistant import ShoppingAssistant
+    from curio.chat.assistant import ShoppingAssistant
     from tests.chat.conftest import FakeToolCallingChatModel
 
     model = FakeToolCallingChatModel(messages=iter([AIMessage(**reply) for reply in replies]))
@@ -518,8 +518,8 @@ COCKTAILS_MISSING = "Cocktail recipes are not prepared: run scripts.prepare_cock
 
 @pytest.fixture
 def cocktail_services(services, cocktail_catalog) -> Services:
-    from clothes_recommender.cocktails.recommend import CocktailRecommender
-    from clothes_recommender.services import CocktailServices
+    from curio.cocktails.recommend import CocktailRecommender
+    from curio.services import CocktailServices
 
     cocktails = CocktailServices(cocktail_catalog, CocktailRecommender(cocktail_catalog))
     return serve(services.fashion, cocktails)
@@ -538,7 +538,7 @@ def _tool_call(name, args, call_id="t"):
 def _cocktail_agent_services(cocktail_services, *replies, signer=None):
     from langchain_core.messages import AIMessage
 
-    from clothes_recommender.chat.cocktail_agent import CocktailAssistant
+    from curio.chat.cocktail_agent import CocktailAssistant
     from tests.chat.conftest import FakeToolCallingChatModel
 
     model = FakeToolCallingChatModel(messages=iter([AIMessage(**reply) for reply in replies]))
@@ -683,8 +683,8 @@ def test_cocktail_chat_stream_sends_steps_then_reply(cocktail_services) -> None:
 def test_cocktail_approval_round_trip_and_cross_domain_replay(cocktail_services) -> None:
     from langchain_core.messages import AIMessage
 
-    from clothes_recommender.chat.assistant import ShoppingAssistant
-    from clothes_recommender.chat.guardrails import ActionSigner
+    from curio.chat.assistant import ShoppingAssistant
+    from curio.chat.guardrails import ActionSigner
     from tests.chat.conftest import FakeToolCallingChatModel
 
     signer = ActionSigner(b"k" * 32)
@@ -756,7 +756,7 @@ def test_chat_accepts_cocktail_context_and_history(services) -> None:
 
 
 def test_malformed_cocktail_decisions_are_409_not_502(cocktail_services) -> None:
-    from clothes_recommender.chat.guardrails import ActionSigner
+    from curio.chat.guardrails import ActionSigner
 
     signer = ActionSigner(b"k" * 32)
     agent = _cocktail_agent_services(

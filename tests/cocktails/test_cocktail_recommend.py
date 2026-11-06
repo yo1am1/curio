@@ -2,9 +2,9 @@ import pandas as pd
 import pytest
 from pydantic import ValidationError
 
-from clothes_recommender.cocktails.catalog import CocktailCatalog
-from clothes_recommender.cocktails.domain import CocktailHit, CocktailQuery
-from clothes_recommender.cocktails.recommend import (
+from curio.cocktails.catalog import CocktailCatalog
+from curio.cocktails.domain import CocktailHit, CocktailQuery
+from curio.cocktails.recommend import (
     PANTRY_ALIASES,
     CocktailRecommender,
     pantry_coverage,

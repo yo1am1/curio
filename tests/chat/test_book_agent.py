@@ -4,11 +4,11 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.runnables import RunnableLambda
 
-from clothes_recommender.books.domain import Book, BookPreferences
-from clothes_recommender.chat.book_agent import STARTERS, BookAssistant
-from clothes_recommender.chat.cocktail_agent import CocktailAssistant
-from clothes_recommender.chat.guardrails import ActionSigner, BookGroundingCheck, InvalidActionError
-from clothes_recommender.chat.schemas import (
+from curio.books.domain import Book, BookPreferences
+from curio.chat.book_agent import STARTERS, BookAssistant
+from curio.chat.cocktail_agent import CocktailAssistant
+from curio.chat.guardrails import ActionSigner, BookGroundingCheck, InvalidActionError
+from curio.chat.schemas import (
     ActionDecision,
     AppliedEffect,
     ChatTurn,
@@ -16,7 +16,7 @@ from clothes_recommender.chat.schemas import (
     StepEvent,
     TurnContext,
 )
-from clothes_recommender.cocktails.recommend import CocktailRecommender
+from curio.cocktails.recommend import CocktailRecommender
 
 
 def action(name, args, call_id="tool_1"):

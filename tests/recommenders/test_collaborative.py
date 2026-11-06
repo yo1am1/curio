@@ -3,9 +3,9 @@ from datetime import date, timedelta
 import pandas as pd
 import pytest
 
-from clothes_recommender.domain import ScoredProduct
-from clothes_recommender.recommenders.base import UnknownUserError
-from clothes_recommender.recommenders.collaborative import (
+from curio.domain import ScoredProduct
+from curio.recommenders.base import UnknownUserError
+from curio.recommenders.collaborative import (
     POPULARITY_DAMPING,
     CollaborativeRecommender,
 )

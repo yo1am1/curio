@@ -39,7 +39,7 @@ everyone else accessible, and offline evaluation scores all eligible customers.
 
 ### Outfit builder
 
-`src/clothes_recommender/outfits.py` holds the planner, used by the agent's `BuildOutfit` and
+`src/curio/outfits.py` holds the planner, used by the agent's `BuildOutfit` and
 `SwapOutfitItem` tools and by `POST /outfits` and `POST /outfits/swap`.
 
 1. **Plan.** The occasion text picks a template by keyword (wedding, office, party, beach,
@@ -366,7 +366,7 @@ flowchart LR
 ```
 
 ```
-src/clothes_recommender/
+src/curio/
 ├── config.py          # Settings from env / .env (pydantic-settings)
 ├── domain.py          # Product, User, Purchase, ProductFilter, Encoder protocol
 ├── catalog.py         # Product catalog + customer data access
@@ -544,8 +544,8 @@ Then build the image index, fetch a few example photos for image search, and sta
 uv run python -m scripts.build_index                   # all products: ~5 min at 50 img/s on 4 CPU cores
 uv run python -m scripts.fetch_query_photos --articles data/raw/articles.csv
 uv run python -m scripts.evaluate --qdrant-path .qdrant --output data/evaluation.json
-uv run uvicorn clothes_recommender.api:create_app --factory --reload   # http://localhost:8000/docs
-uv run streamlit run src/clothes_recommender/ui.py     # http://localhost:8501
+uv run uvicorn curio.api:create_app --factory --reload   # http://localhost:8000/docs
+uv run streamlit run src/curio/ui.py     # http://localhost:8501
 ```
 
 To enable the learned ranking shown in the screenshots, train its optional model
@@ -860,7 +860,7 @@ UI tests in `tests/test_ui_agent.py`.
 ### Release scope and compatibility
 
 Version 1.0.0 covers fashion and cocktails; see the [changelog](../CHANGELOG.md). The
-installable distribution is `curio-recommendations`; the `clothes_recommender` import path
+installable distribution is `curio-recommendations`; the `curio` import path
 remains stable for existing scripts. `ChatRequest.domain` defaults to `fashion`, so fashion
 clients written for 0.2.0 keep working. Changes in 1.1.0: `/health` and `/domains` only
 gain fields; the UI still reads an older API's `/health`. In Docker the full stack now

@@ -5,11 +5,11 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from clothes_recommender.catalog import ProductCatalog
-from clothes_recommender.domain import ScoredProduct
-from clothes_recommender.recommenders.base import UnknownUserError
-from clothes_recommender.recommenders.graph import GraphRecommender
-from clothes_recommender.recommenders.popularity import PopularityRecommender
+from curio.catalog import ProductCatalog
+from curio.domain import ScoredProduct
+from curio.recommenders.base import UnknownUserError
+from curio.recommenders.graph import GraphRecommender
+from curio.recommenders.popularity import PopularityRecommender
 
 
 def product(pid: int, **changes) -> dict:

@@ -6,7 +6,7 @@ import httpx
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from clothes_recommender import ui
+from curio import ui
 
 COAT = {
     "product_id": 1,
@@ -95,9 +95,7 @@ def api(monkeypatch):
 
 
 def home():
-    return AppTest.from_string(
-        "from clothes_recommender import ui; ui.agent_home()", default_timeout=10
-    )
+    return AppTest.from_string("from curio import ui; ui.agent_home()", default_timeout=10)
 
 
 def test_trace_grounding_badge_and_suggestion_chip(api):
@@ -209,7 +207,7 @@ def test_saving_from_a_card_and_sending_feedback(api):
     assert app.button(key="chat_save_home_1_1").disabled
 
     rate = AppTest.from_string(
-        "from clothes_recommender import ui\n"
+        "from curio import ui\n"
         "import streamlit as st\n"
         "st.session_state['feedback_home_1'] = 0\n"
         "ui.send_feedback(1, 'home')"

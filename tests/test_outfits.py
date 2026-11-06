@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from clothes_recommender.outfits import (
+from curio.outfits import (
     SLOT_TYPES,
     FilledSlot,
     OutfitError,
@@ -309,8 +309,8 @@ def test_queries_name_the_types_they_ask_for():
 def _with(*rows):
     import pandas as pd
 
-    from clothes_recommender.catalog import ProductCatalog
-    from clothes_recommender.domain import Product
+    from curio.catalog import ProductCatalog
+    from curio.domain import Product
     from tests.conftest import OutfitSearch, outfit_products
 
     extra = [

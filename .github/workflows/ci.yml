@@ -32,7 +32,7 @@ jobs:
         run: |
           # Start uvicorn from the venv, not `uv run`: a `uv run` left in the background holds
           # uv's cache lock, so setup-uv's post-job cache prune times out and fails the job.
-          .venv/bin/uvicorn clothes_recommender.api:create_app --factory --port 8000 > api.log 2>&1 &
+          .venv/bin/uvicorn curio.api:create_app --factory --port 8000 > api.log 2>&1 &
           server=$!
           trap 'kill "$server"' EXIT
           for _ in $(seq 60); do curl -sf localhost:8000/health -o health.json && break; sleep 1; done

@@ -6,8 +6,8 @@ import httpx
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from clothes_recommender import ui
-from clothes_recommender.chat.schemas import ChatRequest
+from curio import ui
+from curio.chat.schemas import ChatRequest
 
 WIND = {
     "book_id": 1,
@@ -146,15 +146,13 @@ def bodies(calls, path: str) -> list:
 
 
 def run_main():
-    from clothes_recommender import ui
+    from curio import ui
 
     ui.main()
 
 
 def book_app(script: str, **state) -> AppTest:
-    app = AppTest.from_string(
-        f"from clothes_recommender import ui; ui.{script}", default_timeout=10
-    )
+    app = AppTest.from_string(f"from curio import ui; ui.{script}", default_timeout=10)
     app.session_state["domain"] = "books"
     for key, value in state.items():
         app.session_state[key] = value
@@ -196,7 +194,7 @@ def test_books_not_served_are_marked_unavailable(api):
 def run_navigation():
     import streamlit as st
 
-    from clothes_recommender import ui
+    from curio import ui
 
     st.session_state["routes"] = {
         name: [page.url_path for page in ui.domain_pages("books", available)]

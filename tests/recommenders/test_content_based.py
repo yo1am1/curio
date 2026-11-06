@@ -6,11 +6,11 @@ import pandas as pd
 import pytest
 from qdrant_client import QdrantClient
 
-from clothes_recommender.catalog import ProductCatalog
-from clothes_recommender.recommenders.base import UnknownUserError
-from clothes_recommender.recommenders.content_based import ContentBasedRecommender
-from clothes_recommender.recommenders.popularity import PopularityRecommender
-from clothes_recommender.vector_store import ProductVectorStore
+from curio.catalog import ProductCatalog
+from curio.recommenders.base import UnknownUserError
+from curio.recommenders.content_based import ContentBasedRecommender
+from curio.recommenders.popularity import PopularityRecommender
+from curio.vector_store import ProductVectorStore
 
 LOWER, SHOES, UNDERWEAR, UPPER = (
     "Garment Lower body",

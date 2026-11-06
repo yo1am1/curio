@@ -9,7 +9,7 @@ import pytest
 from PIL import Image
 from streamlit.testing.v1 import AppTest
 
-from clothes_recommender import ui
+from curio import ui
 
 PRODUCT = {
     "product_id": 1,
@@ -45,7 +45,7 @@ GRAPH = {
 def run_ui():
     import streamlit as st
 
-    from clothes_recommender import ui
+    from curio import ui
 
     # Component harness; native page routing has its own regression below.
     tabs = st.tabs(
@@ -494,7 +494,7 @@ def test_all_customer_access_is_direct_and_can_be_repeated(mocked_api, key):
 
 
 def run_product_cards():
-    from clothes_recommender import ui
+    from curio import ui
 
     products = [
         {
@@ -682,7 +682,7 @@ def test_example_photo_runs_an_image_search(mocked_api, request_bodies, monkeypa
 
 def test_discover_switches_between_description_and_photo_controls(mocked_api):
     calls, _ = mocked_api
-    app = AppTest.from_string("from clothes_recommender import ui; ui.discovery_page()").run()
+    app = AppTest.from_string("from curio import ui; ui.discovery_page()").run()
     assert not app.exception
     assert app.text_input(key="text_query")
     assert not app.get("file_uploader")
@@ -747,7 +747,7 @@ def test_evaluation_tab_compares_strategies_with_popularity(mocked_api):
 
 
 def run_main():
-    from clothes_recommender import ui
+    from curio import ui
 
     ui.main()
 
@@ -766,7 +766,7 @@ def test_main_renders_only_selected_native_page(mocked_api):
 
 def test_product_detail_is_reachable_from_catalog_and_keeps_names_plain(mocked_api):
     calls, _ = mocked_api
-    app = AppTest.from_string("from clothes_recommender import ui; ui.recommendations_tab()").run()
+    app = AppTest.from_string("from curio import ui; ui.recommendations_tab()").run()
     app.button(key="detail_recommendations_2_0").click().run()
     assert not app.exception
     assert ("/products/2", {}) in calls
@@ -775,7 +775,7 @@ def test_product_detail_is_reachable_from_catalog_and_keeps_names_plain(mocked_a
 
 
 def test_disabled_assistant_has_a_recovery_path(mocked_api):
-    app = AppTest.from_string("from clothes_recommender import ui; ui.chat_tab()").run()
+    app = AppTest.from_string("from curio import ui; ui.chat_tab()").run()
     assert not app.exception
     assert any("discover pieces by description or photo" in info.value for info in app.info)
     assert not app.chat_input
@@ -795,7 +795,7 @@ def test_validated_ranker_is_default_when_api_reports_it_ready(mocked_api):
             }
         },
     )
-    app = AppTest.from_string("from clothes_recommender import ui; ui.recommendations_tab()")
+    app = AppTest.from_string("from curio import ui; ui.recommendations_tab()")
     app.session_state["service_health"] = overrides["/health"][1]["json"]
     app.run()
     assert not app.exception
@@ -817,14 +817,14 @@ def test_rejected_photo_is_not_decoded_for_preview(mocked_api, monkeypatch, stat
             name="corrupt.jpg", getvalue=lambda: b"not an image"
         ),
     )
-    app = AppTest.from_string("from clothes_recommender import ui; ui.image_search_tab()").run()
+    app = AppTest.from_string("from curio import ui; ui.image_search_tab()").run()
     assert not app.exception
     assert app.error[0].value == detail
     assert not app.get("imgs")
 
 
 def test_chat_keeps_long_sessions_within_request_limits(mocked_api, request_bodies):
-    from clothes_recommender.api import ChatRequest
+    from curio.api import ChatRequest
 
     _, overrides = mocked_api
     overrides["/health"] = (
@@ -832,7 +832,7 @@ def test_chat_keeps_long_sessions_within_request_limits(mocked_api, request_bodi
         {"json": {"status": "ok", "indexed_products": 2, "chat_enabled": True}},
     )
     overrides["/chat/stream"] = (200, {"json": {"text": "x" * 4001, "products": []}})
-    app = AppTest.from_string("from clothes_recommender import ui; ui.chat_tab()").run()
+    app = AppTest.from_string("from curio import ui; ui.chat_tab()").run()
     assert app.chat_input[0].proto.max_chars == 2000
     for number in range(28):
         app.chat_input[0].set_value(f"Show me coat {number}").run()
@@ -847,7 +847,7 @@ def test_chat_keeps_long_sessions_within_request_limits(mocked_api, request_bodi
 
 def test_popup_is_lazy_and_disabled_chat_has_recovery(mocked_api):
     calls, _ = mocked_api
-    app = AppTest.from_string("from clothes_recommender import ui; ui.assistant_popup()").run()
+    app = AppTest.from_string("from curio import ui; ui.assistant_popup()").run()
     assert not app.exception
     assert calls == []
     assert not app.chat_input
@@ -865,7 +865,7 @@ def test_popup_keeps_conversation_on_close_and_can_reset(mocked_api, request_bod
         {"json": {"status": "ok", "indexed_products": 2, "chat_enabled": True}},
     )
     overrides["/chat/stream"] = (200, {"json": {"text": "Try this coat.", "products": [PRODUCT]}})
-    app = AppTest.from_string("from clothes_recommender import ui; ui.assistant_popup()")
+    app = AppTest.from_string("from curio import ui; ui.assistant_popup()")
     app.session_state["assistant_popup"] = True
     app.run()
     app.chat_input(key="chat_input_popup").set_value("A blue coat").run()
@@ -903,7 +903,7 @@ def test_popup_provider_error_does_not_poison_history(mocked_api, request_bodies
         502,
         {"json": {"detail": "Assistant unavailable. Please try again."}},
     )
-    app = AppTest.from_string("from clothes_recommender import ui; ui.assistant_popup()")
+    app = AppTest.from_string("from curio import ui; ui.assistant_popup()")
     app.session_state["assistant_popup"] = True
     app.run()
     app.chat_input[0].set_value("A blue coat").run()
@@ -924,7 +924,7 @@ def test_popup_rechecks_availability_after_backend_configuration_changes(mocked_
         200,
         {"json": {"status": "ok", "indexed_products": 2, "chat_enabled": available}},
     )
-    app = AppTest.from_string("from clothes_recommender import ui; ui.assistant_popup()")
+    app = AppTest.from_string("from curio import ui; ui.assistant_popup()")
     app.session_state["service_health"] = {
         "status": "ok",
         "indexed_products": 2,
@@ -937,7 +937,7 @@ def test_popup_rechecks_availability_after_backend_configuration_changes(mocked_
 
 
 def test_chat_sends_prior_product_ids_for_followup(mocked_api, request_bodies):
-    from clothes_recommender.api import ChatRequest
+    from curio.api import ChatRequest
 
     _, overrides = mocked_api
     overrides["/health"] = (
@@ -945,7 +945,7 @@ def test_chat_sends_prior_product_ids_for_followup(mocked_api, request_bodies):
         {"json": {"status": "ok", "indexed_products": 2, "chat_enabled": True}},
     )
     overrides["/chat/stream"] = (200, {"json": {"text": "Try this piece.", "products": [PRODUCT]}})
-    app = AppTest.from_string("from clothes_recommender import ui; ui.chat_tab()").run()
+    app = AppTest.from_string("from curio import ui; ui.chat_tab()").run()
     app.chat_input[0].set_value("Show me a coat").run()
     app.chat_input[0].set_value("What material is that?").run()
     assert not app.exception

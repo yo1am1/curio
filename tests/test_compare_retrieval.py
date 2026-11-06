@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from clothes_recommender.domain import ScoredProduct
+from curio.domain import ScoredProduct
 from scripts import compare_retrieval as experiment
 
 

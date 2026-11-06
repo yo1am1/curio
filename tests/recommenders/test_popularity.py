@@ -3,7 +3,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from clothes_recommender.recommenders.popularity import PopularityRecommender
+from curio.recommenders.popularity import PopularityRecommender
 
 LAST_DAY = date(2020, 9, 22)
 

@@ -2,8 +2,8 @@
 
 import pytest
 
-from clothes_recommender.books.domain import BookQuery
-from clothes_recommender.books.recommend import BookRecommender, quality, term, tokens
+from curio.books.domain import BookQuery
+from curio.books.recommend import BookRecommender, quality, term, tokens
 from tests.conftest import book_neighbours_frame
 
 
@@ -130,8 +130,8 @@ def test_because_sums_seeds_and_skips_seeds_and_their_series(book_recommender):
 def test_because_caps_books_per_author(monkeypatch):
     import pandas as pd
 
-    from clothes_recommender.books import recommend
-    from clothes_recommender.books.catalog import BookCatalog
+    from curio.books import recommend
+    from curio.books.catalog import BookCatalog
     from tests.conftest import book_frame
 
     links = pd.DataFrame(
@@ -234,7 +234,7 @@ GOLDEN_ROWS = [
 def golden():
     import pandas as pd
 
-    from clothes_recommender.books.catalog import BookCatalog
+    from curio.books.catalog import BookCatalog
     from tests.conftest import book_frame
 
     links = pd.DataFrame(
@@ -321,7 +321,7 @@ DIVERSE_ROWS = [
 def diverse():
     import pandas as pd
 
-    from clothes_recommender.books.catalog import BookCatalog
+    from curio.books.catalog import BookCatalog
     from tests.conftest import book_frame
 
     # Readers of Seed Book liked the series' later books and Tom Prolific most.

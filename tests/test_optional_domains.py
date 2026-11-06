@@ -13,11 +13,11 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from clothes_recommender import api as api_module
-from clothes_recommender import services as service_module
-from clothes_recommender.api import CHAT_DISABLED, create_app
-from clothes_recommender.config import Settings
-from clothes_recommender.services import (
+from curio import api as api_module
+from curio import services as service_module
+from curio.api import CHAT_DISABLED, create_app
+from curio.config import Settings
+from curio.services import (
     BOOKS_MISSING,
     COCKTAILS_MISSING,
     DOMAINS,
@@ -122,7 +122,7 @@ def test_partial_fashion_data_is_not_served(tmp_path, no_fashion_models):
 
 
 def test_llm_builds_the_cocktail_assistant_without_fashion(cocktails_only, monkeypatch):
-    from clothes_recommender.chat.cocktail_agent import CocktailAssistant
+    from curio.chat.cocktail_agent import CocktailAssistant
     from tests.chat.conftest import FakeToolCallingChatModel
 
     model = FakeToolCallingChatModel(messages=iter([]))

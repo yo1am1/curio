@@ -1,8 +1,8 @@
 import pytest
 from pydantic import SecretStr
 
-from clothes_recommender.chat.llm import LLMNotConfiguredError, build_chat_model
-from clothes_recommender.config import Settings
+from curio.chat.llm import LLMNotConfiguredError, build_chat_model
+from curio.config import Settings
 
 
 def make_settings(**llm_fields: object) -> Settings:

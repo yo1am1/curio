@@ -4,17 +4,17 @@ import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.runnables import RunnableLambda
 
-from clothes_recommender.chat.assistant import ShoppingAssistant
-from clothes_recommender.chat.cocktail_agent import EXAMPLE_PANTRY, CocktailAssistant
-from clothes_recommender.chat.engine import MAX_TOOL_CALLS
-from clothes_recommender.chat.guardrails import (
+from curio.chat.assistant import ShoppingAssistant
+from curio.chat.cocktail_agent import EXAMPLE_PANTRY, CocktailAssistant
+from curio.chat.engine import MAX_TOOL_CALLS
+from curio.chat.guardrails import (
     ActionSigner,
     CocktailGroundingCheck,
     InvalidActionError,
     measures_in,
     narrow_args,
 )
-from clothes_recommender.chat.schemas import (
+from curio.chat.schemas import (
     ActionDecision,
     AppliedEffect,
     ChatTurn,
@@ -22,8 +22,8 @@ from clothes_recommender.chat.schemas import (
     StepEvent,
     TurnContext,
 )
-from clothes_recommender.cocktails.domain import CocktailPreferences
-from clothes_recommender.cocktails.recommend import CocktailRecommender
+from curio.cocktails.domain import CocktailPreferences
+from curio.cocktails.recommend import CocktailRecommender
 
 NO_SEARCH = {"query": "", "wants_products": False}
 

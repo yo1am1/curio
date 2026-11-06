@@ -2,10 +2,10 @@
 
 import pytest
 
-from clothes_recommender.books.catalog import BookCatalog
-from clothes_recommender.cocktails.catalog import CocktailCatalog
-from clothes_recommender.cocktails.recommend import CocktailRecommender
-from clothes_recommender.pairings.pairer import BookCocktailPairer
+from curio.books.catalog import BookCatalog
+from curio.cocktails.catalog import CocktailCatalog
+from curio.cocktails.recommend import CocktailRecommender
+from curio.pairings.pairer import BookCocktailPairer
 from tests.conftest import book_frame, cocktail_frame
 
 A, N, OPT = "Alcoholic", "Non alcoholic", "Optional alcohol"

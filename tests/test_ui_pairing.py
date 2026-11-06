@@ -6,7 +6,7 @@ import httpx
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from clothes_recommender import ui
+from curio import ui
 from tests.test_ui_books import HEALTH, WIND, ndjson, reply
 
 OLD_FASHIONED = {
@@ -110,9 +110,7 @@ def pairing_bodies(calls) -> list:
 
 
 def app_for(script: str, *, served: bool = True, **state) -> AppTest:
-    app = AppTest.from_string(
-        f"from clothes_recommender import ui; ui.{script}", default_timeout=10
-    )
+    app = AppTest.from_string(f"from curio import ui; ui.{script}", default_timeout=10)
     app.session_state["domain"] = "books"
     if served:
         app.session_state["service_health"] = HEALTH

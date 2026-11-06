@@ -6,7 +6,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from clothes_recommender.catalog import CustomerData, ProductCatalog
+from curio.catalog import CustomerData, ProductCatalog
 
 # (product_id, product_group)
 ProductSpec = tuple[int, str]

@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 from qdrant_client import QdrantClient
 
-from clothes_recommender.domain import Encoder, Product, ProductFilter
-from clothes_recommender.vector_store import IndexNotBuiltError, ProductVectorStore
+from curio.domain import Encoder, Product, ProductFilter
+from curio.vector_store import IndexNotBuiltError, ProductVectorStore
 
 
 def _matching_ids(

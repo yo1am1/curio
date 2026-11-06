@@ -3,8 +3,8 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.runnables import RunnableLambda
 from pydantic import ValidationError
 
-from clothes_recommender.chat.assistant import MAX_TOOL_CALLS, ChatTurn, ShoppingAssistant
-from clothes_recommender.domain import ProductFilter, ScoredProduct
+from curio.chat.assistant import MAX_TOOL_CALLS, ChatTurn, ShoppingAssistant
+from curio.domain import ProductFilter, ScoredProduct
 
 
 def action(name, args, call_id="tool_1"):

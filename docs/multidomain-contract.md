@@ -35,7 +35,7 @@ not TheCocktailDB drink ids, so per-drink pages cannot be linked). UIs credit
 Settings: `Settings.cocktails_path -> data_dir / "cocktails.parquet"`. The domain is enabled
 when that file exists. No API key and no network at serving time.
 
-## Python interfaces (`clothes_recommender.cocktails`)
+## Python interfaces (`curio.cocktails`)
 
 Types: `cocktails/domain.py` (already written: Cocktail, Ingredient, CocktailHit,
 PantryMatch, CocktailPreferences, CocktailQuery, AlcoholFilter, IngredientTerm).
@@ -106,7 +106,7 @@ class CocktailRecommender:
         # coverage, then name. Empty pantry -> [].
 ```
 
-## Agent (`clothes_recommender.chat`)
+## Agent (`curio.chat`)
 
 The plan → act → verify loop, budgets, approvals (signed proposals), streaming steps and
 grounding stay shared. Cocktail tools:
@@ -232,7 +232,7 @@ without one the UI asks Open Library by ISBN and shows its placeholder when ther
 cover). UIs credit "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.0)" and "Some
 covers: Open Library".
 
-### Python interfaces (`clothes_recommender.books`)
+### Python interfaces (`curio.books`)
 
 Types in `books/domain.py`: `Book` (the columns above, with `source_url` instead of
 `goodreads_book_id` and `author` = first author), `BookRef`, `BookHit` (`book`, `score`,
@@ -355,7 +355,7 @@ the reading list or typed), and ratings must match an evidence book's Goodreads 
 
 The outfit builder is fashion-only and adds fields; nothing existing changes shape.
 
-### Python interfaces (`clothes_recommender.outfits`)
+### Python interfaces (`curio.outfits`)
 
 - `SlotName = Literal["top", "bottom", "dress", "outerwear", "shoes", "bag", "accessory"]`,
   `Audience = Literal["women", "men", "kids"]`, `SwapMode = Literal["other", "cheaper"]`.
@@ -416,7 +416,7 @@ outfit's `amounts()`, for the outfit built this turn and the one the client sent
 A cross-domain feature over the books and cocktails domains; nothing existing changes shape
 except the additions below.
 
-### Python interfaces (`clothes_recommender.pairings`)
+### Python interfaces (`curio.pairings`)
 
 - `domain.py`: `PairingRequest(book_id | book_ids (≤ 20), liked_genres, avoided_genres (≤ 10
   `GenreTerm`s each), alcohol_free, cocktail_preferences: CocktailPreferences | None,

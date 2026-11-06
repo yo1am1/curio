@@ -8,13 +8,13 @@ import pytest
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
 
-from clothes_recommender import api as api_module
-from clothes_recommender import services as service_module
-from clothes_recommender.api import CHAT_DISABLED, create_app
-from clothes_recommender.books.recommend import BookRecommender
-from clothes_recommender.chat.book_agent import BookAssistant
-from clothes_recommender.config import Settings
-from clothes_recommender.services import BOOKS_MISSING, BookServices, build_services
+from curio import api as api_module
+from curio import services as service_module
+from curio.api import CHAT_DISABLED, create_app
+from curio.books.recommend import BookRecommender
+from curio.chat.book_agent import BookAssistant
+from curio.config import Settings
+from curio.services import BOOKS_MISSING, BookServices, build_services
 from tests.chat.conftest import FakeToolCallingChatModel
 from tests.conftest import book_frame, book_neighbours_frame, serve
 

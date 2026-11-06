@@ -4,15 +4,15 @@ avoided genres, explanations and determinism."""
 import pytest
 from pydantic import ValidationError
 
-from clothes_recommender.cocktails.domain import CocktailPreferences
-from clothes_recommender.pairings.domain import PairingRequest
-from clothes_recommender.pairings.pairer import (
+from curio.cocktails.domain import CocktailPreferences
+from curio.pairings.domain import PairingRequest
+from curio.pairings.pairer import (
     DRINK_NOTE,
     BookCocktailPairer,
     PairingError,
     UnknownBookError,
 )
-from clothes_recommender.pairings.themes import THEMES, Lore
+from curio.pairings.themes import THEMES, Lore
 
 BIG_SLEEP, GONE_GIRL, GATSBY, WIND, DUNE, POTTER, HOBBIT, DRACULA = range(1, 9)
 PRIDE, CASINO, CAROL, UNSHELVED = range(9, 13)
@@ -301,7 +301,7 @@ def test_requests_are_tightly_bounded(request_body):
 
 
 def test_lore_for_missing_drinks_is_ignored(pairer):
-    from clothes_recommender.cocktails.recommend import CocktailRecommender
+    from curio.cocktails.recommend import CocktailRecommender
     from tests.pairings.conftest import pairing_books, pairing_cocktails
 
     cocktails = pairing_cocktails()

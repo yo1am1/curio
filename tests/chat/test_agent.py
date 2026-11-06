@@ -3,14 +3,14 @@
 import pytest
 from langchain_core.messages import AIMessage
 
-from clothes_recommender.chat.assistant import ShoppingAssistant
-from clothes_recommender.chat.guardrails import (
+from curio.chat.assistant import ShoppingAssistant
+from curio.chat.guardrails import (
     ActionSigner,
     InvalidActionError,
     check_grounding,
 )
-from clothes_recommender.chat.navigator import Evidence, NoPersonalHistoryError
-from clothes_recommender.chat.schemas import (
+from curio.chat.navigator import Evidence, NoPersonalHistoryError
+from curio.chat.schemas import (
     ActionDecision,
     ChatTurn,
     ReplyEvent,
@@ -18,7 +18,7 @@ from clothes_recommender.chat.schemas import (
     StepEvent,
     TurnContext,
 )
-from clothes_recommender.domain import ProductFilter, ScoredProduct
+from curio.domain import ProductFilter, ScoredProduct
 
 NO_SEARCH = {"query": "", "wants_products": False}
 

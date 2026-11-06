@@ -4,8 +4,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from clothes_recommender.catalog import DataFileMissingError
-from clothes_recommender.cocktails.catalog import (
+from curio.catalog import DataFileMissingError
+from curio.cocktails.catalog import (
     SOURCE_URL,
     CocktailCatalog,
     CocktailDataMissingError,

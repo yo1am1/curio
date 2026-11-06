@@ -6,9 +6,9 @@ import httpx
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from clothes_recommender import ui
-from clothes_recommender.chat.schemas import ChatRequest
-from clothes_recommender.cocktails.domain import CocktailPreferences
+from curio import ui
+from curio.chat.schemas import ChatRequest
+from curio.cocktails.domain import CocktailPreferences
 
 COAT = {
     "product_id": 1,
@@ -116,7 +116,7 @@ def api(monkeypatch):
 
 
 def script(body: str, **state) -> AppTest:
-    app = AppTest.from_string(f"from clothes_recommender import ui\n{body}", default_timeout=10)
+    app = AppTest.from_string(f"from curio import ui\n{body}", default_timeout=10)
     for key, value in state.items():
         app.session_state[key] = value
     return app
@@ -269,7 +269,7 @@ def test_popup_flag_queued_on_the_home_page_is_cleared(api):
 
 
 def _run_main():
-    from clothes_recommender import ui
+    from curio import ui
 
     ui.main()
 
@@ -375,7 +375,7 @@ def test_first_typed_message_gets_the_full_height_transcript(monkeypatch):
     import httpx
     from streamlit.testing.v1 import AppTest
 
-    from clothes_recommender import ui
+    from curio import ui
 
     reply = {"text": "Try these.", "products": [], "status": "complete", "steps": []}
 
@@ -402,7 +402,7 @@ def test_first_typed_message_gets_the_full_height_transcript(monkeypatch):
         walk(app.main)
         return found[0]
 
-    app = AppTest.from_string("from clothes_recommender import ui; ui.agent_home()").run()
+    app = AppTest.from_string("from curio import ui; ui.agent_home()").run()
     assert transcript_height(app) == 240  # compact welcome
     app.chat_input[0].set_value("Black trousers").run()
     assert not app.exception

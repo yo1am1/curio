@@ -101,7 +101,7 @@ jobs:
       - name: Smoke test
         if: steps.published.outputs.done == 'false'
         run: |
-          docker run --rm "$IMAGE:$VERSION" python -c "import clothes_recommender.api, clothes_recommender.pairings; print('ok')"
+          docker run --rm "$IMAGE:$VERSION" python -c "import curio.api, curio.pairings; print('ok')"
       - name: Push to ghcr.io
         if: steps.published.outputs.done == 'false'
         run: |

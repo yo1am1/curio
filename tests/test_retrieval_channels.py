@@ -5,8 +5,8 @@ import pandas as pd
 import pytest
 from scipy.sparse import issparse
 
-from clothes_recommender.catalog import CustomerData
-from clothes_recommender.recommenders.base import UnknownUserError
+from curio.catalog import CustomerData
+from curio.recommenders.base import UnknownUserError
 from scripts import retrieval_channels
 from scripts.retrieval_channels import CHANNELS, ComplementaryRetrieval
 

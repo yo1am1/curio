@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from clothes_recommender.books.catalog import BookCatalog
-from clothes_recommender.cocktails.catalog import CocktailCatalog
-from clothes_recommender.cocktails.recommend import CocktailRecommender
-from clothes_recommender.pairings.domain import PairingRequest
-from clothes_recommender.pairings.pairer import BookCocktailPairer
-from clothes_recommender.pairings.themes import LORE, THEMES
+from curio.books.catalog import BookCatalog
+from curio.cocktails.catalog import CocktailCatalog
+from curio.cocktails.recommend import CocktailRecommender
+from curio.pairings.domain import PairingRequest
+from curio.pairings.pairer import BookCocktailPairer
+from curio.pairings.themes import LORE, THEMES
 
 DATA = Path(__file__).resolve().parents[2] / "data"
 BOOKS, COCKTAILS = DATA / "books.parquet", DATA / "cocktails.parquet"

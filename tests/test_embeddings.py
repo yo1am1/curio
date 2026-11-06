@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from clothes_recommender.config import Settings
-from clothes_recommender.embeddings import MAX_BATCH, ClipEncoder
+from curio.config import Settings
+from curio.embeddings import MAX_BATCH, ClipEncoder
 
 
 def test_constructing_encoder_does_not_load_model():

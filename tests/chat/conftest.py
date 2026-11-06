@@ -6,9 +6,9 @@ import pytest
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
-from clothes_recommender.catalog import ProductCatalog
-from clothes_recommender.chat.intent import SearchIntent
-from clothes_recommender.domain import ProductFilter, ScoredProduct
+from curio.catalog import ProductCatalog
+from curio.chat.intent import SearchIntent
+from curio.domain import ProductFilter, ScoredProduct
 
 
 class FakeToolCallingChatModel(GenericFakeChatModel):
