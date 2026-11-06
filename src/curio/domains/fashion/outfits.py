@@ -267,6 +267,9 @@ class OutfitRequest:
     slots: tuple[SlotName, ...] = ()
     # A remembered per-piece price limit, applied to every slot.
     max_item_price: float | None = None
+    # (slot, query) pairs that replace the occasion template's query for those slots, so a
+    # caller can ask for a look ("chunky knit sweater") and keep the template's types.
+    queries: tuple[tuple[SlotName, str], ...] = ()
 
 
 # --- Progress, streamed while an outfit is built ----------------------------------------------
@@ -532,13 +535,18 @@ def audience_in(text: str) -> Audience | None:
 
 
 def plan_slots(
-    occasion: str, audience: Audience | None, slots: Sequence[SlotName] = ()
+    occasion: str,
+    audience: Audience | None,
+    slots: Sequence[SlotName] = (),
+    queries: Iterable[tuple[SlotName, str]] = (),
 ) -> list[SlotSpec]:
     """The slots of an outfit for `occasion`, in the order they are filled.
 
     Without an audience the women's template is used to find the look's first piece; the
-    planner then re-plans for the audience of the best match.
+    planner then re-plans for the audience of the best match. `queries` replace the
+    template's query of the slots they name (types and weights stay the template's).
     """
+    overrides = dict(queries)
     style = occasion_style(occasion)
     season = occasion_season(occasion)
     off = OFF_OCCASION[style]
@@ -569,7 +577,7 @@ def plan_slots(
     words = {"season": season, "style": _STYLE_WORDS[style]}
     specs = []
     for slot, query, types, weight in rows:
-        text = _clean(query.format(**words))
+        text = _clean(overrides.get(slot, query).format(**words))
         fallback = tuple(t for t in _suited(SLOT_TYPES[slot], off) if t not in types)
         specs.append(SlotSpec(slot, text, types, weight, fallback, named_types(text, types)))
     return specs
@@ -706,7 +714,7 @@ class OutfitPlanner:
         if audience is None:
             audience = self._probe_audience(request)
             source = "best match" if audience else "none"
-        specs = plan_slots(request.occasion, audience, request.slots)
+        specs = plan_slots(request.occasion, audience, request.slots, request.queries)
         budget = None if request.budget is None else _cents(request.budget)
         item_cap = None if request.max_item_price is None else _cents(request.max_item_price)
         cap = _min_cap(budget, item_cap)

@@ -112,6 +112,24 @@ def test_named_slots_are_filled_in_priority_order_with_generic_specs():
 # --- Build ---------------------------------------------------------------------------------
 
 
+def test_slot_queries_replace_the_template_query_and_keep_its_types():
+    template = {s.slot: s for s in plan_slots("summer wedding", "women")}
+    looks = (("dress", "romantic {season} midi dress"), ("bag", "straw bag"), ("top", "unused"))
+    specs = {s.slot: s for s in plan_slots("summer wedding", "women", (), looks)}
+    assert specs["dress"].query == "romantic summer midi dress"
+    assert specs["bag"].query == "straw bag"
+    assert specs["dress"].types == template["dress"].types
+    assert specs["shoes"].query == template["shoes"].query
+    assert "top" not in specs  # a query for a slot the plan lacks adds no slot
+
+
+def test_build_searches_with_the_requested_slot_queries(planner, outfit_search):
+    build(planner, "party", None, "women", queries=(("dress", "silk slip dress"),))
+    searched = [query for query, _ in outfit_search.queries]
+    assert "silk slip dress" in searched and "party heels" in searched
+    assert not any("party dress" in query for query in searched)
+
+
 def test_build_streams_the_plan_then_each_slot(planner):
     stages = list(planner.build(OutfitRequest("wedding", 80, "women")))
     assert isinstance(stages[0], PlannedSlots)
