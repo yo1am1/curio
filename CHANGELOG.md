@@ -6,6 +6,43 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Plan my evening**, a composed domain (`curio.domains.evening`) that proves the domains
+  compose. Given an occasion in free text ("rainy Sunday in", "date night under €100", "book
+  club, alcohol-free"), the deterministic, offline `EveningPlanner` picks one of eight evening
+  themes (cosy, romantic, glamorous, summery, mysterious, thoughtful, adventurous, playful) and
+  plans one coherent evening from it: an outfit from fashion's `OutfitPlanner` (the theme's
+  occasion, slots and a query per slot, under the budget), a book from the books
+  recommender's searches, and a drink the book → cocktail pairer pairs with that book (never
+  invented), with a reason for each part and one "why it works" line citing each part's
+  evidence ("Rainy Sunday in → cosy: Osman crew sweater (€24.99) + 2 more, €58.97 in all · The
+  Name of the Wind (fantasy, ★4.55) · Honey Bee (Honey; pairs with fantasy and magic)").
+  Alcohol-free (asked, written in the occasion or remembered) and the children's and
+  young-adult rule work as in pairings. Without fashion data it plans the book and drink and
+  says the outfit needs the fashion catalogue; with books or cocktails missing it says which.
+- `POST /evening/plan` and `POST /evening/swap` (another or a cheaper outfit piece, another
+  book with a re-paired drink, another or an alcohol-free drink), stateless over a
+  client-held `EveningState` that the server re-reads from the catalogs.
+- The **evening agent** on the engine (`/chat` with `domain: "evening"`): PlanEvening and
+  SwapEveningPart (READ), AskShopper, and SaveEvening (APPROVE, signed and narrowable), which
+  saves the pieces, the book and the drink to the fashion shortlist, the reading list and
+  the saved cocktails through one `EveningEffect`. Grounding reuses the fashion price and ID
+  check, the book title and rating check and the paired-drink check.
+- The domain registry supports **composed domains** (`DomainSpec.compose`): `evening` is
+  served whenever books and cocktails are, including in the quick-start demo, and `/domains`
+  names the missing part.
+- UI: an **Evening** entry (moon icon) in the header switch, a Plan my evening page with
+  occasion chips, an outfit budget, women or men and alcohol-free, three cards in a row
+  (pieces with photos and the total, the book cover, the drink photo) with swap buttons, and
+  Save evening through an approval dialog; evening chat renders the same cards.
+- `OutfitRequest.queries` sets a query per outfit slot, keeping the template's types.
+- `scripts.capture_readme --only evening` writes `docs/screenshots/curio-evening.webp`.
+- Tests: planner, API, agent (scripted model) and UI tests, and end-to-end runs on the real
+  data ("rainy Sunday in", "date night under €100", "book club, alcohol-free", a phone, and
+  the quick-start demo without fashion); `tests/test_architecture.py` lets `evening`, and only
+  `evening`, import fashion, books, cocktails and pairings.
+
 ### Changed
 
 - **The Python package is now `curio`** (`src/curio`), not `clothes_recommender`: imports,

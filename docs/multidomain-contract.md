@@ -1,9 +1,10 @@
-# Multi-domain contract (fashion, cocktails, books)
+# Multi-domain contract (fashion, cocktails, books, evening)
 
 Shared interfaces for the cocktail domain (v1.0), the book domain and the fashion outfit
 builder (1.1.0). Every teammate codes against this file; change it only together with
-every consumer. The [books](#books), [fashion outfits](#fashion-outfits) and
-[book → cocktail pairing](#book--cocktail-pairing) sections follow the cocktail sections.
+every consumer. The [books](#books), [fashion outfits](#fashion-outfits),
+[book → cocktail pairing](#book--cocktail-pairing) and [Plan my evening](#plan-my-evening)
+sections follow the cocktail sections.
 
 ## Data
 
@@ -378,6 +379,9 @@ The outfit builder is fashion-only and adds fields; nothing existing changes sha
   Outfit]`, `outfit(request) -> Outfit`, `swap(state, slot, mode, refine, *,
   max_item_price) -> Swap(outfit, slot, old, new | None)` (raises `OutfitError` for a slot
   the outfit lacks or an outfit with no known piece), `restore(state) -> Outfit | None`.
+- `OutfitRequest(occasion, budget, audience, slots, max_item_price, queries)`: `queries`,
+  `(slot, query)` pairs, replace the occasion template's query for those slots (types and
+  weights stay); `plan_slots(occasion, audience, slots, queries)` takes the same pairs.
 
 ### Agent
 
@@ -474,3 +478,98 @@ extras.
 - Books page: "Your reading list's cocktail" (`pairing_reading_list`) when the reading list
   or liked genres are set. Book chat sends `cocktail_preferences`, stores `pairing` on the
   turn and renders it as a card; the starters add "Pair a cocktail with my reading list".
+
+## Plan my evening
+
+A composed domain, `curio.domains.evening`, the only one that may import `fashion`, `books`,
+`cocktails` and `pairings` (`tests/test_architecture.py`; no domain imports `evening`).
+Nothing existing changes shape except the additions below; other domains' replies have no
+`evening` key.
+
+### Python interfaces (`curio.domains.evening`)
+
+- `themes.py`: `ThemeId = Literal["cosy", "romantic", "glamorous", "summery", "mysterious",
+  "thoughtful", "adventurous", "playful"]`; `Theme(id, label, icon, words, feeling,
+  outfit_occasion, slots, queries, men_queries, books: tuple[BookSearch, ...], drink_words,
+  drink_feeling)` with `queries_for(audience)`; `BookSearch(query, genres, mood, min_rating,
+  exclude_genres)`; `THEMES`, `THEMES_BY_ID`, `DEFAULT_THEME` (cosy), `FALLBACK_BOOKS`;
+  `detect_theme(occasion, mood=None) -> ThemeMatch(theme, words, source: "mood" |
+  "occasion" | "default")` with `evidence(occasion)`.
+- `models.py`: `EveningTastes(book_preferences, cocktail_preferences, max_item_price)`;
+  `EveningRequest(EveningTastes)` adds `occasion` (2-200, not blank), `budget` (0 < b ≤
+  5,000, the outfit's), `audience` (`women` | `men`), `mood` (≤ 40) and `alcohol_free`; extra
+  fields are forbidden. `EveningState(occasion, mood, theme, budget, audience, alcohol_free,
+  outfit: OutfitState | None, book_id, drink_id, skipped_books (≤ 20), skipped_drinks (≤
+  15))`: what a client holds and sends back. `EveningPlan(occasion, theme: ThemeInfo(id,
+  label, icon, feeling, evidence), outfit: OutfitPart(outfit: Outfit, reason) | None, book:
+  BookPart(book, reason) | None, drink: DrinkPart(cocktail, reasons (≥ 1), pairs_with,
+  evening_fit, alcohol_free_reason, note) | None, why, missing: list[MissingPart(part,
+  reason)], notes, status: "complete" | "partial" | "empty", change: str | None, state)`;
+  `EveningPlan.amounts()` is the outfit's. `EveningSwap(evening, part: "outfit" | "book" |
+  "drink", slot, mode: "other" | "cheaper" | "alcohol_free", refine (≤ 100), tastes)`.
+- `planner.py`: `EveningPlanner(*, outfits: OutfitPlanner | None, books: BookRecommender |
+  None, book_catalog: BookCatalog | None, pairer: BookCocktailPairer | None, cocktails:
+  CocktailCatalog | None)`; `parts -> ["outfit", "book", "drink"]` (those it can plan),
+  `plan(EveningRequest) -> EveningPlan`, `restore(state, tastes) -> EveningPlan`,
+  `swap(state, part, *, slot, mode, refine, tastes) -> EveningPlan` (raises `EveningError`
+  for a swap the plan cannot make). `budget_in(text)`, `wants_alcohol_free(text)` read a
+  budget and an alcohol-free wish from the occasion. `OUTFIT_NEEDS_FASHION`,
+  `BOOK_NEEDS_BOOKS`, `DRINK_NEEDS_COCKTAILS` and `DRINK_NEEDS_BOOK` are the `missing`
+  reasons.
+
+Rules: the drink always comes from `BookCocktailPairer.pair` on the plan's book (the client's
+drink is kept on restore only when the pairer still pairs it); alcohol-free and the
+children's and young-adult rule as in pairings; children's books are never the evening's
+book; remembered avoided genres and authors win over a theme's genre; the outfit stays
+within the budget; a part that cannot be planned is in `missing`, never an error;
+deterministic.
+
+### Serving and API
+
+- `DomainSpec` gains `compose(domains, kit) -> runtime | None` (a composed domain has no
+  `load`) and `missing(services) -> str`; `DomainSpec.hint(services)` is the 503 detail and
+  the `/domains` hint. `EVENING` (`id="evening"`, label `Evening`) composes
+  `EveningServices(planner, assistant)` whenever books and cocktails are served and their
+  pairer built; `item_count()` is the number of parts it plans, and its `notice` (the
+  outfit's `OUTFIT_NEEDS_FASHION` without fashion) is appended to its `/domains` hint.
+  `ENABLED_DOMAINS` accepts `evening` but limits only data domains.
+- `POST /evening/plan` body `EveningRequest` -> `EveningPlan`; `POST /evening/swap` body
+  `EveningSwap` -> `EveningPlan` (422 for an `EveningError` or an invalid body). Both 503 with
+  `EVENING_MISSING` naming the missing books or cocktails.
+- `Domain` adds `"evening"`, `ApprovalTool` adds `"SaveEvening"` (`auto_approve` ≤ 7),
+  `TurnContext.evening: EveningState | None`, `AppliedEffect` adds `EveningEffect(kind=
+  "evening", product_ids, book_ids, drink_ids)` (adds to `shortlist`, `book_shortlist`,
+  `cocktail_shortlist`), and `AssistantReply.evening: EveningPlan | None`, serialized last and
+  only for evening replies.
+
+### Agent
+
+| Tool | Policy | Args |
+|---|---|---|
+| PlanEvening | read | occasion (2-200), budget (≤ 5,000), audience (`women`, `men`), mood (≤ 40), alcohol_free |
+| SwapEveningPart | read | part (`outfit` needs a slot; `book`, `drink` take none), mode (`other`, `cheaper` for the outfit only, `alcohol_free` for the drink only), refine (≤ 100) |
+| AskShopper | ask | shared |
+| SaveEvening | approve | product_ids (≤ 5), book_ids (≤ 2), drink_ids (≤ 2), at least one |
+
+PlanEvening streams "Evening theme", "Evening outfit", "Evening book", "Evening drink" (or a
+skipped step per missing part), then "PlanEvening". Answers cite pieces as "product #N",
+books as "book #N" or "[id N]" and drinks as "drink #N"; `EveningGroundingCheck` merges the
+fashion, book and paired-drink checks. Turn items are products, books and drinks keyed in
+separate ranges (`BOOK_KEY`, `DRINK_KEY`).
+
+### UI
+
+- `DOMAIN_VIEWS["evening"]`: label ":material/bedtime: Evening", the "Plan my evening" page
+  (`/evening`), copy titled "Plan my evening.", approval setting `ask_shortlist` ->
+  `SaveEvening`, session keys `chat_history_evening`, `chat_queued_evening`,
+  `chat_decision_evening`.
+- Session key `chat_evening`: the latest evening reply's `evening.state`, sent as `evening`
+  with every evening chat request (with every domain's tastes and lists) and cleared by "New
+  conversation". `evening_plan` holds the page's plan, `evening_saving` the open save dialog.
+- The plan renders as `evening_cards`: the theme badge and evidence, the "why it works" line
+  (`evening_why_<key>`), three cards in a row (`evening_outfit_<key>`, `evening_book_<key>`,
+  `evening_drink_<key>`) with swap buttons, and Save evening. On the page the buttons call
+  `/evening/swap` and Save evening opens an approval dialog with a checkbox per part; in chat
+  they send "Another top for my evening", "Cheaper shoes", "Another book", "Another drink",
+  "Make the drink alcohol-free" and "Save the evening" to the agent. An applied `evening`
+  effect adds each part to its own list.

@@ -177,6 +177,36 @@ empty rather than a drink without a reason. `tests/domains/pairings/test_pairing
 checks the golden cases on the real data; the E2E suite writes the top three pairings of 14
 famous books to `e2e-artifacts/pairings.json`.
 
+## Plan my evening
+
+`domains/evening/` composes the other domains into one evening: an outfit, a book and a drink
+paired with that book, under one theme. It is deterministic and offline (no model); the
+outfit needs fashion's CLIP photo index, the rest runs on the book and recipe files alone.
+
+| Step | How it works |
+|---|---|
+| Theme | The occasion (or a `mood` that names one) maps to one of eight themes in `domains/evening/themes.py` by the words it uses, matched as whole words: cosy ("rainy", "Sunday", "night in", "winter"…), romantic ("date night", "first date", "anniversary", "dinner"…), glamorous ("party", "New Year's Eve", "gala"…), summery ("summer", "garden", "picnic"…), mysterious ("murder mystery", "noir", "halloween"…), thoughtful ("book club", "reading group"…), adventurous ("camping", "trip"…) and playful ("game night", "friends"…). The theme with most matching words wins (ties in table order); with none the evening is cosy and says so. The theme's evidence names the words ("“rainy Sunday in” mentions “rainy” and “Sunday”"). |
+| Outfit | The theme's outfit occasion (its words choose the template's style and season; a season in the occasion wins), slots and a query per slot ("chunky knit sweater", "soft knit cardigan") go to `OutfitPlanner` through `OutfitRequest.queries`, with menswear queries for men. The budget caps the whole outfit, a remembered per-piece limit every piece. Without an audience the look is womenswear (the plan's note says so): fashion's best-match probe tends to pick children's pieces for homely occasions. |
+| Book | The theme's book searches (`BookSearch`: genres, a mood, a query, a minimum rating) run through `BookRecommender.search` in order, then a last "well-rated" search, so every theme finds a book. Children's books are left out, remembered avoided genres and authors too (an avoided genre skips the searches that ask for it), liked genres rank higher; swapped-out books never return. |
+| Drink | `BookCocktailPairer` pairs the chosen book (top five, alcohol-free when asked, written in the occasion, remembered, or for a children's or young-adult book; avoided ingredients left out). Among its drinks the first whose ingredients, name or glass use the theme's drink words ("honey", "cinnamon", "hot" for cosy; "champagne", "strawberry" for romantic) suits the evening best, else the pairer's first. When no drink pairs, the next book (up to three) is tried, and the plan notes it; the drink never comes from anywhere but the pairer. |
+| Explain | Each part has its reason (the outfit's look and total against the budget, the book's theme fit, genre and Goodreads rating, the pairer's reasons plus the drink's fit with the evening), and one "why it works" line cites each part's evidence: "Rainy Sunday in → cosy: Osman crew sweater (€24.99) + 2 more, €58.97 in all · The Name of the Wind (fantasy, ★4.55) · Honey Bee (Honey; pairs with fantasy and magic)". |
+
+A budget ("under €100") or "alcohol-free" written in the occasion counts as if given. Every
+part is optional: without fashion the outfit is listed in `missing` ("The outfit needs the
+fashion catalogue…"), without cocktails the drink, without books the book and the drink, and a
+photo search that fails only drops the outfit. A plan is never an error.
+
+Swaps are stateless like outfits. The client holds `EveningState` (occasion, theme, budget,
+audience, alcohol-free, the outfit's `OutfitState`, the book and drink IDs and the parts
+swapped out) and sends it back; `EveningPlanner.restore` re-reads every product and book and
+re-pairs the drink, keeping the client's drink only when the pairer still pairs it with the
+book under the current rules (a forged or no-longer-allowed drink is replaced). "Another book"
+skips the old one and re-pairs a drink for the new one; "another drink" skips the drink;
+"alcohol-free" re-pairs with alcohol-free recipes; an outfit piece is swapped by
+`OutfitPlanner.swap` with the theme's query for the slot. `tests/domains/evening/` covers the
+planner over small catalogs, and the E2E suite writes real plans for eight occasions to
+`e2e-artifacts/evening-plans.json`.
+
 ## Data
 
 ### H&M data
@@ -351,6 +381,12 @@ flowchart LR
     API --> PR[BookCocktailPairer]
     BA --> PR
     PR --> BC & CR
+    API --> EA[EveningAssistant]
+    API --> EP[EveningPlanner]
+    EA --> EP
+    EA --> LLM
+    EP --> O[OutfitPlanner] & BR & PR
+    O --> S
     S --> E[CLIP encoder]
     S --> Q[(Qdrant)]
     CB --> Q
@@ -376,17 +412,19 @@ src/curio/
 │   ├── grounding.py      # Price and ID checks, name matching, GroundingReport merging
 │   ├── llm.py            # Chat model factory for any LangChain provider
 │   └── data.py           # DataFileMissingError, shared by every catalog loader
-├── domains/              # Each imports the engine and itself only (pairings: + books, cocktails)
+├── domains/              # Each imports the engine and itself only (pairings: + books,
+│   │                     # cocktails; evening: + fashion, books, cocktails, pairings)
 │   ├── fashion/          # models, catalog, embeddings, vector_store, search, outfits,
 │   │   │                 # navigator (recommender bridge), recommenders/
 │   │   └── agent/        # toolkit, tools, intent, prompts, grounding, schemas
 │   ├── cocktails/        # models, catalog, recommend (search, similar, pantry), agent/
 │   ├── books/            # models, catalog, taxonomy, recommend, agent/
-│   └── pairings/         # models, themes, pairer; agent/ (PairCocktail, PairedDrinkCheck)
+│   ├── pairings/         # models, themes, pairer; agent/ (PairCocktail, PairedDrinkCheck)
+│   └── evening/          # themes, models, planner (Plan my evening); agent/ (PlanEvening…)
 └── app/                  # Composition: settings, wire format, assistants, API, UI
     ├── config.py         # Settings from env / .env (pydantic-settings)
     ├── schemas.py        # The /chat wire models: the engine's plus every domain's payloads
-    ├── assistants.py     # ShoppingAssistant, CocktailAssistant, BookAssistant
+    ├── assistants.py     # ShoppingAssistant, CocktailAssistant, BookAssistant, EveningAssistant
     ├── services.py       # Composition root and domain registry
     ├── demo.py           # Demo customers
     ├── api.py            # FastAPI app
@@ -446,6 +484,18 @@ fields on `TurnContext` (`book_preferences`, `book_shortlist`), its effect kinds
 `AppliedEffect` (serialized with their own fields only), and one entry each in the engine's
 `_MEMORY_EFFECTS` and `_SHORTLIST_EFFECTS` tables. The engine loop, budgets, signing,
 grounding flow and UI chat code did not change.
+
+A **composed domain** has no data of its own: its `DomainSpec` has `compose` instead of
+`load`, and `build_services` builds it from the loaded domains after linking. `evening` is the
+first: `compose_evening` returns an `EveningServices` (the `EveningPlanner` over the served
+book recommender, pairer, recipes and, when fashion is served, its `OutfitPlanner`, plus the
+`EveningAssistant`) whenever books and cocktails are served and their pairer built. Its
+`missing` callable names what an unserved evening lacks ("Plan my evening needs the book
+catalog and the cocktail recipes: The book catalog is not prepared: …"), which `/domains` and
+the 503 of `/evening/*` and evening chat report; a served evening without fashion reports
+`item_count` 2 (the parts it plans) and the hint "The outfit needs the fashion catalogue…".
+`ENABLED_DOMAINS` limits only the data domains: the quick start (`cocktails,books`) serves
+the evening too, without the outfit.
 
 Cross-domain features link loaded domains after loading: `link_domains` builds the
 `BookCocktailPairer` when books and cocktails are both served, stores it on `BookServices`
@@ -647,14 +697,16 @@ string when running several API workers, so approval proposals verify on any wor
 | GET | `/books/{id}/similar?top_k=5&other_authors_only=false` | Readers who liked this book also liked |
 | GET | `/books/{id}/by-author?top_k=5` | More by its first author |
 | POST | `/pairings/book-cocktail` | `{"book_id": 5}` or `{"book_ids": [1160, 1598], "liked_genres": [], "avoided_genres": []}`, plus `alcohol_free`, `cocktail_preferences`, `exclude_drink_ids`, `seed` (0-10,000) and `top_k` (1-5): drinks for a book or a reader's taste with `profile` (themes, summary, alcohol-free reason), `pairings` (cocktail, theme, 1-3 reasons), `sets` and `note`. 404 for an unknown book, 422 for nothing known to pair |
-| POST | `/chat` | One agent turn: `{"domain": "fashion\|cocktails\|books", "message", "history", "preferences", "shopper_id", "shortlist", "outfit", "cocktail_preferences", "cocktail_shortlist", "book_preferences", "book_shortlist", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal. `domain` defaults to `fashion`; a fashion reply carries `outfit` when the turn built or changed one |
+| POST | `/evening/plan` | `{"occasion": "rainy Sunday in", "budget": 100, "audience": "women\|men", "mood": null, "alcohol_free": false, "book_preferences": {}, "cocktail_preferences": {}, "max_item_price": null}` (all but `occasion` optional; occasion 2-200 characters, budget up to €5,000, mood up to 40 characters, unknown fields 422): `theme` (id, label, icon, feeling, evidence), `outfit` (the `Outfit` and its reason), `book` (book, reason), `drink` (cocktail, reasons, `pairs_with`, `evening_fit`, `alcohol_free_reason`, `note`), `why`, `missing` (part, reason), `notes`, `status` (`complete`, `partial`, `empty`) and the `state` to send back |
+| POST | `/evening/swap` | `{"evening": <state>, "part": "outfit\|book\|drink", "slot": "shoes", "mode": "other\|cheaper\|alcohol_free", "refine": "", "tastes": {...}}`: the plan with that part changed and `change` saying what changed; 422 for a swap the plan cannot make (a cheaper book, an alcohol-free outfit, a slot the outfit lacks) or an out-of-bounds state |
+| POST | `/chat` | One agent turn: `{"domain": "fashion\|cocktails\|books\|evening", "message", "history", "preferences", "shopper_id", "shortlist", "outfit", "cocktail_preferences", "cocktail_shortlist", "book_preferences", "book_shortlist", "evening", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal. `domain` defaults to `fashion`; a fashion reply carries `outfit` when the turn built or changed one, an evening reply `evening` (the plan) |
 | POST | `/chat/stream` | The same turn as NDJSON: `step` events, then `reply` (or `error`) |
 | POST, GET | `/chat/feedback` | Rate an answer; summary of ratings and recent negative feedback |
 | GET | `/evaluation` | Offline evaluation results saved by `scripts.evaluate --output` |
 
 Every `/cocktails` endpoint returns 503 until `scripts.prepare_cocktails` has been run,
-every `/books` endpoint until `scripts.prepare_books` has, `/pairings/book-cocktail` until
-both have (with the missing domain's hint), and
+every `/books` endpoint until `scripts.prepare_books` has, `/pairings/book-cocktail` and
+`/evening/*` until both have (with the missing domain's hint), and
 every fashion endpoint (`/products`, `/sections`, `/search`, `/outfits`, `/users`,
 `/demo/customers`, `/evaluation`) returns 503 with how to prepare the H&M data when fashion is not served.
 `/chat` returns 503 when the requested domain is not served or has no assistant (no LLM);
@@ -823,7 +875,16 @@ gin or Champagne drink, reader taste with avoided genres, and the agent's PairCo
 (verified) and an invented drink (caught, replaced by the paired drinks). In the browser it
 pairs a drink in the book dialog (another pairing, the alcohol-free toggle, the hand-off to
 the recipe), the reading-list cocktail card, the chat starter, and the dialog at phone
-width (screenshots 70-74).
+width (screenshots 70-74). `test_evening_e2e.py` plans eight occasions on the real catalogs
+and writes them to `evening-plans.json`, checking that each is complete, within its budget,
+alcohol-free when asked and with a drink the pairer pairs with its book, and that swaps
+work on the real data. In the browser it plans "rainy Sunday in" and "book club,
+alcohol-free" on the Plan my evening page (another book, Save evening through the approval
+dialog), "date night under €100" in evening chat (a cheaper piece, a SaveEvening approval
+with six parts), an invented drink caught by grounding, and the page at 390 px (screenshots
+80-87). A third API, the quick-start demo with books (recipes and books, no fashion, no
+LLM), checks that the evening plans the book and the drink and says the outfit needs the
+fashion catalogue (screenshot 88).
 
 The chat model is `tests/e2e/llm_stub.py`, a scripted OpenAI-compatible server: the app
 reaches it through `LLM_PROVIDER=openai` and `LLM_BASE_URL`, so the real provider path runs

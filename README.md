@@ -196,6 +196,17 @@ offline: no model, no download.
 
 ![Drinks paired with The Great Gatsby, each with the book and recipe evidence](docs/screenshots/curio-pairing.webp)
 
+### Plan my evening
+
+The Evening tab composes all three domains. Tell Curio the occasion ("rainy Sunday in",
+"date night under €100", "book club, alcohol-free") and it picks one theme, then plans an
+outfit, a book and a drink the pairer pairs with that book, each with its reason, plus one
+line on why they go together. Swap any part, then save the evening after approving it. In
+the quick-start demo, without fashion data, it plans the book and the drink and says the
+outfit needs the fashion catalogue.
+
+![A rainy Sunday in: a knit outfit, The Name of the Wind and a Honey Bee, with why they go together](docs/screenshots/curio-evening.webp)
+
 ## Under the hood
 
 Streamlit UI → FastAPI → a shared agent engine with one toolkit per domain. The code has
