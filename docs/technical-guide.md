@@ -226,7 +226,7 @@ book under the current rules (a forged or no-longer-allowed drink is replaced). 
 skips the old one and re-pairs a drink for the new one; "another drink" skips the drink;
 "alcohol-free" re-pairs with alcohol-free recipes; an outfit piece is swapped by
 `OutfitPlanner.swap` with the theme's query for the slot. `tests/domains/evening/` covers the
-planner over small catalogs, and the E2E suite writes real plans for eight occasions to
+planner over small catalogs, and the E2E suite writes real plans for fifteen occasions to
 `e2e-artifacts/evening-plans.json`.
 
 ## Data
@@ -904,10 +904,14 @@ gin or Champagne drink, reader taste with avoided genres, and the agent's PairCo
 (verified) and an invented drink (caught, replaced by the paired drinks). In the browser it
 pairs a drink in the book dialog (another pairing, the alcohol-free toggle, the hand-off to
 the recipe), the reading-list cocktail card, the chat starter, and the dialog at phone
-width (screenshots 70-74). `test_evening_e2e.py` plans eight occasions on the real catalogs
-and writes them to `evening-plans.json`, checking that each is complete, within its budget,
-alcohol-free when asked and with a drink the pairer pairs with its book, and that swaps
-work on the real data. In the browser it plans "rainy Sunday in" and "book club,
+width (screenshots 70-74). `test_evening_e2e.py` plans fifteen occasions on the real
+catalogs (among them date night, dinner with my parents, business dinner, kids birthday
+party, family movie night, baby shower, girls' night in, summer garden party and murder
+mystery night) and writes them to `evening-plans.json`, checking that each is complete
+exactly when its outfit is, within its budget, alcohol-free when asked or for kids, family
+and a baby shower, never romantic or glamorous for family, kids or work, with a well-known
+book that carries no excluded shelf and a drink the pairer pairs with it, and that swaps
+work on the real data. A new visit opens on the Plan my evening page. In the browser it plans "rainy Sunday in" and "book club,
 alcohol-free" on the Plan my evening page (another book, Save evening through the approval
 dialog), "date night under €100" in evening chat (a cheaper piece, a SaveEvening approval
 with six parts), an invented drink caught by grounding, and the page at 390 px (screenshots

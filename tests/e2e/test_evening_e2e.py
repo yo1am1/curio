@@ -11,6 +11,8 @@ import httpx
 import pytest
 from playwright.sync_api import expect
 
+from curio.domains.books.taxonomy import EXCLUDED_SHELVES
+from curio.domains.cocktails.recommend import CRUDE_NAMES
 from tests.e2e.conftest import DATA_DIR
 from tests.e2e.test_ui_e2e import visible_photos
 
@@ -20,6 +22,7 @@ pytestmark = pytest.mark.skipif(
 )
 OCCASIONS = [
     {"occasion": "rainy Sunday in"},
+    {"occasion": "date night"},
     {"occasion": "date night under €100"},
     {"occasion": "book club, alcohol-free"},
     {"occasion": "summer garden party", "audience": "women"},
@@ -27,7 +30,28 @@ OCCASIONS = [
     {"occasion": "murder mystery night"},
     {"occasion": "game night with friends"},
     {"occasion": "New Year's Eve party", "budget": 60},
+    {"occasion": "dinner with my parents"},
+    {"occasion": "business dinner"},
+    {"occasion": "kids birthday party"},
+    {"occasion": "family movie night"},
+    {"occasion": "baby shower"},
+    {"occasion": "girls' night in"},
 ]
+# Occasions that must never be romantic or glamorous, and those that must be alcohol-free.
+NEVER_ROMANTIC = {
+    "dinner with my parents",
+    "business dinner",
+    "kids birthday party",
+    "family movie night",
+    "baby shower",
+}
+ALCOHOL_FREE = {
+    "book club, alcohol-free",
+    "dinner with my parents",
+    "kids birthday party",
+    "family movie night",
+    "baby shower",
+}
 
 
 @pytest.fixture(scope="module")
@@ -61,39 +85,74 @@ def paired_drinks(api, result: dict) -> set[int]:
 
 
 def test_real_plans_for_several_occasions(api, artifacts):
+    excluded = set(EXCLUDED_SHELVES)
     table = []
     for body in OCCASIONS:
         result = plan(api, **body)
-        assert result["status"] == "complete", (body, result["missing"])
+        occasion = body["occasion"]
+        assert result["book"] and result["drink"] and result["outfit"], (body, result["missing"])
         outfit = result["outfit"]["outfit"]
+        # The evening is complete exactly when its outfit is.
+        assert result["status"] == ("complete" if outfit["status"] == "complete" else "partial")
         if budget := result["state"]["budget"]:
             assert outfit["total"] <= budget
         drink, book = result["drink"]["cocktail"], result["book"]["book"]
         assert drink["drink_id"] in paired_drinks(api, result), body
+        # Content safety: no sexual or abuse shelf, no crude drink name.
+        assert not set(book["tags"]) & excluded, (occasion, book["title"], book["tags"])
+        assert drink["name"].casefold() not in CRUDE_NAMES, (occasion, drink["name"])
+        if occasion in NEVER_ROMANTIC:
+            assert result["theme"]["id"] not in ("romantic", "glamorous"), occasion
+        if occasion in ALCOHOL_FREE:
+            assert result["state"]["alcohol_free"], occasion
         if result["state"]["alcohol_free"]:
-            assert drink["alcoholic"] == "Non alcoholic"
+            assert drink["alcoholic"] == "Non alcoholic", occasion
+        # Natural evidence ("you mentioned date night"), never "“Date night” mentions …".
+        assert result["theme"]["evidence"] and " mentions " not in result["theme"]["evidence"]
         table.append(
             {
-                "occasion": body["occasion"],
+                "occasion": occasion,
                 "request": body,
                 "theme": result["theme"]["id"],
+                "evidence": result["theme"]["evidence"],
+                "alcohol_free": result["state"]["alcohol_free"],
                 "outfit": [
-                    f"{s['label']}: {s['product']['name']} €{s['product']['price']:.2f}"
+                    f"{s['label']}: {s['product']['display_name']} €{s['product']['price']:.2f}"
                     for s in outfit["slots"]
                     if s["product"]
                 ],
                 "outfit_total": outfit["total"],
-                "book": f"{book['title']} ★{book['average_rating']}",
+                "status": result["status"],
+                "book": f"{book['title']} by {book['authors'][0]} ★{book['average_rating']}",
+                "book_ratings": book["ratings_count"],
                 "drink": f"{drink['name']} ({drink['alcoholic']})",
+                "notes": result["notes"],
                 "why": result["why"],
             }
         )
     (artifacts / "evening-plans.json").write_text(json.dumps(table, indent=2, ensure_ascii=False))
     themes = {row["occasion"]: row["theme"] for row in table}
     assert themes["rainy Sunday in"] == "cosy"
+    assert themes["date night"] == "romantic"
     assert themes["date night under €100"] == "romantic"
     assert themes["book club, alcohol-free"] == "thoughtful"
     assert themes["summer garden party"] == "summery"
+    assert themes["murder mystery night"] == "mysterious"
+    assert themes["kids birthday party"] == "playful"
+    books = {row["occasion"]: row["book"] for row in table}
+    assert books["date night"].startswith("Pride and Prejudice")
+    # Well-known books: an evening reads one at least 100,000 readers rated.
+    assert all(row["book_ratings"] >= 100_000 for row in table), books
+
+
+def test_a_new_visit_opens_on_plan_my_evening_with_the_engine_brand(ui):
+    ui.open()
+    expect(ui.page.get_by_role("heading", name="Plan my evening", exact=True)).to_be_visible()
+    expect(ui.page.get_by_text("TRUSTWORTHY RECOMMENDATION AGENTS")).to_be_visible()
+    ui.click(ui.page.get_by_test_id("stButtonGroup").first.get_by_text("Books"))
+    expect(ui.page.get_by_role("heading", name="Find your next great read.")).to_be_visible()
+    ui.click(ui.page.get_by_test_id("stButtonGroup").first.get_by_text("Evening"))
+    expect(ui.page.get_by_role("heading", name="Plan my evening", exact=True)).to_be_visible()
 
 
 def test_swaps_on_the_real_data(api):
@@ -167,8 +226,7 @@ def test_book_club_alcohol_free_on_the_planner_page(ui):
 
 
 def test_date_night_under_100_in_chat_with_a_swap_and_an_approved_save(ui):
-    ui.open()
-    ui.click(ui.key("domain_switch").locator("button", has_text="Evening"))
+    ui.ask("Evening")
     expect(ui.page.get_by_role("heading", name="Plan my evening.")).to_be_visible()
     ui.send("Plan a date night under €100")
     card = ui.key("chat_evening_home_1")
@@ -192,8 +250,7 @@ def test_date_night_under_100_in_chat_with_a_swap_and_an_approved_save(ui):
 
 
 def test_an_invented_drink_in_an_evening_answer_falls_back(ui):
-    ui.open()
-    ui.click(ui.key("domain_switch").locator("button", has_text="Evening"))
+    ui.ask("Evening")
     ui.send("Plan a murder mystery night, surprise me")
     expect(ui.page.get_by_text("Unverified answer replaced with catalog facts")).to_be_visible()
     expect(ui.page.get_by_text("from the catalogs:", exact=False)).to_be_visible()

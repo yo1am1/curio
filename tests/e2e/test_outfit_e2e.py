@@ -149,7 +149,7 @@ def outfit_cards(ui):
 
 
 def test_outfit_builder_swap_and_save_with_approval(ui):
-    ui.open()
+    ui.ask("Fashion")
     ui.click(ui.key("chat_starter_home_3"))  # "Outfit for an occasion"
     options = ui.page.locator('[class*="st-key-chat_options_home_"] button')
     expect(options).to_have_count(3)

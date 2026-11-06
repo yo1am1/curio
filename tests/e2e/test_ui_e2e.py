@@ -85,7 +85,7 @@ def test_model_quality_page(ui):
 
 
 def test_fashion_agent_search_trace_and_self_correction(ui):
-    ui.open()
+    ui.ask("Fashion")
     ui.send("Black trousers under €30")
     trace = ui.page.get_by_text(re.compile(r"How Curio worked · \d+ actions?"))
     expect(trace.first).to_be_visible()
@@ -103,7 +103,7 @@ def test_fashion_agent_search_trace_and_self_correction(ui):
 
 
 def test_fashion_agent_human_in_the_loop(ui):
-    ui.open()
+    ui.ask("Fashion")
     ui.send("White sneakers")
     ui.click(
         ui.page.locator('[class*="st-key-chat_suggestion_home_1_"]').filter(
@@ -141,7 +141,7 @@ def test_fashion_agent_human_in_the_loop(ui):
 
 
 def test_declined_proposal_changes_nothing(ui):
-    ui.open()
+    ui.ask("Fashion")
     ui.send("Red dress")
     ui.send("Save the first two")
     card = ui.page.locator('[class*="st-key-approval_home_"]').last
@@ -151,7 +151,7 @@ def test_declined_proposal_changes_nothing(ui):
 
 
 def test_personal_picks_from_a_linked_history(ui):
-    ui.open()
+    ui.ask("Fashion")
     ui.click(ui.key("session_shopper_select"))
     ui.click(ui.page.get_by_role("option").nth(1))
     ui.send("Picks from my shopping history")

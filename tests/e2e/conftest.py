@@ -251,6 +251,16 @@ class Driver:
         self.settle()
         return self
 
+    def ask(self, domain: str) -> "Driver":
+        """A new visit, on `domain`'s chat (Ask Curio): a visit opens on Plan my evening, so
+        Evening's chat is one menu click away, and another domain's one switch away."""
+        self.open()
+        if domain == "Evening":
+            self.click(self.page.get_by_role("link", name="Ask Curio"))
+        else:
+            self.click(self.page.get_by_test_id("stButtonGroup").first.get_by_text(domain))
+        return self
+
     def settle(self, timeout: float = 120_000) -> None:
         self.page.wait_for_timeout(600)  # reruns start asynchronously after an interaction
         self.page.wait_for_function(SETTLED, timeout=timeout)
