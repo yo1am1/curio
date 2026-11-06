@@ -5,8 +5,10 @@ The rule:
 1. `curio.engine` is domain-independent. No engine module imports `curio.domains` or
    `curio.app`, at module level or inside a function.
 2. A domain (`curio.domains.<name>`) imports the engine and itself, never `curio.app` and
-   never another domain. The one exception is `pairings`, which is built on two domains and
-   may import `books` and `cocktails`.
+   never another domain. Two composed domains are the exceptions: `pairings`, which is built
+   on two domains and may import `books` and `cocktails`, and `evening` ("Plan my evening"),
+   which composes an outfit, a book and a paired drink and so may import `fashion`, `books`,
+   `cocktails` and `pairings`. No domain may import `evening`.
 3. Everything else belongs to `curio.app`, which may import anything.
 
 A domain that needs another one's feature takes it through an extension point it defines
@@ -22,7 +24,10 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 PACKAGE = SRC / "curio"
 DOMAINS = sorted(p.name for p in (PACKAGE / "domains").iterdir() if (p / "__init__.py").is_file())
 # Domain -> the other domains it may import.
-ALLOWED_DOMAIN_IMPORTS = {"pairings": {"books", "cocktails"}}
+ALLOWED_DOMAIN_IMPORTS = {
+    "pairings": {"books", "cocktails"},
+    "evening": {"fashion", "books", "cocktails", "pairings"},
+}
 
 
 def module_name(path: Path) -> str:
@@ -69,7 +74,7 @@ def test_the_layers_exist():
         "domains",
         "app",
     }
-    assert set(DOMAINS) == {"fashion", "cocktails", "books", "pairings"}
+    assert set(DOMAINS) == {"fashion", "cocktails", "books", "pairings", "evening"}
     assert modules(PACKAGE / "engine")
 
 
@@ -82,6 +87,13 @@ def test_a_domain_imports_the_engine_and_itself_only(domain):
     others = set(DOMAINS) - {domain} - ALLOWED_DOMAIN_IMPORTS.get(domain, set())
     forbidden = ("curio.app", *(f"curio.domains.{other}" for other in sorted(others)))
     assert violations(PACKAGE / "domains" / domain, forbidden) == []
+
+
+def test_only_the_composed_domains_build_on_other_domains():
+    """The exceptions stay exactly these two, and nothing builds on the evening domain."""
+    assert set(ALLOWED_DOMAIN_IMPORTS) == {"pairings", "evening"}
+    for domain in set(DOMAINS) - {"evening"}:
+        assert violations(PACKAGE / "domains" / domain, ("curio.domains.evening",)) == []
 
 
 def test_the_check_sees_relative_and_nested_imports(tmp_path, monkeypatch):
