@@ -9,8 +9,9 @@ the scripted stub in tests/e2e/llm_stub.py was used:
     uv run streamlit run src/curio/app/ui.py
     uv run python -m scripts.capture_readme --out docs/screenshots
 
-`--only books` refreshes just the book screenshots, `--only outfit` the outfit builder and
-`--only pairing` the book → cocktail pairing (books and cocktails both prepared).
+`--only books` refreshes just the book screenshots, `--only outfit` the outfit builder,
+`--only pairing` the book → cocktail pairing (books and cocktails both prepared) and
+`--only evening` Plan my evening (fashion, books and cocktails prepared; no LLM needed).
 Example customer 3 is used for the feed; its default picks all have photos.
 """
 
@@ -30,7 +31,7 @@ parser.add_argument("--executable-path", help="Chromium binary (default: Playwri
 parser.add_argument(
     "--only",
     nargs="+",
-    choices=["fashion", "cocktails", "books", "outfit", "pairing", "phone"],
+    choices=["fashion", "cocktails", "books", "outfit", "pairing", "evening", "phone"],
     help="Capture only these groups (default: all). Books need scripts.prepare_books.",
 )
 ARGS = parser.parse_args()
@@ -302,6 +303,20 @@ def pairing(b) -> None:
     save(p, "curio-pairing")
 
 
+def evening(b) -> None:
+    """Plan my evening: a rainy Sunday in, its theme, why it works and the three cards."""
+    p = desk(b, 1150)
+    p.goto(f"{UI}/evening")
+    settle(p)
+    p.locator(".st-key-evening_occasion_chip button", has_text="Rainy Sunday in").click()
+    settle(p)
+    p.locator(".st-key-evening_plan_button button").click()
+    settle(p)
+    p.locator(".st-key-evening_theme_page").evaluate("el => el.scrollIntoView({block: 'start'})")
+    p.wait_for_timeout(500)
+    save(p, "curio-evening")
+
+
 def phone(b) -> None:
     """Home and feed on a phone."""
     # Phone: home and feed.
@@ -322,6 +337,7 @@ GROUPS = {
     "books": books,
     "outfit": outfit,
     "pairing": pairing,
+    "evening": evening,
     "phone": phone,
 }
 
