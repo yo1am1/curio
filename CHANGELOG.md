@@ -18,8 +18,16 @@ All notable changes to Curio are recorded here. The format follows
   are WebP with transparent corners (`scripts.readme_images`, used by
   `scripts.capture_readme`), about a third smaller than the JPEGs they replace; the overview
   is an animated WebP (1 MB) rather than a 4 MB GIF.
+- CI: `actions/checkout` v5 (Node 24).
 - Removed 22 superseded development screenshots from `docs/screenshots`;
   `scripts.take_screenshots` now writes to `e2e-artifacts/dev-screenshots/` by default.
+
+### Fixed
+
+- CI failed after every check had passed since v1.1.0: the quick-start API step left a
+  `uv run` process in the background holding uv's cache lock, so setup-uv's post-job cache
+  prune timed out after 5 minutes. The step now starts uvicorn from the venv and stops it
+  on exit.
 
 ## [1.2.0] - 2026-11-05
 

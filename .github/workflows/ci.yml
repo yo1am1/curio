@@ -12,7 +12,7 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.11.32"   # same uv as the Dockerfile's 0.11 image; uv.lock is written by it
@@ -30,7 +30,11 @@ jobs:
       # LLM, as on this runner) the API starts, reports each domain and answers fashion with 503.
       - name: API starts with only the cocktail domain
         run: |
-          uv run uvicorn clothes_recommender.api:create_app --factory --port 8000 > api.log 2>&1 &
+          # Start uvicorn from the venv, not `uv run`: a `uv run` left in the background holds
+          # uv's cache lock, so setup-uv's post-job cache prune times out and fails the job.
+          .venv/bin/uvicorn clothes_recommender.api:create_app --factory --port 8000 > api.log 2>&1 &
+          server=$!
+          trap 'kill "$server"' EXIT
           for _ in $(seq 60); do curl -sf localhost:8000/health -o health.json && break; sleep 1; done
           cat api.log
           uv run python - <<'PY'

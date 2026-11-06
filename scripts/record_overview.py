@@ -92,9 +92,7 @@ def scroll_chat_to_last(p) -> None:
 
 
 def tour(p) -> None:
-    # 1. Fashion agent: plan, tools, verified answer.
-    p.goto(UI)
-    settle(p)
+    # 1. Fashion agent: plan, tools, verified answer (main() has loaded the home page).
     caption(p, "Ask in plain words: the agent plans, calls catalog tools and verifies")
     p.wait_for_timeout(1200)
     ask(p, "Black trousers under €30")
@@ -217,6 +215,9 @@ def main() -> None:
         ask(warm, "Black trousers under €30")
         warm.context.close()
         page = browser.new_context(viewport=VIEWPORT).new_page()
+        # Open the home page before recording, so the first frame is the app, not a skeleton.
+        page.goto(UI)
+        settle(page)
         cdp = page.context.new_cdp_session(page)
 
         def on_frame(event: dict) -> None:
