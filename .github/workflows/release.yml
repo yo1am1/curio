@@ -30,7 +30,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       sha: ${{ steps.release.outputs.sha }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Create the release if this version is new
@@ -81,7 +81,7 @@ jobs:
           else
             echo "done=false" >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         if: steps.published.outputs.done == 'false'
         with:
           ref: ${{ needs.release.outputs.sha }}
