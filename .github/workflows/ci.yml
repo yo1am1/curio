@@ -42,7 +42,9 @@ jobs:
 
           health = json.load(open("health.json"))
           enabled = {d["id"]: d["enabled"] for d in health["domains"]}
-          assert enabled == {"fashion": False, "cocktails": True, "books": False}, health
+          assert enabled == {"fashion": False, "cocktails": True, "books": False, "evening": False}, health
+          evening = next(d for d in health["domains"] if d["id"] == "evening")
+          assert "book catalog" in evening["hint"], evening
           assert health["cocktail_count"] == 425 and not health["fashion_enabled"], health
           PY
           test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/products/1)" = 503
