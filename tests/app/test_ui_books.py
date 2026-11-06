@@ -115,7 +115,8 @@ def api(monkeypatch):
                     for b in (KINGS, WIND)]  # fmt: skip
             return httpx.Response(200, json=refs)
         if path == "/books/search":
-            return httpx.Response(200, json=[hit(KINGS, "960 readers who liked it")])
+            hits = state.get("search_hits") or [hit(KINGS, "960 readers who liked it")]
+            return httpx.Response(200, json=hits)
         if path == "/books/because":
             return httpx.Response(200, json=[hit(KINGS, "Because you liked The Name of the Wind")])
         if path == "/books/1":
@@ -508,3 +509,21 @@ def test_reading_list_is_capped(api):
     app.run()
     assert not app.exception
     assert len(app.session_state["book_shortlist"]) == 20
+
+
+def test_cards_and_the_dialog_show_the_author_not_the_illustrator_or_translator(api):
+    _, state = api
+    potter = {**KINGS, "title": "Harry Potter", "authors": ["J.K. Rowling", "Mary GrandPré"]}
+    ove = {**KINGS, "book_id": 4, "title": "A Man Called Ove",
+           "authors": ["Fredrik Backman", "Henning Koch"]}  # fmt: skip
+    state["search_hits"] = [hit(potter), hit(ove)]
+    app = book_app("books_page()").run()
+    app.text_input(key="book_query").set_value("magic")
+    app.button(key="book_search_submit").click().run()
+    assert not app.exception
+    captions = [c.value for c in app.caption]
+    assert "J.K. Rowling" in captions and "Fredrik Backman" in captions
+    assert not any("GrandPré" in c or "Henning Koch" in c for c in captions)
+    state["book_3"] = potter
+    dialog = book_app("book_details(3)").run()
+    assert any(m.value == "by J.K. Rowling" for m in dialog.markdown)

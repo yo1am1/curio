@@ -2889,6 +2889,12 @@ def book_cover(book: dict, width: int | str = "stretch", *, key: str = "") -> No
             st.caption(plain(book["title"]), text_alignment="center")
 
 
+def primary_author(book: dict) -> str:
+    """The book's author for a card or dialog: the first listed, since Goodreads lists
+    illustrators and translators after the author (Harry Potter's "Mary GrandPré")."""
+    return book["authors"][0]
+
+
 def rating_line(book: dict) -> str:
     return f"{book['average_rating']:.2f} · {book['ratings_count']:,} Goodreads ratings"
 
@@ -2925,7 +2931,7 @@ def show_books(
                 book_cover(book, key=f"{context}_book_{bid}_{i}")
                 with st.container(key=f"book_info_{context}_{bid}_{i}", gap=None):
                     st.text(book["title"])
-                    st.caption(plain(", ".join(book["authors"][:2])))
+                    st.caption(plain(primary_author(book)))
                 with st.container(
                     horizontal=True,
                     vertical_alignment="center",
@@ -3152,7 +3158,7 @@ def book_details(book_id: int) -> None:
             book_cover(book, key=f"detail_book_{book_id}")
         with right:
             st.subheader(book["title"], anchor=False)
-            st.markdown(f"by {plain(', '.join(book['authors'][:3]))}")
+            st.markdown(f"by {plain(primary_author(book))}")
             st.badge(rating_line(book), color="violet", icon=":material/star:")
             if facts := book_facts(book):
                 st.caption(facts)

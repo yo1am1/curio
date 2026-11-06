@@ -78,7 +78,7 @@ def render_books(
     for position, b in enumerate(books, start=1):
         facts = [
             f"{position}. [id {b.book_id}] {b.title}",
-            ", ".join(b.authors[:3]),
+            b.author,
             f"★ {b.average_rating:.2f} ({b.ratings_count:,} ratings)",
         ]
         if b.year is not None:

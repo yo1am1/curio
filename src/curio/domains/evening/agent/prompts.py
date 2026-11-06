@@ -82,7 +82,7 @@ def render_plan(plan: EveningPlan) -> str:
     if plan.book is not None:
         b = plan.book.book
         lines.append(
-            f"Book: book #{b.book_id} {b.title} | {', '.join(b.authors[:2])} | "
+            f"Book: book #{b.book_id} {b.title} | {b.author} | "
             f"★ {b.average_rating:.2f} ({b.ratings_count:,} ratings) | genres: "
             f"{', '.join(b.genres) or 'none'} | why: {plan.book.reason}"
         )
