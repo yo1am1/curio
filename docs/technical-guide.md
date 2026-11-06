@@ -193,7 +193,11 @@ outfit needs fashion's CLIP photo index, the rest runs on the book and recipe fi
 | Drink | `BookCocktailPairer` pairs the chosen book (top five, alcohol-free when asked, written in the occasion, remembered, or for a children's or young-adult book; avoided ingredients left out). Among its drinks the first whose ingredients, name or glass use the theme's drink words ("honey", "cinnamon", "hot" for cosy; "champagne", "strawberry" for romantic) suits the evening best, else the pairer's first. When no drink pairs, the next book (up to three) is tried, and the plan notes it; the drink never comes from anywhere but the pairer. |
 | Explain | Each part has its reason (the outfit's look and total against the budget, the book's theme fit, genre and Goodreads rating, the pairer's reasons plus the drink's fit with the evening), and one "why it works" line cites each part's evidence: "Rainy Sunday in → cosy: Osman crew sweater (€24.99) + 2 more, €58.97 in all · The Name of the Wind (fantasy, ★4.55) · Honey Bee (Honey; pairs with fantasy and magic)". |
 
-A budget ("under €100") or "alcohol-free" written in the occasion counts as if given. The
+A budget ("under €100", "up to €99.50", "max €1,500") or "alcohol-free" written in the
+occasion counts as if given; an amount of €0 or over €5,000 is no budget, and the plan says so
+in a note instead of failing ("Planned without a budget: €6,000 is not one Curio can plan
+with…"). In chat, any invalid value an evening tool meets becomes a tool message the model
+can correct, never a failed turn. The
 drink is alcohol-free when the occasion asks for it ("alcohol-free", "sober", "mocktails",
 not when negated: "alcohol-free is boring"), mentions family, or gives a safety reason: a
 pregnancy ("pregnant", "expecting", "baby shower"), a driver ("designated driver",

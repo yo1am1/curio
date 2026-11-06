@@ -312,3 +312,22 @@ def test_the_evening_state_travels_in_the_chat_context():
     )
     assert request.evening == state
     assert TurnContext(auto_approve=["SaveEvening"]).auto_approve == ["SaveEvening"]
+
+
+@pytest.mark.parametrize(
+    ("occasion", "budget"),
+    [
+        ("date night under €0", None),
+        ("gala under €6000", None),
+        ("dinner under €10000", None),
+        ("date night under €99.50", 99.5),
+        ("date night under €5,000", 5000),
+    ],
+)
+def test_a_budget_in_the_occasion_never_crashes_the_plan(client, occasion, budget):
+    response = client.post("/evening/plan", json={"occasion": occasion})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["state"]["budget"] == budget
+    if budget is None:
+        assert body["notes"][0].startswith("Planned without a budget: €")

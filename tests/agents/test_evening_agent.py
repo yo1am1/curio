@@ -344,3 +344,40 @@ def test_saving_unknown_ids_is_a_tool_error(agent):
     reply = assistant.reply("save", [])
     assert tool_results(seen) == ["None of those pieces, books or drinks are in the catalogs."]
     assert reply.status == "complete"
+
+
+# --- Robustness: a bad value is a tool message, never a crashed turn -------------------------
+
+
+@pytest.mark.parametrize(
+    "occasion", ["date night under €0", "gala under €6000", "dinner under €10000"]
+)
+def test_an_out_of_range_budget_in_the_occasion_plans_without_a_budget(agent, occasion):
+    assistant = agent(action("PlanEvening", {"occasion": occasion}), "Here is your evening.")
+    seen = record(assistant)
+    reply = assistant.reply(occasion, [])
+    assert reply.status != "error"
+    plan = reply.evening
+    assert plan is not None and plan.state.budget is None
+    assert plan.notes[0].startswith("Planned without a budget: €")
+    assert "Note: Planned without a budget" in tool_results(seen)[0]
+
+
+def test_a_validation_error_in_an_evening_tool_becomes_a_tool_error(agent, monkeypatch):
+    from pydantic import ValidationError
+
+    from curio.domains.evening.models import EveningState
+
+    assistant = agent(action("PlanEvening", {"occasion": "rainy Sunday in"}), "Sorry.")
+    seen = record(assistant)
+
+    def broken(request):
+        EveningState(occasion="rainy Sunday in", theme="cosy", budget=0)  # ValidationError
+
+    monkeypatch.setattr(assistant._toolkit._planner, "plan", broken)
+    with pytest.raises(ValidationError):
+        broken(None)  # what the planner raised for "under €0" before budgets were checked
+    reply = assistant.reply("Plan a rainy Sunday in", [])
+    [message] = tool_results(seen)
+    assert message.startswith("The evening could not be planned with these values (budget:")
+    assert any(s.name == "PlanEvening" and s.status == "error" for s in reply.steps)

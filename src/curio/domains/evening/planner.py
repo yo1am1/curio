@@ -32,6 +32,7 @@ from curio.domains.books.taxonomy import MOODS, shelf_label
 from curio.domains.cocktails.catalog import CocktailCatalog
 from curio.domains.cocktails.models import Cocktail
 from curio.domains.evening.models import (
+    MAX_BUDGET,
     MAX_SKIPPED_BOOKS,
     MAX_SKIPPED_DRINKS,
     BookPart,
@@ -77,6 +78,7 @@ __all__ = [
     "EveningPlanner",
     "alcohol_free_in",
     "budget_in",
+    "budget_note",
     "resolve_alcohol_free",
     "wants_alcohol_free",
 ]
@@ -103,11 +105,19 @@ BROWSE_CANDIDATES = 40
 # that any candidate reaches applies, so a theme with only niche books still gets one.
 POPULARITY_FLOORS = (100_000, 25_000, 0)
 SEASONS = ("summer", "winter", "autumn", "spring")
+# "under €100", "budget of €99.50", "up to 80 euros", "max €1,500": an amount after a limit
+# word, with the euro sign before it or a euro word after it.
+_AMOUNT = r"(\d[\d,. ]*\d|\d)"
 _BUDGET = re.compile(
-    r"(?:under|below|less than|up to|within|max(?:imum)?|budget(?: of| is)?)\s*€\s?(\d{1,4})"
-    r"|(?:under|below|less than|up to|within|budget(?: of| is)?)\s*(\d{1,4})"
-    r"\s?(?:€|eur\b|euros?\b)",
+    r"(?:under|below|less than|up to|within|max(?:imum)?|budget(?: of| is)?)\s*"
+    rf"(?:€\s?{_AMOUNT}|{_AMOUNT}\s?(?:€|eur\b|euros?\b))",
     re.IGNORECASE,
+)
+_THOUSANDS = re.compile(r"\d{1,3}(?:[, ]\d{3})+(?:\.\d+)?")
+_DECIMAL_COMMA = re.compile(r"\d+,\d{1,2}")
+BUDGET_NOTE = (
+    "Planned without a budget: €{amount} is not one Curio can plan with (an outfit budget is "
+    "over €0 and at most €{limit:,})."
 )
 # Words that ask for an alcohol-free evening, and those that make one alcohol-free for
 # safety (a pregnancy, a driver): explicit `alcohol_free=false` overrides only the first.
@@ -132,9 +142,29 @@ class EveningError(ValueError):
 
 
 def budget_in(text: str) -> float | None:
-    """An outfit budget written in the occasion ("date night under €100")."""
+    """An outfit budget written in the occasion ("date night under €100"), when it is one
+    Curio can plan with (over €0, at most `MAX_BUDGET`)."""
+    return budget_note(text)[0]
+
+
+def budget_note(text: str) -> tuple[float | None, str | None]:
+    """The budget written in `text`, or None with a note when the amount is out of range
+    ("under €0", "under €6,000"): such an amount is no budget, never an error."""
     match = _BUDGET.search(text)
-    return float(match.group(1) or match.group(2)) if match else None
+    if match is None:
+        return None, None
+    raw = (match.group(1) or match.group(2)).strip()
+    if _THOUSANDS.fullmatch(raw):
+        raw = raw.replace(",", "").replace(" ", "")
+    elif _DECIMAL_COMMA.fullmatch(raw):
+        raw = raw.replace(",", ".")
+    try:
+        amount = float(raw.replace(" ", ""))
+    except ValueError:
+        return None, None
+    if not 0 < amount <= MAX_BUDGET:
+        return None, BUDGET_NOTE.format(amount=f"{amount:,g}", limit=MAX_BUDGET)
+    return round(amount, 2), None
 
 
 def alcohol_free_in(text: str) -> tuple[str, str] | None:
@@ -210,7 +240,9 @@ class EveningPlanner:
 
     def plan(self, request: EveningRequest) -> EveningPlan:
         match = detect_theme(request.occasion, request.mood)
-        budget = request.budget if request.budget is not None else budget_in(request.occasion)
+        budget, budget_issue = (
+            (request.budget, None) if request.budget is not None else budget_note(request.occasion)
+        )
         audience = request.audience or audience_of(request.occasion)
         alcohol_free, alcohol_note = resolve_alcohol_free(
             f"{request.occasion} {request.mood or ''}", request.alcohol_free
@@ -227,7 +259,7 @@ class EveningPlanner:
         outfit, outfit_issue = self._build_outfit(state, match.theme, tastes)
         state = state.model_copy(update={"outfit": outfit.state if outfit else None})
         plan = self._compose(state, match, tastes, outfit, outfit_issue)
-        notes = [note for note in (alcohol_note,) if note]
+        notes = [note for note in (budget_issue, alcohol_note) if note]
         return plan.model_copy(update={"notes": [*notes, *plan.notes]}) if notes else plan
 
     def restore(self, state: EveningState, tastes: EveningTastes | None = None) -> EveningPlan:

@@ -15,7 +15,7 @@ from collections.abc import Generator, Iterator, Mapping, Sequence
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from curio.domains.books.catalog import BookCatalog
 from curio.domains.books.models import Book
@@ -176,15 +176,18 @@ class EveningToolkit:
     ) -> Generator[AgentStep, None, tuple[str, AgentStep]]:
         context: EveningContext = turn.context
         tastes = _tastes(context)
-        request = EveningRequest(
-            occasion=action.occasion,
-            budget=action.budget,
-            audience=action.audience or _audience(context),
-            mood=action.mood,
-            alcohol_free=action.alcohol_free,
-            **tastes.model_dump(),
-        )
-        plan = self._planner.plan(request)
+        try:
+            request = EveningRequest(
+                occasion=action.occasion,
+                budget=action.budget,
+                audience=action.audience or _audience(context),
+                mood=action.mood,
+                alcohol_free=action.alcohol_free,
+                **tastes.model_dump(),
+            )
+            plan = self._planner.plan(request)
+        except ValidationError as error:
+            raise ToolError(_invalid(error)) from error
         yield AgentStep(
             kind="plan",
             name="Evening theme",
@@ -219,6 +222,8 @@ class EveningToolkit:
             )
         except EveningError as error:
             raise ToolError(str(error)) from error
+        except ValidationError as error:
+            raise ToolError(_invalid(error)) from error
         # What was swapped out stays citable ("instead of …").
         turn.remember(_items(current))
         self._show(turn, plan)
@@ -394,6 +399,14 @@ class EveningToolkit:
         else:
             parts.append("no evening is planned yet")
         return ". ".join(parts) + "."
+
+
+def _invalid(error: ValidationError) -> str:
+    """A tool message for values the planner cannot use, instead of a crashed turn."""
+    problems = "; ".join(
+        f"{'.'.join(map(str, e['loc'])) or 'value'}: {e['msg']}" for e in error.errors()[:3]
+    )
+    return f"The evening could not be planned with these values ({problems}). Change them."
 
 
 def _tastes(context: EveningContext) -> EveningTastes:
