@@ -30,9 +30,9 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
-from curio.chat.llm import build_chat_model
-from curio.config import get_settings
-from curio.embeddings import ClipEncoder
+from curio.app.config import get_settings
+from curio.domains.fashion.embeddings import ClipEncoder
+from curio.engine.llm import build_chat_model
 from scripts.shopify_enrichment import CATEGORY_MAPPING_PATH
 
 SHOPIFY_TAXONOMY_VERSION = "2026-05"

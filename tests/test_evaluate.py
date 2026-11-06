@@ -7,8 +7,8 @@ import pandas as pd
 import pytest
 from qdrant_client import QdrantClient
 
-from curio.domain import ScoredProduct
-from curio.vector_store import ProductVectorStore
+from curio.domains.fashion.models import ScoredProduct
+from curio.domains.fashion.vector_store import ProductVectorStore
 from scripts import evaluate
 
 
@@ -51,7 +51,7 @@ def prepared_evaluation(tmp_path, sample_products, monkeypatch):
 
     monkeypatch.setitem(
         sys.modules,
-        "curio.recommenders.graph",
+        "curio.domains.fashion.recommenders.graph",
         SimpleNamespace(GraphRecommender=Graph),
     )
     return tmp_path, seen
@@ -255,7 +255,7 @@ def test_explicit_validation_window_ignores_later_purchases():
 def test_ranker_artifact_cannot_have_seen_holdout_labels(prepared_evaluation):
     from datetime import date
 
-    from curio.recommenders.learned import FEATURES, RankerModel
+    from curio.domains.fashion.recommenders.learned import FEATURES, RankerModel
 
     data_dir, _ = prepared_evaluation
     model = RankerModel(

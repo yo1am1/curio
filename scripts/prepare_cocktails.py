@@ -31,13 +31,13 @@ from tempfile import NamedTemporaryFile
 import httpx
 import pandas as pd
 
-from curio.cocktails.catalog import (
+from curio.app.config import get_settings
+from curio.domains.cocktails.catalog import (
     ALCOHOL_VALUES,
     COLUMNS,
     ingredient_key,
     trusted_image_url,
 )
-from curio.config import get_settings
 
 SOURCE_COMMIT = "92e05ae48b3f2af9f62ca5fdcd23b7b7c2f3fba6"
 DEFAULT_SOURCE = (

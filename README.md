@@ -198,7 +198,12 @@ offline: no model, no download.
 
 ## Under the hood
 
-Streamlit UI → FastAPI → a shared agent engine with one toolkit per domain.
+Streamlit UI → FastAPI → a shared agent engine with one toolkit per domain. The code has
+three layers: `curio.engine` (the loop, policies, signed proposals and grounding; it imports
+no domain), `curio.domains` (fashion, cocktails, books and the book → drink pairing, each
+with its own agent package) and `curio.app` (settings, the domain registry, the API and the
+UI). [`examples/hello_domain`](examples/hello_domain) is a complete small domain on the same
+engine.
 Fashion uses CLIP search, Qdrant, purchase-based recommenders and a learned ranker.
 Cocktails use an in-memory TF-IDF and ingredient-overlap recommender, and books an
 in-memory TF-IDF search plus item-item collaborative filtering precomputed from goodbooks-10k
@@ -250,8 +255,8 @@ index](docs/technical-guide.md#fashion-data), then run the full stack:
 ```bash
 uv sync --all-extras
 cp .env.example .env
-uv run uvicorn curio.api:create_app --factory
-uv run streamlit run src/curio/ui.py     # in a second terminal
+uv run uvicorn curio.app.api:create_app --factory
+uv run streamlit run src/curio/app/ui.py     # in a second terminal
 ```
 
 With Docker, `docker compose --profile fashion up --build` starts it. Every domain is

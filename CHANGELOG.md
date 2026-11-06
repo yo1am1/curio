@@ -13,6 +13,19 @@ All notable changes to Curio are recorded here. The format follows
   Compose services, `scripts/quickstart.sh` and CI use the new name. The PyPI project stays
   `curio-recommendations`. A small `curio.meta` shim keeps sniffio (anyio, httpx) from
   mistaking this package for the Curio async library, which shares the import name.
+- **Three layers instead of one `chat/` package.** `curio.engine` holds the domain-independent
+  agent: `AgentEngine`, the `Toolkit` protocol, policies and `AskShopper`, signed proposals,
+  the generic grounding helpers, the chat model factory and the shared wire models.
+  `curio.domains.{fashion,cocktails,books,pairings}` each hold their catalog and
+  recommenders beside an `agent/` package (toolkit, tools, prompts, grounding, session
+  schemas). `curio.app` holds settings, the domain registry, the `/chat` wire models
+  (`app/schemas.py`), the assistants, the API, the UI and the demo data. The engine imports no
+  domain, and no domain imports another except `pairings` (books and cocktails); PairCocktail
+  reaches the book agent through a `DrinkPairing` extension point. Each domain declares its
+  own context fields and approved effects (`FashionEffect`, `CocktailEffect`, `BookEffect`),
+  so the engine no longer lists every domain's fields. Routes and JSON replies are unchanged;
+  the OpenAPI schema now describes `applied` effects as one schema per domain.
+- Tests mirror the layout: `tests/agents`, `tests/app` and `tests/domains/<domain>`.
 
 ### Fixed
 

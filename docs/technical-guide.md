@@ -39,7 +39,7 @@ everyone else accessible, and offline evaluation scores all eligible customers.
 
 ### Outfit builder
 
-`src/curio/outfits.py` holds the planner, used by the agent's `BuildOutfit` and
+`src/curio/domains/fashion/outfits.py` holds the planner, used by the agent's `BuildOutfit` and
 `SwapOutfitItem` tools and by `POST /outfits` and `POST /outfits/swap`.
 
 1. **Plan.** The occasion text picks a template by keyword (wedding, office, party, beach,
@@ -104,7 +104,7 @@ shoe type.
 
 The cocktail domain serves 425 recipes from `data/cocktails.parquet`, in memory, with no
 model, index or network call at serving time. `CocktailRecommender`
-(`cocktails/recommend.py`) is deterministic, and ties go to the lower drink ID.
+(`domains/cocktails/recommend.py`) is deterministic, and ties go to the lower drink ID.
 
 | Feature | How it works |
 |---|---|
@@ -124,7 +124,7 @@ and every interface are in the [multi-domain contract](multidomain-contract.md).
 The book domain serves the 10,000 most-rated Goodreads books of
 [goodbooks-10k](https://github.com/zygmuntz/goodbooks-10k), in memory, with numpy and scipy
 only: no model, index or network call at serving time. `BookRecommender`
-(`books/recommend.py`) is deterministic, and ties go to the lower book ID (goodbooks-10k
+(`domains/books/recommend.py`) is deterministic, and ties go to the lower book ID (goodbooks-10k
 numbers books by popularity). It loads in about 2 seconds.
 
 | Feature | How it works |
@@ -134,7 +134,7 @@ numbers books by popularity). It loads in about 2 seconds.
 | Readers also liked | Item-item collaborative filtering precomputed by `prepare_books` from ~6 M ratings: "liked" is 4 or 5 stars, and the score is an asymmetric cosine `c / (n_i^0.35 · n_j^0.65)` (c readers liked both; n readers liked each), which damps blockbusters every reader liked, shrunk by `c / (c + 10)`; pairs with fewer than 5 shared readers are dropped and each book keeps its 50 best. Books with few links are topped up by shelf similarity. Reasons name the shared readers ("960 readers who liked The Name of the Wind also liked this") and the link (same series, author or shelves). |
 | Because you liked… | The neighbour scores of several liked books, summed; the seeds and their series are left out and each author appears at most twice. |
 | More by this author | The author's books, most rated first, with their series position. |
-| Browse by genre and mood | 30 genres mapped from reader shelves (`books/taxonomy.py`), and nine moods (Cosy, Dark, Funny, Romantic, Thought-provoking, Adventurous, Emotional, Epic, Short reads) defined by shelves and, for short reads, a 200-page limit. Books rank by how high the mood's shelf sits among their shelves, times the quality prior. |
+| Browse by genre and mood | 30 genres mapped from reader shelves (`domains/books/taxonomy.py`), and nine moods (Cosy, Dark, Funny, Romantic, Thought-provoking, Adventurous, Emotional, Epic, Short reads) defined by shelves and, for short reads, a 200-page limit. Books rank by how high the mood's shelf sits among their shelves, times the quality prior. |
 | Book agent | The shared agent engine with book tools: SearchBooks, InspectBooks, ReadersAlsoLiked, BooksByAuthor, SaveBooks and RememberReadingTastes. See [agent architecture](agent-architecture.md). |
 
 Ratings are Goodreads averages over all Goodreads readers; the neighbour links come from the
@@ -160,12 +160,12 @@ page count. Probes on the real data, run with `prepare_books` output:
 
 ## Book → cocktail pairing
 
-`pairings/` pairs a book, or a reader's taste, with drinks from the recipe catalog. It is
+`domains/pairings/` pairs a book, or a reader's taste, with drinks from the recipe catalog. It is
 deterministic and offline: no model, no download, about a second to build at startup.
 
 | Step | How it works |
 |---|---|
-| Profile | A book's signals point to flavour themes (`pairings/themes.py`): each genre by rank (1.0, 0.8, 0.6, 0.5), each reader shelf by rank (0.5 fading to about 0.13) and title (0.6) or description (0.4) words such as a setting (Paris, Caribbean, Tuscany, Moscow) or an era (Jazz Age, Victorian), capped per theme. Broad themes weigh less (Classics ×0.6, literary ×0.7, historical ×0.75, adventure ×0.8). Shares below 10 % are dropped and at most four themes kept. Reader taste sums each reading-list book's shares, plus one book's worth per liked genre. |
+| Profile | A book's signals point to flavour themes (`domains/pairings/themes.py`): each genre by rank (1.0, 0.8, 0.6, 0.5), each reader shelf by rank (0.5 fading to about 0.13) and title (0.6) or description (0.4) words such as a setting (Paris, Caribbean, Tuscany, Moscow) or an era (Jazz Age, Victorian), capped per theme. Broad themes weigh less (Classics ×0.6, literary ×0.7, historical ×0.75, adventure ×0.8). Shares below 10 % are dropped and at most four themes kept. Reader taste sums each reading-list book's shares, plus one book's worth per liked genre. |
 | Avoided genres | Their genre labels and their shelves (`books.taxonomy.GENRES`) are dropped, and a theme whose main genre is avoided (Horror for "Horror and gothic") is switched off, so an avoided genre never drives a pairing. |
 | Score | Each theme scores every recipe with the cocktail search index (`CocktailRecommender.term_scores`: TF-IDF cosine of weighted words), counted only when the recipe's ingredients or name use those words, plus a bonus for its signature drinks (most typical first) and glasses. A recipe's score is the profile-weighted sum, plus a bonus for a documented literary drink of the book's author (`LORE`: the Vesper for Ian Fleming, gin rickeys and mint juleps for F. Scott Fitzgerald, the Hemingway daiquiri and Death in the Afternoon, Chandler's gimlet). |
 | Choose | The pool is the recipes scoring at least 30 % of the best, at most four sets' worth. Sets are drawn greedily: a pick sharing a base spirit (×0.7), a theme (×0.75), a name word or most ingredient families (×0.5) with an earlier pick of its set ranks lower. `seed` picks set `seed mod sets`, so "Another pairing" is deterministic; the agent passes the drinks already shown instead. |
@@ -173,7 +173,7 @@ deterministic and offline: no model, no download, about a second to build at sta
 | Responsible drinking | A book whose genres or reader shelves say children's or young adult, `alcohol_free`, or an alcohol-free `cocktail_preferences` keep only recipes marked "Non alcoholic" (alcohol-free styles then describe what is poured: "a drawing-room cup of tea", not gin). Shots, drinks named as slammers or flaming, overproof spirits and crude names are never offered; avoided ingredients are left out with search's broad matching. Pairings make no health or allergen claims. |
 
 When no allowed recipe fits (an alcohol-free profile that avoids milk, say), the result is
-empty rather than a drink without a reason. `tests/pairings/test_pairing_real_data.py`
+empty rather than a drink without a reason. `tests/domains/pairings/test_pairing_real_data.py`
 checks the golden cases on the real data; the E2E suite writes the top three pairings of 14
 famous books to `e2e-artifacts/pairings.json`.
 
@@ -367,25 +367,31 @@ flowchart LR
 
 ```
 src/curio/
-├── config.py          # Settings from env / .env (pydantic-settings)
-├── domain.py          # Product, User, Purchase, ProductFilter, Encoder protocol
-├── catalog.py         # Product catalog + customer data access
-├── embeddings.py      # CLIP encoder (lazy-loaded)
-├── vector_store.py    # Qdrant wrapper: upsert, filtered search, vector lookup
-├── search.py          # Text and image search
-├── outfits.py         # Outfit builder: occasion templates, budget allocation, swaps
-├── recommenders/      # learned, repeat, content_based, collaborative, graph, popularity
-├── cocktails/         # domain (types), catalog, recommend (search, similar, pantry)
-├── pairings/          # book → cocktail pairing: domain (types), themes, pairer
-├── books/             # domain (types), catalog, taxonomy (genres, moods, shelves),
-│                      # recommend (search, readers also liked, because, by author)
-├── chat/              # engine (shared agent loop), llm, intent, prompts, schemas,
-│                      # guardrails (grounding, signed proposals), tools + assistant
-│                      # (fashion), cocktail_tools + cocktail_agent (cocktails),
-│                      # book_tools + book_agent (books), navigator (recommender bridge)
-├── services.py        # Composition root
-├── api.py             # FastAPI app
-└── ui.py              # Streamlit client
+├── engine/               # Domain-independent: imports no domain and not the app
+│   ├── agent.py          # AgentEngine: plan, bounded tool loop, approvals, verify, fallback
+│   ├── toolkit.py        # The Toolkit protocol a domain implements, Turn, ToolError
+│   ├── tools.py          # Policy (READ / ASK / APPROVE) and the shared AskShopper tool
+│   ├── schemas.py        # AgentStep, Intent, PendingAction, AppliedEffect, AssistantReply…
+│   ├── signing.py        # ActionSigner (HMAC proposals), narrow_args
+│   ├── grounding.py      # Price and ID checks, name matching, GroundingReport merging
+│   ├── llm.py            # Chat model factory for any LangChain provider
+│   └── data.py           # DataFileMissingError, shared by every catalog loader
+├── domains/              # Each imports the engine and itself only (pairings: + books, cocktails)
+│   ├── fashion/          # models, catalog, embeddings, vector_store, search, outfits,
+│   │   │                 # navigator (recommender bridge), recommenders/
+│   │   └── agent/        # toolkit, tools, intent, prompts, grounding, schemas
+│   ├── cocktails/        # models, catalog, recommend (search, similar, pantry), agent/
+│   ├── books/            # models, catalog, taxonomy, recommend, agent/
+│   └── pairings/         # models, themes, pairer; agent/ (PairCocktail, PairedDrinkCheck)
+└── app/                  # Composition: settings, wire format, assistants, API, UI
+    ├── config.py         # Settings from env / .env (pydantic-settings)
+    ├── schemas.py        # The /chat wire models: the engine's plus every domain's payloads
+    ├── assistants.py     # ShoppingAssistant, CocktailAssistant, BookAssistant
+    ├── services.py       # Composition root and domain registry
+    ├── demo.py           # Demo customers
+    ├── api.py            # FastAPI app
+    └── ui.py, ui.css     # Streamlit client
+examples/hello_domain/    # A complete teas domain on the engine, in one file (teas.py)
 scripts/prepare_data.py # Sample the H&M Kaggle archive (or its unzipped CSVs) into data/
 scripts/fetch_photos.py # Download the sampled products' photos from the mirror
 scripts/fetch_query_photos.py # Example image-search photos of garments outside the catalog
@@ -399,7 +405,7 @@ scripts/take_screenshots.py # Development captures of every page with Playwright
 
 ### Domain registry
 
-Each domain is one `DomainSpec` in `services.DOMAINS` (display order): its id, label, a
+Each domain is one `DomainSpec` in `app.services.DOMAINS` (display order): its id, label, a
 setup hint and a loader. `build_services` runs every loader; a loader returns `None` while
 its data is missing (fashion: `products`, `users` and `purchases.parquet`; cocktails:
 `cocktails.parquet`; books: `books.parquet` and `book_neighbours.parquet`), so that domain
@@ -419,7 +425,7 @@ From that registry, without per-domain code:
   FastAPI dependency per domain (`FashionDep`, `CocktailsDep`, `BooksDep`).
 - `POST /chat` routes by `ChatRequest.domain` to that runtime's assistant.
 
-The UI mirrors this with `DOMAIN_VIEWS` in `ui.py`: one `DomainView` per domain (switch
+The UI mirrors this with `DOMAIN_VIEWS` in `app/ui.py`: one `DomainView` per domain (switch
 label, copy, session-state keys, grounding badges, approval tools, pages, session panel,
 chat-request fields, footer). It reads availability from `/health`, registers only the
 pages of served domains, opens on the first served domain, and shows a setup page when the
@@ -431,8 +437,8 @@ even when other data is present; an unknown id fails startup. Unset, every prepa
 loads.
 
 Books were added this way, which is the recipe for the next domain: its catalog and
-recommender (`books/`), a runtime dataclass and a loader in `services.py`, a `DomainSpec`
-appended to `DOMAINS`, its id in `chat.schemas.Domain`, its endpoints behind a `BooksDep`
+recommender (`domains/books/`), a runtime dataclass and a loader in `app/services.py`, a
+`DomainSpec` appended to `DOMAINS`, its id in `app.schemas.Domain`, its endpoints behind a `BooksDep`
 dependency, and a `DomainView` with its pages in `DOMAIN_VIEWS`. Its agent is a `Toolkit` for
 the shared engine ([agent architecture](agent-architecture.md)). The shared parts needed
 only data-driven additions: the domain's approval tools in `ApprovalTool`, its context
@@ -544,8 +550,8 @@ Then build the image index, fetch a few example photos for image search, and sta
 uv run python -m scripts.build_index                   # all products: ~5 min at 50 img/s on 4 CPU cores
 uv run python -m scripts.fetch_query_photos --articles data/raw/articles.csv
 uv run python -m scripts.evaluate --qdrant-path .qdrant --output data/evaluation.json
-uv run uvicorn curio.api:create_app --factory --reload   # http://localhost:8000/docs
-uv run streamlit run src/curio/ui.py     # http://localhost:8501
+uv run uvicorn curio.app.api:create_app --factory --reload   # http://localhost:8000/docs
+uv run streamlit run src/curio/app/ui.py     # http://localhost:8501
 ```
 
 To enable the learned ranking shown in the screenshots, train its optional model
@@ -848,13 +854,13 @@ The offline suite covers fashion-less serving in `tests/test_optional_domains.py
 `Settings` over a temporary data folder; CLIP and Qdrant fail the test if touched) and the
 UI's cocktails-only, no-domain and legacy-API cases in `tests/test_ui_cocktails.py`. Books
 have their own offline tests over a ten-book fixture (`tests/conftest.py`): the catalog,
-taxonomy and recommender in `tests/books/`, `scripts.prepare_books` over a miniature
+taxonomy and recommender in `tests/domains/books/`, `scripts.prepare_books` over a miniature
 goodbooks-10k checkout in `tests/test_prepare_books.py`, the agent and its grounding in
-`tests/chat/test_book_agent.py`, loading and endpoints in `tests/test_books_api.py`, and
+`tests/agents/test_book_agent.py`, loading and endpoints in `tests/test_books_api.py`, and
 the UI in `tests/test_ui_books.py`. CI does not download goodbooks-10k. The outfit builder is
 covered by planner tests over a 13-product fixture (`tests/test_outfits.py`: plans, budget
 allocation, infeasible budgets, co-purchase and visual preference, swaps), agent tests with
-a scripted model (`tests/chat/test_outfit_agent.py`), API tests in `tests/test_api.py` and
+a scripted model (`tests/agents/test_outfit_agent.py`), API tests in `tests/test_api.py` and
 UI tests in `tests/test_ui_agent.py`.
 
 ### Release scope and compatibility

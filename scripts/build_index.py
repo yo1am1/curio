@@ -15,11 +15,11 @@ from pathlib import Path
 from PIL import Image
 from tqdm import tqdm
 
-from curio.catalog import ProductCatalog
-from curio.config import get_settings
-from curio.domain import Encoder, Product
-from curio.embeddings import ClipEncoder
-from curio.vector_store import ProductVectorStore
+from curio.app.config import get_settings
+from curio.domains.fashion.catalog import ProductCatalog
+from curio.domains.fashion.embeddings import ClipEncoder
+from curio.domains.fashion.models import Encoder, Product
+from curio.domains.fashion.vector_store import ProductVectorStore
 
 logger = logging.getLogger(__name__)
 

@@ -12,10 +12,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from curio.catalog import CustomerData
-from curio.recommenders.learned import FEATURES, PROVENANCE_FEATURES, fit
-from curio.recommenders.popularity import PopularityRecommender
-from curio.recommenders.repeat import RepeatPurchaseRecommender
+from curio.domains.fashion.catalog import CustomerData
+from curio.domains.fashion.recommenders.learned import FEATURES, PROVENANCE_FEATURES, fit
+from curio.domains.fashion.recommenders.popularity import PopularityRecommender
+from curio.domains.fashion.recommenders.repeat import RepeatPurchaseRecommender
 from scripts.compare_retrieval import (
     CHANNELS,
     CandidateRows,

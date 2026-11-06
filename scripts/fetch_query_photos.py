@@ -18,7 +18,7 @@ from pathlib import Path
 import httpx
 import pandas as pd
 
-from curio.config import get_settings
+from curio.app.config import get_settings
 from scripts.fetch_photos import atomic_write, download_photo
 
 # Product groups whose photos show one recognisable garment. Accessories and

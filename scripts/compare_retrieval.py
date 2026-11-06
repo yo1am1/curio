@@ -16,16 +16,16 @@ from time import perf_counter
 import numpy as np
 import pandas as pd
 
-from curio.catalog import CustomerData, ProductCatalog
-from curio.recommenders.collaborative import CollaborativeRecommender
-from curio.recommenders.learned import (
+from curio.domains.fashion.catalog import CustomerData, ProductCatalog
+from curio.domains.fashion.recommenders.collaborative import CollaborativeRecommender
+from curio.domains.fashion.recommenders.learned import (
     FEATURES,
     PROVENANCE_FEATURES,
     LearnedRecommender,
     fit,
 )
-from curio.recommenders.popularity import PopularityRecommender
-from curio.recommenders.repeat import RepeatPurchaseRecommender
+from curio.domains.fashion.recommenders.popularity import PopularityRecommender
+from curio.domains.fashion.recommenders.repeat import RepeatPurchaseRecommender
 from scripts.evaluate import TOP_K, chronological_split, paired_map_gain, ranking_metrics
 from scripts.fetch_photos import atomic_write
 from scripts.retrieval_channels import ComplementaryRetrieval

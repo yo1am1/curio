@@ -8,9 +8,9 @@ import pytest
 from PIL import Image
 from qdrant_client import QdrantClient
 
-from curio.catalog import ProductCatalog
-from curio.domain import ProductFilter
-from curio.vector_store import ProductVectorStore
+from curio.domains.fashion.catalog import ProductCatalog
+from curio.domains.fashion.models import ProductFilter
+from curio.domains.fashion.vector_store import ProductVectorStore
 from scripts import build_index
 
 

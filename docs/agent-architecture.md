@@ -6,14 +6,31 @@ the recommendation system and the earlier assistant that led to this design.
 
 ## One engine, three toolkits
 
-The loop lives once, in `chat/engine.py` (`AgentEngine`). Each domain plugs in a
-`Toolkit`: its tool schemas and policies, planning, how READ tools run, how APPROVE
-effects are validated, the grounding check, the deterministic fallback and the reply
-fields.
+The loop lives once, in `curio.engine` (`engine/agent.py`, `AgentEngine`). Each domain
+plugs in a `Toolkit` (`engine/toolkit.py`): its tool schemas and policies, planning, how
+READ tools run, how APPROVE effects are validated, the grounding check, the deterministic
+fallback and the reply fields.
+
+The code has three layers, and `tests/test_architecture.py` enforces their boundaries:
+
+- `curio.engine`: the loop, the `Toolkit` protocol, policies and the shared `AskShopper`,
+  signed proposals (`ActionSigner`, `narrow_args`), the generic grounding machinery (price and
+  ID checks, name matching, `merge_reports`), the chat model factory and the wire models every
+  turn shares. It imports no domain and not the app.
+- `curio.domains.<name>`: a domain's catalog and recommenders beside its `agent/` package
+  (toolkit, tools, prompts, grounding check and session schemas: its context fields, card IDs
+  and approved effects). A domain imports the engine and itself; only `pairings` builds on
+  `books` and `cocktails`.
+- `curio.app`: settings, the domain registry, the API and the UI. `app/schemas.py` combines
+  every domain's payloads into the one `/chat` wire format, and `app/assistants.py` binds
+  each toolkit to the engine with it (`Schemas`).
+
+[`examples/hello_domain`](../examples/hello_domain) is a complete small domain on the same
+engine, without the app.
 
 | | Fashion (`ShoppingAssistant`) | Cocktails (`CocktailAssistant`) | Books (`BookAssistant`) |
 |---|---|---|---|
-| Toolkit | `chat/assistant.py`, `chat/tools.py` | `chat/cocktail_agent.py`, `chat/cocktail_tools.py` | `chat/book_agent.py`, `chat/book_tools.py` |
+| Toolkit | `domains/fashion/agent/` | `domains/cocktails/agent/` | `domains/books/agent/`; PairCocktail from `domains/pairings/agent/` |
 | Planning | Structured `SearchIntent` from the LLM, then an initial catalog search | The message is the query; no extra model call before the tool loop | As cocktails |
 | Grounding | Euro amounts (including outfit totals) and product IDs | Drink IDs, catalog drink names and recipe amounts | Book IDs, catalog titles and Goodreads ratings; paired drinks' numbers, names and amounts |
 | Reply items | `products` | `cocktails` | `books`; a pairing's drinks in `cocktails` and `pairing` |
@@ -22,7 +39,7 @@ The engine owns everything shared: the tool-call and time budgets, policy enforc
 signed proposals and resume, clarifying questions, merging approved effects into the
 turn, the self-correction step, the streamed trace and the error mapping. `POST /chat`
 picks the assistant by `ChatRequest.domain` (default `fashion`) from the loaded domains in
-the domain registry (`services.DOMAINS`, see the
+the domain registry (`app.services.DOMAINS`, see the
 [technical guide](technical-guide.md#domain-registry)). Every domain is optional: a request
 for a domain the server does not serve gets 503 with how to prepare it, and a served domain
 without an LLM gets 503 saying how to enable chat. Every assistant is built once at startup
@@ -31,11 +48,15 @@ to its tool's domain but verifies on any. A new domain's assistant is a `Toolkit
 same engine, built by its loader from that kit.
 
 Books were the test of that claim. The book toolkit needed no change to the loop, budgets,
-signing, resume, grounding flow, streaming or UI chat code. The shared schemas only gained
-data: the book approval tools in `ApprovalTool`, `book_preferences` and `book_shortlist` on
-`TurnContext`, two `AppliedEffect` kinds, and one entry each in the engine's tables that
-say which context field an approved effect updates (`_MEMORY_EFFECTS`,
-`_SHORTLIST_EFFECTS`).
+signing, resume, grounding flow, streaming or UI chat code. The book domain declares its own
+session fields (`book_preferences`, `book_shortlist` on `BookContext`), card IDs and approved
+effects (`BookEffect`, which names the context field each effect field updates); the app adds
+them to its wire models and the book approval tools to `ApprovalTool`.
+
+The book → drink pairing is the one cross-domain feature. The book toolkit registers
+PairCocktail and exposes a `DrinkPairing` extension point; the pairings domain implements it
+(`CocktailPairing`) with the pairer and `PairedDrinkCheck`, and the app plugs it in when both
+books and cocktails are served. So `books` never imports `cocktails` or `pairings`.
 
 ## One turn
 
@@ -93,7 +114,7 @@ pages show ("3 shoppers who bought … also bought this"), so explanations stay 
 #### Outfits: multi-step planning with human approval
 
 "Build me a summer outfit for a wedding under €80" is one `BuildOutfit` call. The planner
-(`outfits.py`, described in the [technical guide](technical-guide.md#outfit-builder)) plans
+(`domains/fashion/outfits.py`, described in the [technical guide](technical-guide.md#outfit-builder)) plans
 slots from the occasion (a women's wedding: dress, shoes, bag, accessory), searches each
 slot's candidates with CLIP restricted to its product types and the audience's sections,
 checks that the cheapest pieces fit the budget, then fills the slots in order. Each slot may
