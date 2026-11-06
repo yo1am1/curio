@@ -9,9 +9,9 @@ import pytest
 from PIL.Image import Image
 from qdrant_client import QdrantClient
 
-from clothes_recommender.catalog import ProductCatalog
-from clothes_recommender.domain import Product
-from clothes_recommender.vector_store import ProductVectorStore
+from curio.domains.fashion.catalog import ProductCatalog
+from curio.domains.fashion.models import Product
+from curio.domains.fashion.vector_store import ProductVectorStore
 
 
 class FakeEncoder:
@@ -201,7 +201,7 @@ def cocktail_frame(rows=None):
 
 @pytest.fixture
 def cocktail_catalog():
-    from clothes_recommender.cocktails.catalog import CocktailCatalog
+    from curio.domains.cocktails.catalog import CocktailCatalog
 
     return CocktailCatalog(cocktail_frame())
 
@@ -290,21 +290,21 @@ def book_neighbours_frame():
 
 @pytest.fixture
 def book_catalog():
-    from clothes_recommender.books.catalog import BookCatalog
+    from curio.domains.books.catalog import BookCatalog
 
     return BookCatalog(book_frame())
 
 
 @pytest.fixture
 def book_recommender(book_catalog):
-    from clothes_recommender.books.recommend import BookRecommender
+    from curio.domains.books.recommend import BookRecommender
 
     return BookRecommender(book_catalog, book_neighbours_frame())
 
 
 def serve(fashion=None, cocktails=None, books=None, *, llm_configured: bool = False):
     """`Services` holding the given domain runtimes; a None domain is not served."""
-    from clothes_recommender.services import Services
+    from curio.app.services import Services
 
     domains = {"fashion": fashion, "cocktails": cocktails, "books": books}
     return Services(
@@ -384,7 +384,7 @@ class OutfitSearch:
         self.queries: list[tuple[str, object]] = []
 
     def by_text(self, query: str, top_k: int = 10, product_filter=None):
-        from clothes_recommender.domain import ScoredProduct
+        from curio.domains.fashion.models import ScoredProduct
 
         self.queries.append((query, product_filter))
         words = set(query.lower().split())

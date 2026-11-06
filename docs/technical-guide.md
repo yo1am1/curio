@@ -37,9 +37,24 @@ their main product group, and a purchase with co-purchased complements for the g
 recommenders' output; nothing is tuned for these customers. "Browse all customers" keeps
 everyone else accessible, and offline evaluation scores all eligible customers.
 
+**Display names.** H&M names carry merchandising codes and capitals ("PQ BOSTON SILK
+SKIRT", "Flirty Mysan ring pk.", "Nora dress(1)", "Maxi tansitional boot").
+`fashion/names.display_name` drops the codes and stock notes ("new", "old", "(1)", "pk", "RW",
+"TRS", "PQ", "TD", "Pid"), spells packs out ("2PK" → "2-pack"), fixes "tansitional",
+title-cases shouty names and collapses spaces; it changes 2,062 of the 8,054 distinct names.
+`Product.display_name` carries it in every API response, and the UI and the agents' text use
+it, while `name` stays the raw catalog name in the data and IDs. Grounding accepts either.
+
+**Data behind the screenshots.** The fashion images use 5,000 historical customers and a
+photo index covering 14,280 of the 14,300 catalog products (the mirror lacks 20 photos),
+prepared from the public Hugging Face mirror of the H&M data. A product without a photo
+shows a placeholder. Prices are approximate historical values; there is no live stock or
+checkout. The holdout results for the learned ranker, and their uncertainty, are under
+[Offline evaluation](#offline-evaluation).
+
 ### Outfit builder
 
-`src/clothes_recommender/outfits.py` holds the planner, used by the agent's `BuildOutfit` and
+`src/curio/domains/fashion/outfits.py` holds the planner, used by the agent's `BuildOutfit` and
 `SwapOutfitItem` tools and by `POST /outfits` and `POST /outfits/swap`.
 
 1. **Plan.** The occasion text picks a template by keyword (wedding, office, party, beach,
@@ -104,13 +119,15 @@ shoe type.
 
 The cocktail domain serves 425 recipes from `data/cocktails.parquet`, in memory, with no
 model, index or network call at serving time. `CocktailRecommender`
-(`cocktails/recommend.py`) is deterministic, and ties go to the lower drink ID.
+(`domains/cocktails/recommend.py`) is deterministic, and ties go to the lower drink ID.
 
 | Feature | How it works |
 |---|---|
 | Search | TF-IDF cosine over name, category, glass and ingredient names, with a name boost, scaled by the share of query words a recipe uses. Plurals and spelling variants are normalised ("limes", "whisky" → "whiskey"); flavour words ("fresh", "creamy", "fruity", ...) stand for ingredient hints; "alcohol-free", "non-alcoholic" or "mocktail" set the alcohol filter. Required and excluded ingredients, alcohol and category are filters. Each hit has reasons ("Contains lime, mint"). |
 | Similar drinks | IDF-weighted overlap of ingredient families ("Lime" ~ "Lime juice", "White rum" ~ "Light rum"). |
-| What can I make? | Ranks recipes by fewest missing ingredients, then coverage. Matching ignores case and plurals and uses a small explicit alias table (`PANTRY_ALIASES`: a lime covers lime juice and peel, "rum" covers the common styles); a few staples (ice, water) count as available. Up to three missing ingredients can be allowed. |
+| What can I make? | Ranks recipes that miss only mixers or garnish first and those missing their base spirit (`SPIRIT_WORDS`: gin, rum, vodka, whiskey…) last, then by fewest missing ingredients, then coverage. Matching ignores case and plurals and uses a small explicit alias table (`PANTRY_ALIASES`: a lime covers lime juice and peel, "rum" covers the common styles); a few staples (ice, water) count as available. Up to three missing ingredients can be allowed. |
+| Crude names | Drinks whose names are crude, sexual or a slur (`CRUDE_NAMES`: "After sex", "Orgasm", "Zipperhead"…) are left out of search, similar drinks and "What can I make?", unless the search names the drink; pairings never offer them. |
+| Shots | Shot-style drinks (`is_shot`: the "Shot" category, and shots, slammers or flaming drinks by name, such as Jello shots) are left out of "What can I make?" and of search, unless the request asks for shots (`asks_for_shots`: shot, shooter, slammer), filters on the Shot category or names the drink. The cocktail agent's WhatCanIMake includes them when the shopper's message asks for shots; pairings never offer them. |
 | Cocktail agent | The shared agent engine with cocktail tools: SearchCocktails, InspectCocktails, SimilarCocktails, WhatCanIMake, SaveCocktails and RememberTastes. See [agent architecture](agent-architecture.md). |
 
 Alcohol-free means TheCocktailDB's "Non alcoholic" label only. "Optional alcohol" recipes
@@ -124,7 +141,7 @@ and every interface are in the [multi-domain contract](multidomain-contract.md).
 The book domain serves the 10,000 most-rated Goodreads books of
 [goodbooks-10k](https://github.com/zygmuntz/goodbooks-10k), in memory, with numpy and scipy
 only: no model, index or network call at serving time. `BookRecommender`
-(`books/recommend.py`) is deterministic, and ties go to the lower book ID (goodbooks-10k
+(`domains/books/recommend.py`) is deterministic, and ties go to the lower book ID (goodbooks-10k
 numbers books by popularity). It loads in about 2 seconds.
 
 | Feature | How it works |
@@ -134,7 +151,8 @@ numbers books by popularity). It loads in about 2 seconds.
 | Readers also liked | Item-item collaborative filtering precomputed by `prepare_books` from ~6 M ratings: "liked" is 4 or 5 stars, and the score is an asymmetric cosine `c / (n_i^0.35 · n_j^0.65)` (c readers liked both; n readers liked each), which damps blockbusters every reader liked, shrunk by `c / (c + 10)`; pairs with fewer than 5 shared readers are dropped and each book keeps its 50 best. Books with few links are topped up by shelf similarity. Reasons name the shared readers ("960 readers who liked The Name of the Wind also liked this") and the link (same series, author or shelves). |
 | Because you liked… | The neighbour scores of several liked books, summed; the seeds and their series are left out and each author appears at most twice. |
 | More by this author | The author's books, most rated first, with their series position. |
-| Browse by genre and mood | 30 genres mapped from reader shelves (`books/taxonomy.py`), and nine moods (Cosy, Dark, Funny, Romantic, Thought-provoking, Adventurous, Emotional, Epic, Short reads) defined by shelves and, for short reads, a 200-page limit. Books rank by how high the mood's shelf sits among their shelves, times the quality prior. |
+| Browse by genre and mood | 30 genres mapped from reader shelves (`domains/books/taxonomy.py`), and nine moods (Cosy, Dark, Funny, Romantic, Thought-provoking, Adventurous, Emotional, Epic, Short reads) defined by shelves and, for short reads, a 200-page limit. Books rank by how high the mood's shelf sits among their shelves, times the quality prior. |
+| Content safety | Curio is a public demo, so results nobody asked for never carry sexual or abuse-centred shelves: `taxonomy.EXCLUDED_SHELVES` (erotica, erotic romance, BDSM, smut, steamy, dark romance, abuse, child abuse, rape…, from the real tag vocabulary) is `BookQuery.exclude_tags` by default and the default of `similar` and `because`, applied before `top_k`. A series where at least 40 % of the books carry such a shelf is kept out as a whole (Fifty Shades Darker is shelved only as romance). A query that asks for the group ("steamy", "erotica", "abuse"), names the whole title, seeds "like <title>" with such a book or names its author lifts it, and so does a seed book that carries it ("readers also liked" Bared to You). |
 | Book agent | The shared agent engine with book tools: SearchBooks, InspectBooks, ReadersAlsoLiked, BooksByAuthor, SaveBooks and RememberReadingTastes. See [agent architecture](agent-architecture.md). |
 
 Ratings are Goodreads averages over all Goodreads readers; the neighbour links come from the
@@ -160,22 +178,64 @@ page count. Probes on the real data, run with `prepare_books` output:
 
 ## Book → cocktail pairing
 
-`pairings/` pairs a book, or a reader's taste, with drinks from the recipe catalog. It is
+`domains/pairings/` pairs a book, or a reader's taste, with drinks from the recipe catalog. It is
 deterministic and offline: no model, no download, about a second to build at startup.
 
 | Step | How it works |
 |---|---|
-| Profile | A book's signals point to flavour themes (`pairings/themes.py`): each genre by rank (1.0, 0.8, 0.6, 0.5), each reader shelf by rank (0.5 fading to about 0.13) and title (0.6) or description (0.4) words such as a setting (Paris, Caribbean, Tuscany, Moscow) or an era (Jazz Age, Victorian), capped per theme. Broad themes weigh less (Classics ×0.6, literary ×0.7, historical ×0.75, adventure ×0.8). Shares below 10 % are dropped and at most four themes kept. Reader taste sums each reading-list book's shares, plus one book's worth per liked genre. |
+| Profile | A book's signals point to flavour themes (`domains/pairings/themes.py`): each genre by rank (1.0, 0.8, 0.6, 0.5), each reader shelf by rank (0.5 fading to about 0.13) and title (0.6) or description (0.4) words such as a setting (Paris, Caribbean, Tuscany, Moscow) or an era (Jazz Age, Victorian), capped per theme. Broad themes weigh less (Classics ×0.6, literary ×0.7, historical ×0.75, adventure ×0.8). Shares below 10 % are dropped and at most four themes kept. Reader taste sums each reading-list book's shares, plus one book's worth per liked genre. |
 | Avoided genres | Their genre labels and their shelves (`books.taxonomy.GENRES`) are dropped, and a theme whose main genre is avoided (Horror for "Horror and gothic") is switched off, so an avoided genre never drives a pairing. |
-| Score | Each theme scores every recipe with the cocktail search index (`CocktailRecommender.term_scores`: TF-IDF cosine of weighted words), counted only when the recipe's ingredients or name use those words, plus a bonus for its signature drinks (most typical first) and glasses. A recipe's score is the profile-weighted sum, plus a bonus for a documented literary drink of the book's author (`LORE`: the Vesper for Ian Fleming, gin rickeys and mint juleps for F. Scott Fitzgerald, the Hemingway daiquiri and Death in the Afternoon, Chandler's gimlet). |
+| Score | Each theme scores every recipe with the cocktail search index (`CocktailRecommender.term_scores`: TF-IDF cosine of weighted words), counted only when the recipe's ingredients or name use those words, plus a bonus for its signature drinks (most typical first) and glasses. A recipe's score is the profile-weighted sum, plus a bonus for a documented literary drink of the book's author (`LORE`: the Vesper for Ian Fleming, gin rickeys and mint juleps for F. Scott Fitzgerald, the Hemingway daiquiri and Death in the Afternoon, Chandler's gimlet, and for 1984 alone Orwell's Victory Gin as a pink gin, whose larger bonus makes it lead). |
 | Choose | The pool is the recipes scoring at least 30 % of the best, at most four sets' worth. Sets are drawn greedily: a pick sharing a base spirit (×0.7), a theme (×0.75), a name word or most ingredient families (×0.5) with an earlier pick of its set ranks lower. `seed` picks set `seed mod sets`, so "Another pairing" is deterministic; the agent passes the drinks already shown instead. |
 | Explain | The main reason cites the book and recipe evidence: "The Big Sleep (Mystery · shelved as noir) → a bitter, spirit-forward whiskey drink: Old Fashioned (Bourbon, Angostura Bitters)", or "Your reading list leans Mystery and noir (4 of 6 books) → …". Lore leads when it chose the drink. A second theme the recipe also pours, and why it is alcohol-free, follow (at most three reasons). |
 | Responsible drinking | A book whose genres or reader shelves say children's or young adult, `alcohol_free`, or an alcohol-free `cocktail_preferences` keep only recipes marked "Non alcoholic" (alcohol-free styles then describe what is poured: "a drawing-room cup of tea", not gin). Shots, drinks named as slammers or flaming, overproof spirits and crude names are never offered; avoided ingredients are left out with search's broad matching. Pairings make no health or allergen claims. |
 
 When no allowed recipe fits (an alcohol-free profile that avoids milk, say), the result is
-empty rather than a drink without a reason. `tests/pairings/test_pairing_real_data.py`
+empty rather than a drink without a reason. `tests/domains/pairings/test_pairing_real_data.py`
 checks the golden cases on the real data; the E2E suite writes the top three pairings of 14
 famous books to `e2e-artifacts/pairings.json`.
+
+## Plan my evening
+
+`domains/evening/` composes the other domains into one evening: an outfit, a book and a drink
+paired with that book, under one theme. It is deterministic and offline (no model); the
+outfit needs fashion's CLIP photo index, the rest runs on the book and recipe files alone.
+
+| Step | How it works |
+|---|---|
+| Theme | The occasion (or a `mood` that names one) maps to one of eight themes in `domains/evening/themes.py` by the words it uses, matched as whole words: cosy ("rainy", "Sunday", "night in", "winter"…), romantic ("date night", "first date", "anniversary", "for two"…; never "dinner" or "love" alone), glamorous ("party", "New Year's Eve", "gala"…), summery ("summer", "garden", "picnic"…), mysterious ("murder mystery", "noir", "halloween"…), thoughtful ("book club", "reading group"…), adventurous ("camping", "trip"…) and playful ("game night", "friends"…). The theme with most matching words wins (ties in table order); with none the evening is cosy and says so. Negated mentions ("not a date", "no kids") do not count. An occasion with kids, with family (parents, a baby shower) or for work (business, a client) is never romantic or glamorous, whatever its other words or the mood say: its other words decide, else playful for kids and thoughtful for family and work (`themes.GUARDS`). The theme's evidence reads after its label: "Cosy: you mentioned rainy and Sunday", "Thoughtful: a work occasion (you mentioned business)". |
+| Outfit | The theme's outfit occasion (its words choose the template's style and season; a season in the occasion wins), slots and a query per slot ("chunky knit sweater", "soft knit cardigan") go to `OutfitPlanner` through `OutfitRequest.queries`, with menswear queries for men. The budget caps the whole outfit, a remembered per-piece limit every piece. Without an audience the look is womenswear (the plan's note says so): fashion's best-match probe tends to pick children's pieces for homely occasions. The evening asks for variety (`OutfitRequest.variety`, seeded from the occasion text): a slot avoids its cheapest tenth of candidates unless the budget leaves nothing else, and a small deterministic jitter per occasion reorders near-ties, so evenings do not converge on the same few pieces. Over 17 real occasions this took the distinct pieces from 30 to 47 of 62 and the pieces at €5 or less from 14 to 5. |
+| Book | The theme's book searches (`BookSearch`: genres, a mood, a query, a minimum rating; mainstream first, so a romantic evening starts with Romance and Classics at ★4.0+) run through `BookRecommender.search`, then a last "well-rated" search, so every theme finds a book. The evening then ranks the hits itself: books with at least 100,000 Goodreads ratings first (25,000, then any, when no candidate reaches that), then the searches in order, books that stand alone or open their series, liked genres, and the quality prior (rating × log popularity): a date night reads Pride and Prejudice, then Persuasion, then Rebecca. A search with words keeps its 12 most relevant hits, a genre or mood browse its 40 best. The excluded shelves of the book domain (erotica, abuse…) never come through, children's books are left out except for an evening with kids (which reads one first), remembered avoided genres and authors too (an avoided genre skips the searches that ask for it); swapped-out books never return. |
+| Drink | `BookCocktailPairer` pairs the chosen book (top five, alcohol-free when asked, written in the occasion, remembered, or for a children's or young-adult book; avoided ingredients left out). Among its drinks the first whose ingredients, name or glass use the theme's drink words ("honey", "cinnamon", "hot" for cosy; "champagne", "strawberry" for romantic) suits the evening best, else the pairer's first. When no drink pairs, the next book (up to three) is tried, and the plan notes it; the drink never comes from anywhere but the pairer. |
+| Explain | Each part has its reason (the outfit's look and total against the budget, the book's theme fit, genre and Goodreads rating, the pairer's reasons plus the drink's fit with the evening), and one "why it works" line cites each part's evidence: "Rainy Sunday in → cosy: Osman crew sweater (€24.99) + 2 more, €58.97 in all · The Name of the Wind (fantasy, ★4.55) · Honey Bee (Honey; pairs with fantasy and magic)". |
+
+A budget ("under €100", "up to €99.50", "max €1,500") or "alcohol-free" written in the
+occasion counts as if given; an amount of €0 or over €5,000 is no budget, and the plan says so
+in a note instead of failing ("Planned without a budget: €6,000 is not one Curio can plan
+with…"). In chat, any invalid value an evening tool meets becomes a tool message the model
+can correct, never a failed turn. The
+drink is alcohol-free when the occasion asks for it ("alcohol-free", "sober", "mocktails",
+not when negated: "alcohol-free is boring"), mentions family, or gives a safety reason: a
+pregnancy ("pregnant", "expecting", "baby shower"), a driver ("designated driver",
+"driving") or kids. `alcohol_free` left out follows these words; an explicit `false`
+overrides them except a safety reason, and the plan then notes "The drink stays
+alcohol-free: you mentioned kids." Every
+part is optional: without fashion the outfit is listed in `missing` ("The outfit needs the
+fashion catalogue…"), without cocktails the drink, without books the book and the drink, and a
+photo search that fails only drops the outfit. A plan is never an error.
+
+Swaps are stateless like outfits. The client holds `EveningState` (occasion, theme, budget,
+audience, alcohol-free, the outfit's `OutfitState`, the book and drink IDs and the parts
+swapped out) and sends it back; `EveningPlanner.restore` re-reads every product and book and
+re-pairs the drink (the outfit's state also carries its empty slots, their order and the
+minimum, display-only, so a partial outfit stays partial after any swap, and the evening's
+`status` is "partial" whenever its outfit is), keeping the client's drink only when the pairer still pairs it with the
+book under the current rules (a forged or no-longer-allowed drink is replaced). "Another book"
+skips the old one and re-pairs a drink for the new one; "another drink" skips the drink;
+"alcohol-free" re-pairs with alcohol-free recipes; an outfit piece is swapped by
+`OutfitPlanner.swap` with the theme's query for the slot. `tests/domains/evening/` covers the
+planner over small catalogs, and the E2E suite writes real plans for fifteen occasions to
+`e2e-artifacts/evening-plans.json`.
 
 ## Data
 
@@ -269,7 +329,9 @@ of about 9 MB together:
 - `books.parquet`: one row per book. Titles lose the "(Series, #1)" suffix, which becomes
   `series` and `series_position`; authors are split; reader shelves are cleaned of
   bookkeeping ("to-read", "owned", "kindle", "read-in-2015"); genres come from shelf shares;
-  descriptions are plain text, cut at 600 characters; only https covers on
+  descriptions are plain text without the Goodreads librarian notes some start with ("There is
+  an alternate cover edition for this ASIN here and here.", 160 books; the catalog loader
+  strips them from files prepared earlier too), cut at 600 characters; only https covers on
   `images.gr-assets.com` are kept (a third of the books have Goodreads' "no photo"
   placeholder, which is dropped). `isbn` is a checked ISBN-13 for 9,277 books, converted
   from the ISBN-10 column after restoring its lost leading zeros; the ISBN-13 column is a
@@ -296,8 +358,8 @@ Goodreads, so Goodreads' own terms may also apply to that content; Curio does no
 relicense it, and the Apache-2.0 licence covers this repository's code only. Covers stay on
 Goodreads' (or Open Library's) servers and are loaded by the browser; they and the book
 descriptions are the publishers' and Goodreads' material, not covered by CC BY-SA. The
-prepared files stay on your machine. The only copies in this repository are three README
-screenshots (`curio-books.webp`, `curio-book-detail.webp`, `curio-book-agent.webp`), which show
+prepared files stay on your machine. The only copies in this repository are the README
+images `curio-pairing.webp`, `curio-evening.webp` and `curio-overview.webp`, which show
 covers and a description excerpt for illustration only; they are not licensed by this
 repository. If you share them, they are adaptations of goodbooks-10k: credit it and share
 them under CC BY-SA 4.0. The UI credits "Book data: goodbooks-10k from Goodreads (CC BY-SA
@@ -351,6 +413,12 @@ flowchart LR
     API --> PR[BookCocktailPairer]
     BA --> PR
     PR --> BC & CR
+    API --> EA[EveningAssistant]
+    API --> EP[EveningPlanner]
+    EA --> EP
+    EA --> LLM
+    EP --> O[OutfitPlanner] & BR & PR
+    O --> S
     S --> E[CLIP encoder]
     S --> Q[(Qdrant)]
     CB --> Q
@@ -366,26 +434,35 @@ flowchart LR
 ```
 
 ```
-src/clothes_recommender/
-├── config.py          # Settings from env / .env (pydantic-settings)
-├── domain.py          # Product, User, Purchase, ProductFilter, Encoder protocol
-├── catalog.py         # Product catalog + customer data access
-├── embeddings.py      # CLIP encoder (lazy-loaded)
-├── vector_store.py    # Qdrant wrapper: upsert, filtered search, vector lookup
-├── search.py          # Text and image search
-├── outfits.py         # Outfit builder: occasion templates, budget allocation, swaps
-├── recommenders/      # learned, repeat, content_based, collaborative, graph, popularity
-├── cocktails/         # domain (types), catalog, recommend (search, similar, pantry)
-├── pairings/          # book → cocktail pairing: domain (types), themes, pairer
-├── books/             # domain (types), catalog, taxonomy (genres, moods, shelves),
-│                      # recommend (search, readers also liked, because, by author)
-├── chat/              # engine (shared agent loop), llm, intent, prompts, schemas,
-│                      # guardrails (grounding, signed proposals), tools + assistant
-│                      # (fashion), cocktail_tools + cocktail_agent (cocktails),
-│                      # book_tools + book_agent (books), navigator (recommender bridge)
-├── services.py        # Composition root
-├── api.py             # FastAPI app
-└── ui.py              # Streamlit client
+src/curio/
+├── engine/               # Domain-independent: imports no domain and not the app
+│   ├── agent.py          # AgentEngine: plan, bounded tool loop, approvals, verify, fallback
+│   ├── toolkit.py        # The Toolkit protocol, BaseToolkit, Turn, ToolError
+│   ├── tools.py          # Policy (READ / ASK / APPROVE) and the shared AskShopper tool
+│   ├── schemas.py        # AgentStep, Intent, PendingAction, AppliedEffect, AssistantReply…
+│   ├── signing.py        # ActionSigner (HMAC proposals), narrow_args
+│   ├── grounding.py      # Price and ID checks, name matching, GroundingReport merging
+│   ├── llm.py            # Chat model factory for any LangChain provider
+│   └── data.py           # DataFileMissingError, shared by every catalog loader
+├── domains/              # Each imports the engine and itself only (pairings: + books,
+│   │                     # cocktails; evening: + fashion, books, cocktails, pairings)
+│   ├── fashion/          # models, catalog, embeddings, vector_store, search, outfits,
+│   │   │                 # navigator (recommender bridge), recommenders/
+│   │   └── agent/        # toolkit, tools, intent, prompts, grounding, schemas
+│   ├── cocktails/        # models, catalog, recommend (search, similar, pantry), agent/
+│   ├── books/            # models, catalog, taxonomy, recommend, agent/
+│   ├── pairings/         # models, themes, pairer; agent/ (PairCocktail, PairedDrinkCheck)
+│   └── evening/          # themes, models, planner (Plan my evening); agent/ (PlanEvening…)
+└── app/                  # Composition: settings, wire format, assistants, API, UI
+    ├── config.py         # Settings from env / .env (pydantic-settings)
+    ├── schemas.py        # The /chat wire models: the engine's plus every domain's payloads
+    ├── assistants.py     # ShoppingAssistant, CocktailAssistant, BookAssistant, EveningAssistant
+    ├── services.py       # Composition root and domain registry
+    ├── demo.py           # Demo customers
+    ├── api.py            # FastAPI app
+    └── ui/               # Streamlit client: main.py (entry), shell, client, common, chat,
+                          # effects, fashion, cocktails, books, evening; ui.css
+examples/hello_domain/    # A complete teas domain on the engine, in one file (teas.py)
 scripts/prepare_data.py # Sample the H&M Kaggle archive (or its unzipped CSVs) into data/
 scripts/fetch_photos.py # Download the sampled products' photos from the mirror
 scripts/fetch_query_photos.py # Example image-search photos of garments outside the catalog
@@ -394,12 +471,11 @@ scripts/classify_product_types.py # Reviewable H&M-to-Shopify category decisions
 scripts/evaluate.py # Chronological holdout evaluation; JSON results for the Model quality page
 scripts/prepare_cocktails.py # Download the pinned recipe CSV, write data/cocktails.parquet
 scripts/prepare_books.py # Download pinned goodbooks-10k, write books + book_neighbours.parquet
-scripts/take_screenshots.py # Development captures of every page with Playwright
 ```
 
 ### Domain registry
 
-Each domain is one `DomainSpec` in `services.DOMAINS` (display order): its id, label, a
+Each domain is one `DomainSpec` in `app.services.DOMAINS` (display order): its id, label, a
 setup hint and a loader. `build_services` runs every loader; a loader returns `None` while
 its data is missing (fashion: `products`, `users` and `purchases.parquet`; cocktails:
 `cocktails.parquet`; books: `books.parquet` and `book_neighbours.parquet`), so that domain
@@ -419,11 +495,12 @@ From that registry, without per-domain code:
   FastAPI dependency per domain (`FashionDep`, `CocktailsDep`, `BooksDep`).
 - `POST /chat` routes by `ChatRequest.domain` to that runtime's assistant.
 
-The UI mirrors this with `DOMAIN_VIEWS` in `ui.py`: one `DomainView` per domain (switch
+The UI mirrors this with `DOMAIN_VIEWS` (`app/ui/common.py`, filled in `app/ui/shell.py`): one `DomainView` per domain (switch
 label, copy, session-state keys, grounding badges, approval tools, pages, session panel,
 chat-request fields, footer). It reads availability from `/health`, registers only the
-pages of served domains, opens on the first served domain, and shows a setup page when the
-API serves none. A domain the server does not serve appears beside the switch as "… is not
+pages of served domains, opens on Evening's Plan my evening page when the API serves the
+evening (choosing Evening in the switch lands there too, not on its chat), else on the first
+served domain, and shows a setup page when the API serves none. A domain the server does not serve appears beside the switch as "… is not
 available", with the server's hint.
 
 `ENABLED_DOMAINS` (comma-separated ids, e.g. `cocktails`) limits loading to those domains
@@ -431,15 +508,29 @@ even when other data is present; an unknown id fails startup. Unset, every prepa
 loads.
 
 Books were added this way, which is the recipe for the next domain: its catalog and
-recommender (`books/`), a runtime dataclass and a loader in `services.py`, a `DomainSpec`
-appended to `DOMAINS`, its id in `chat.schemas.Domain`, its endpoints behind a `BooksDep`
-dependency, and a `DomainView` with its pages in `DOMAIN_VIEWS`. Its agent is a `Toolkit` for
+recommender (`domains/books/`), a runtime dataclass and a loader in `app/services.py`, a
+`DomainSpec` appended to `DOMAINS`, its id in `app.schemas.Domain`, its endpoints behind a `BooksDep`
+dependency, and a `DomainView` with its pages in `DOMAIN_VIEWS`. Its agent is a `BaseToolkit` for
 the shared engine ([agent architecture](agent-architecture.md)). The shared parts needed
 only data-driven additions: the domain's approval tools in `ApprovalTool`, its context
 fields on `TurnContext` (`book_preferences`, `book_shortlist`), its effect kinds on
 `AppliedEffect` (serialized with their own fields only), and one entry each in the engine's
 `_MEMORY_EFFECTS` and `_SHORTLIST_EFFECTS` tables. The engine loop, budgets, signing,
 grounding flow and UI chat code did not change.
+
+A **composed domain** has no data of its own: its `DomainSpec` has `compose` instead of
+`load`, and `build_services` builds it from the loaded domains after linking. `evening` is the
+first: `compose_evening` returns an `EveningServices` (the `EveningPlanner` over the served
+book recommender, pairer, recipes and, when fashion is served, its `OutfitPlanner`, plus the
+`EveningAssistant`) whenever books and cocktails are served and their pairer built. Its
+`missing` callable names what an unserved evening lacks ("Plan my evening needs the book
+catalog and the cocktail recipes: The book catalog is not prepared: …"), which `/domains` and
+the 503 of `/evening/*` and evening chat report; a served evening without fashion reports
+`item_count` 2 (the parts it plans) and the hint "The outfit needs the fashion catalogue…".
+`ENABLED_DOMAINS` limits only the data domains: the quick start (`cocktails,books`) serves
+the evening too, without the outfit. Naming a composed domain enables what it builds on
+(`DomainSpec.builds_on`): `ENABLED_DOMAINS=evening` loads books, cocktails and fashion, each
+only when its data is prepared, and the log says so.
 
 Cross-domain features link loaded domains after loading: `link_domains` builds the
 `BookCocktailPairer` when books and cocktails are both served, stores it on `BookServices`
@@ -450,17 +541,19 @@ setup hint of whichever domain is missing, and the UI shows its pairing controls
 
 ## Quick start
 
-Two equivalent ways to run Curio with the cocktail domain, without the H&M download:
+Two equivalent ways to run Curio with cocktails, books and Plan my evening (without the
+outfit), without the H&M download:
 
 ```bash
 docker compose --profile demo up --build   # Docker
 scripts/quickstart.sh                      # uv, no Docker
 ```
 
-Add books with `DEMO_BOOKS=1 docker compose --profile demo up --build` or
-`CURIO_BOOKS=1 scripts/quickstart.sh`: the first run then also prepares goodbooks-10k
-(about 150 MB to download, under a minute and about 1 GB of RAM; ~9 MB on disk). Both ways
-serve books whenever they are prepared, so the flag is only needed once.
+The first run prepares goodbooks-10k besides the recipes (about 150 MB to download, under a
+minute and about 1 GB of RAM; ~9 MB on disk), so the one-command demo has book pairings and
+Plan my evening. Opt out with `DEMO_BOOKS=0 docker compose --profile demo up --build` or
+`CURIO_BOOKS=0 scripts/quickstart.sh` for cocktails only. Both ways serve books whenever they
+are prepared.
 
 On the first run both download the pinned recipe file (about 400 KB, SHA-256 checked) and
 then start the API (port 8000) and the UI (port 8501); later runs reuse the recipes. Expect
@@ -468,12 +561,12 @@ a few minutes for the first Docker build or `uv sync` (PyTorch is a dependency o
 fashion engine even though the demo never loads it), then seconds to start.
 
 - **Docker** (`demo` profile): `demo-data` prepares the recipes into the `demo-data`
-  volume (nothing is written to `./data`), plus the books with `DEMO_BOOKS=1`; `demo-api`
+  volume (nothing is written to `./data`), plus the books unless `DEMO_BOOKS=0`; `demo-api`
   serves them with `ENABLED_DOMAINS=cocktails,books` (it never loads CLIP or opens Qdrant),
   and `demo-ui` starts once the API is healthy. `docker compose --profile demo down -v`
   removes the volume.
 - **`scripts/quickstart.sh`**: runs `uv sync --locked --extra ui --extra anthropic`, writes
-  `data/cocktails.parquet` if it is missing (and the book files with `CURIO_BOOKS=1`),
+  `data/cocktails.parquet` if it is missing (and the book files unless `CURIO_BOOKS=0`),
   starts the API in the background, prints which domains and chat are available, then runs
   the UI; Ctrl+C stops both. `ENABLED_DOMAINS` (default `cocktails,books`; a domain that is
   not prepared is skipped), `API_PORT` and `UI_PORT` change what it serves and where. With
@@ -544,8 +637,8 @@ Then build the image index, fetch a few example photos for image search, and sta
 uv run python -m scripts.build_index                   # all products: ~5 min at 50 img/s on 4 CPU cores
 uv run python -m scripts.fetch_query_photos --articles data/raw/articles.csv
 uv run python -m scripts.evaluate --qdrant-path .qdrant --output data/evaluation.json
-uv run uvicorn clothes_recommender.api:create_app --factory --reload   # http://localhost:8000/docs
-uv run streamlit run src/clothes_recommender/ui.py     # http://localhost:8501
+uv run uvicorn curio.app.api:create_app --factory --reload   # http://localhost:8000/docs
+uv run streamlit run src/curio/app/ui/main.py     # http://localhost:8501
 ```
 
 To enable the learned ranking shown in the screenshots, train its optional model
@@ -641,14 +734,16 @@ string when running several API workers, so approval proposals verify on any wor
 | GET | `/books/{id}/similar?top_k=5&other_authors_only=false` | Readers who liked this book also liked |
 | GET | `/books/{id}/by-author?top_k=5` | More by its first author |
 | POST | `/pairings/book-cocktail` | `{"book_id": 5}` or `{"book_ids": [1160, 1598], "liked_genres": [], "avoided_genres": []}`, plus `alcohol_free`, `cocktail_preferences`, `exclude_drink_ids`, `seed` (0-10,000) and `top_k` (1-5): drinks for a book or a reader's taste with `profile` (themes, summary, alcohol-free reason), `pairings` (cocktail, theme, 1-3 reasons), `sets` and `note`. 404 for an unknown book, 422 for nothing known to pair |
-| POST | `/chat` | One agent turn: `{"domain": "fashion\|cocktails\|books", "message", "history", "preferences", "shopper_id", "shortlist", "outfit", "cocktail_preferences", "cocktail_shortlist", "book_preferences", "book_shortlist", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal. `domain` defaults to `fashion`; a fashion reply carries `outfit` when the turn built or changed one |
+| POST | `/evening/plan` | `{"occasion": "rainy Sunday in", "budget": 100, "audience": "women\|men", "mood": null, "alcohol_free": false, "book_preferences": {}, "cocktail_preferences": {}, "max_item_price": null}` (all but `occasion` optional; occasion 2-200 characters, budget up to €5,000, mood up to 40 characters, unknown fields 422): `theme` (id, label, icon, feeling, evidence), `outfit` (the `Outfit` and its reason), `book` (book, reason), `drink` (cocktail, reasons, `pairs_with`, `evening_fit`, `alcohol_free_reason`, `note`), `why`, `missing` (part, reason), `notes`, `status` (`complete`, `partial`, `empty`) and the `state` to send back |
+| POST | `/evening/swap` | `{"evening": <state>, "part": "outfit\|book\|drink", "slot": "shoes", "mode": "other\|cheaper\|alcohol_free", "refine": "", "tastes": {...}}`: the plan with that part changed and `change` saying what changed; 422 for a swap the plan cannot make (a cheaper book, an alcohol-free outfit, a slot the outfit lacks) or an out-of-bounds state |
+| POST | `/chat` | One agent turn: `{"domain": "fashion\|cocktails\|books\|evening", "message", "history", "preferences", "shopper_id", "shortlist", "outfit", "cocktail_preferences", "cocktail_shortlist", "book_preferences", "book_shortlist", "evening", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal. `domain` defaults to `fashion`; a fashion reply carries `outfit` when the turn built or changed one, an evening reply `evening` (the plan) |
 | POST | `/chat/stream` | The same turn as NDJSON: `step` events, then `reply` (or `error`) |
 | POST, GET | `/chat/feedback` | Rate an answer; summary of ratings and recent negative feedback |
 | GET | `/evaluation` | Offline evaluation results saved by `scripts.evaluate --output` |
 
 Every `/cocktails` endpoint returns 503 until `scripts.prepare_cocktails` has been run,
-every `/books` endpoint until `scripts.prepare_books` has, `/pairings/book-cocktail` until
-both have (with the missing domain's hint), and
+every `/books` endpoint until `scripts.prepare_books` has, `/pairings/book-cocktail` and
+`/evening/*` until both have (with the missing domain's hint), and
 every fashion endpoint (`/products`, `/sections`, `/search`, `/outfits`, `/users`,
 `/demo/customers`, `/evaluation`) returns 503 with how to prepare the H&M data when fashion is not served.
 `/chat` returns 503 when the requested domain is not served or has no assistant (no LLM);
@@ -673,25 +768,25 @@ reaches the holdout cutoff. On the 819-customer final week, observed MAP@12 is
 0.0302 versus 0.0248 for deterministic buy-again; hit rate is 13.9% versus 11.1%.
 The paired bootstrap interval crosses zero, so this does not establish superiority
 from that week alone. Full evidence and the three earlier validations are in the
-[recommendation audit](recommendation-audit.md).
-A [further BPR, sampling and training-scale iteration](recommendation-iteration2.md)
+[recommendation audit](research/fashion/recommendation-audit.md).
+A [further BPR, sampling and training-scale iteration](research/fashion/recommendation-iteration2.md)
 tested seven new designs. More supervision reached MAP .036754 on one development
 week but regressed on the other; no design passed both weeks or was promoted.
-A [ranking follow-up and customer-disjoint check](recommendation-ranking-followup.md)
+A [ranking follow-up and customer-disjoint check](research/fashion/recommendation-ranking-followup.md)
 raised observed scores again; the frozen challenger still failed its promotion gates.
-The [complementary retrieval experiment](recommendation-retrieval.md) adds
+The [complementary retrieval experiment](research/fashion/recommendation-retrieval.md) adds
 family, recent-basket and latent channels: candidate reach improves on both development
 weeks, but the ranking challenger remains unpromoted.
-The [fixed-pool provenance experiment](recommendation-provenance.md) adds an
+The [fixed-pool provenance experiment](research/fashion/recommendation-provenance.md) adds an
 opt-in versioned feature contract; its mixed development results were not promoted.
-See the [quality research and implementation direction](recommendation-research.md)
+See the [quality research and implementation direction](research/fashion/recommendation-research.md)
 for the retrieval bottleneck, dataset comparison and next experiments.
 
 The full holdout, including repeat purchases, is now the primary comparison.
 `strategy=repeat` exposes the strong recent-purchases plus best-sellers baseline.
 Evaluation reports customer hit rate and macro recall@12 beside MAP@12, and keeps
 unrestricted popularity separate from new-item-only popularity. See the current
-[recommendation audit](recommendation-audit.md) for reproduced validation and
+[recommendation audit](research/fashion/recommendation-audit.md) for reproduced validation and
 MVP work; the earlier new-item benchmark below describes the previous branch state.
 Use `--holdout-end YYYY-MM-DD` to reproduce earlier validation weeks.
 
@@ -706,7 +801,7 @@ uv run python -m scripts.evaluate --data-dir data --qdrant-path .qdrant --output
 
 The following results describe the earlier system, before repeat-aware ranking.
 For the current learned model and buy-again comparison, see the beginning of this
-section and the [recommendation audit](recommendation-audit.md).
+section and the [recommendation audit](research/fashion/recommendation-audit.md).
 
 The last seven calendar days (2020-09-16 to 09-22) are held out. Popularity, collaborative
 filtering and co-purchase links are rebuilt from every shopper's purchases before that
@@ -760,8 +855,8 @@ population estimate or a competition leaderboard score. In evaluation, co-purcha
 counts only baskets with catalog products. CLIP image vectors are fixed features, but index
 provenance is not recorded.
 
-The development workflow and remaining validation are recorded in
-[engineering workflow](engineering-workflow.md).
+How the project was built and reviewed is summarised in
+[how it was built](how-it-was-built.md).
 
 ## Development
 
@@ -770,23 +865,16 @@ uv run pytest                        # fast, offline unit tests (fake encoder, i
 uv run pytest -m integration        # tests that download the real CLIP model
 uv run pytest -m e2e tests/e2e      # browser end-to-end run over prepared data (below)
 uv run ruff check . && uv run ruff format --check .
-
-# Development captures of every page (API + UI running; uses the local Google Chrome)
-uv run python -m scripts.take_screenshots --example 5 --skip-chat --out data/screenshots
 ```
 
-`take_screenshots` writes development captures (`mvp-*`, `text-search`, `cocktails-*`, ...)
-and checks layout invariants on the way. The curated README images
-(`docs/screenshots/curio-*.webp`, with rounded transparent corners from
-`scripts.readme_images`) come from `scripts.capture_readme`, which drives the
-running stack through the same flows; its docstring lists the commands. The current images
-use the H&M sample prepared from the Hugging Face mirror (14,280 of 14,300 products photographed) and
-the real recipe catalog; chat replies come from the scripted stub, as the README says.
-The overview animation (`docs/screenshots/curio-overview.webp`) comes from
-`scripts.record_overview` against the same stack: it warms the models, records a captioned
-tour with Chrome's screencast and builds an animated WebP with the same rounded corners
-with ffmpeg (about 40 s and 1 MB). `take_screenshots` writes its development captures to
-`e2e-artifacts/dev-screenshots/`, outside version control.
+The README images (`docs/screenshots/curio-*.webp`, with rounded transparent corners from
+`scripts.readme_images`) come from `scripts.capture_readme`, which drives a running stack;
+its docstring lists the commands. They use the H&M sample prepared from the Hugging Face
+mirror (14,280 of 14,300 products photographed), goodbooks-10k and the real recipe catalog;
+chat replies come from the scripted stub, as the README says. The overview animation
+(`docs/screenshots/curio-overview.webp`) comes from `scripts.record_overview` against the
+same stack: it warms the models, records a captioned tour with Chrome's screencast and
+builds an animated WebP with the same rounded corners with ffmpeg (about 40 s).
 
 ### End-to-end tests
 
@@ -817,7 +905,20 @@ gin or Champagne drink, reader taste with avoided genres, and the agent's PairCo
 (verified) and an invented drink (caught, replaced by the paired drinks). In the browser it
 pairs a drink in the book dialog (another pairing, the alcohol-free toggle, the hand-off to
 the recipe), the reading-list cocktail card, the chat starter, and the dialog at phone
-width (screenshots 70-74).
+width (screenshots 70-74). `test_evening_e2e.py` plans fifteen occasions on the real
+catalogs (among them date night, dinner with my parents, business dinner, kids birthday
+party, family movie night, baby shower, girls' night in, summer garden party and murder
+mystery night) and writes them to `evening-plans.json`, checking that each is complete
+exactly when its outfit is, within its budget, alcohol-free when asked or for kids, family
+and a baby shower, never romantic or glamorous for family, kids or work, with a well-known
+book that carries no excluded shelf and a drink the pairer pairs with it, and that swaps
+work on the real data. A new visit opens on the Plan my evening page. In the browser it plans "rainy Sunday in" and "book club,
+alcohol-free" on the Plan my evening page (another book, Save evening through the approval
+dialog), "date night under €100" in evening chat (a cheaper piece, a SaveEvening approval
+with six parts), an invented drink caught by grounding, and the page at 390 px (screenshots
+80-87). A third API, the quick-start demo with books (recipes and books, no fashion, no
+LLM), checks that the evening plans the book and the drink and says the outfit needs the
+fashion catalogue (screenshot 88).
 
 The chat model is `tests/e2e/llm_stub.py`, a scripted OpenAI-compatible server: the app
 reaches it through `LLM_PROVIDER=openai` and `LLM_BASE_URL`, so the real provider path runs
@@ -848,19 +949,31 @@ The offline suite covers fashion-less serving in `tests/test_optional_domains.py
 `Settings` over a temporary data folder; CLIP and Qdrant fail the test if touched) and the
 UI's cocktails-only, no-domain and legacy-API cases in `tests/test_ui_cocktails.py`. Books
 have their own offline tests over a ten-book fixture (`tests/conftest.py`): the catalog,
-taxonomy and recommender in `tests/books/`, `scripts.prepare_books` over a miniature
+taxonomy and recommender in `tests/domains/books/`, `scripts.prepare_books` over a miniature
 goodbooks-10k checkout in `tests/test_prepare_books.py`, the agent and its grounding in
-`tests/chat/test_book_agent.py`, loading and endpoints in `tests/test_books_api.py`, and
+`tests/agents/test_book_agent.py`, loading and endpoints in `tests/test_books_api.py`, and
 the UI in `tests/test_ui_books.py`. CI does not download goodbooks-10k. The outfit builder is
 covered by planner tests over a 13-product fixture (`tests/test_outfits.py`: plans, budget
 allocation, infeasible budgets, co-purchase and visual preference, swaps), agent tests with
-a scripted model (`tests/chat/test_outfit_agent.py`), API tests in `tests/test_api.py` and
+a scripted model (`tests/agents/test_outfit_agent.py`), API tests in `tests/test_api.py` and
 UI tests in `tests/test_ui_agent.py`.
+
+### Releases
+
+Releases are cut from `main` by changing the version, never by pushing tags by hand. Set
+`version` in `pyproject.toml` and `CITATION.cff`, run `uv lock`, and rename
+`## [Unreleased]` in the changelog to `## [X.Y.Z] - YYYY-MM-DD` (plus the compare links at
+the bottom). When CI passes on that `main` commit, the Release workflow
+(`.github/workflows/release.yml`) tags it `vX.Y.Z`, publishes a GitHub release whose notes are
+that changelog section, and pushes `ghcr.io/yo1am1/curio:X.Y.Z` and `:latest`. A version
+that already has a release is skipped, so re-runs are safe. Dependabot
+(`.github/dependabot.yml`) proposes grouped weekly updates for `uv.lock`, GitHub Actions and
+the Docker base image.
 
 ### Release scope and compatibility
 
 Version 1.0.0 covers fashion and cocktails; see the [changelog](../CHANGELOG.md). The
-installable distribution is `curio-recommendations`; the `clothes_recommender` import path
+installable distribution is `curio-recommendations`; the `curio` import path
 remains stable for existing scripts. `ChatRequest.domain` defaults to `fashion`, so fashion
 clients written for 0.2.0 keep working. Changes in 1.1.0: `/health` and `/domains` only
 gain fields; the UI still reads an older API's `/health`. In Docker the full stack now

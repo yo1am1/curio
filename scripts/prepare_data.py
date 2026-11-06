@@ -40,7 +40,7 @@ from pyarrow import csv, parquet
 from scipy.sparse import csr_array, triu
 from tqdm import tqdm
 
-from clothes_recommender.config import get_settings
+from curio.app.config import get_settings
 from scripts.shopify_enrichment import shopify_attributes, shopify_categories
 
 # Prices in the dataset are normalised; x590 recovers real euro price points (0.0508 -> 29.99).

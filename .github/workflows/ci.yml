@@ -21,7 +21,7 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       # Pinned, checksum-verified public CSV (~400 KB). With it, the probes on the real cocktail
-      # catalog in tests/cocktails/test_cocktail_release_fixes.py run instead of skipping.
+      # catalog in tests/domains/cocktails/test_cocktail_release_fixes.py run instead of skipping.
       - run: uv run python -m scripts.prepare_cocktails
       # Runs every test under tests/ offline (fake encoder, in-memory Qdrant, scripted LLM,
       # small cocktail fixtures). No secrets or downloaded data are needed.
@@ -32,7 +32,7 @@ jobs:
         run: |
           # Start uvicorn from the venv, not `uv run`: a `uv run` left in the background holds
           # uv's cache lock, so setup-uv's post-job cache prune times out and fails the job.
-          .venv/bin/uvicorn clothes_recommender.api:create_app --factory --port 8000 > api.log 2>&1 &
+          .venv/bin/uvicorn curio.app.api:create_app --factory --port 8000 > api.log 2>&1 &
           server=$!
           trap 'kill "$server"' EXIT
           for _ in $(seq 60); do curl -sf localhost:8000/health -o health.json && break; sleep 1; done
@@ -42,7 +42,9 @@ jobs:
 
           health = json.load(open("health.json"))
           enabled = {d["id"]: d["enabled"] for d in health["domains"]}
-          assert enabled == {"fashion": False, "cocktails": True, "books": False}, health
+          assert enabled == {"fashion": False, "cocktails": True, "books": False, "evening": False}, health
+          evening = next(d for d in health["domains"] if d["id"] == "evening")
+          assert "book catalog" in evening["hint"], evening
           assert health["cocktail_count"] == 425 and not health["fashion_enabled"], health
           PY
           test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/products/1)" = 503

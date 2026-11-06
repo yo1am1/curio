@@ -40,14 +40,15 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from clothes_recommender.books.catalog import (
+from curio.app.config import get_settings
+from curio.domains.books.catalog import (
     NEIGHBOUR_COLUMNS,
     OUTPUT_COLUMNS,
     isbn13,
+    strip_edition_notes,
     trusted_cover_url,
 )
-from clothes_recommender.books.taxonomy import MAX_TAGS, genres_for, is_descriptive, shelf_label
-from clothes_recommender.config import get_settings
+from curio.domains.books.taxonomy import MAX_TAGS, genres_for, is_descriptive, shelf_label
 
 SOURCE_COMMIT = "6dd165b555a7b47b2dd36743a425776e641ff50c"
 DEFAULT_SOURCE = f"https://raw.githubusercontent.com/zygmuntz/goodbooks-10k/{SOURCE_COMMIT}"
@@ -233,8 +234,9 @@ def describe(shelf_counts: Mapping[str, int]) -> tuple[list[str], list[str]]:
 
 
 def clean_description(raw: str) -> str:
-    """Plain text from Goodreads' HTML blurb, cut at a word boundary."""
-    text = " ".join(html.unescape(_HTML_TAG.sub(" ", raw)).split())
+    """Plain text from Goodreads' HTML blurb without a leading librarian note ("There is an
+    alternate cover edition here."), cut at a word boundary."""
+    text = strip_edition_notes(" ".join(html.unescape(_HTML_TAG.sub(" ", raw)).split()))
     if len(text) <= MAX_DESCRIPTION:
         return text
     return text[:MAX_DESCRIPTION].rsplit(" ", 1)[0].rstrip(",;:") + "…"

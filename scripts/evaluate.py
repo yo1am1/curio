@@ -16,14 +16,14 @@ import numpy as np
 import pandas as pd
 from qdrant_client import QdrantClient
 
-from clothes_recommender.catalog import CustomerData, ProductCatalog, load_shopper_purchases
-from clothes_recommender.config import get_settings
-from clothes_recommender.recommenders.collaborative import CollaborativeRecommender
-from clothes_recommender.recommenders.content_based import ContentBasedRecommender
-from clothes_recommender.recommenders.learned import LearnedRecommender, load_model
-from clothes_recommender.recommenders.popularity import PopularityRecommender
-from clothes_recommender.recommenders.repeat import RepeatPurchaseRecommender
-from clothes_recommender.vector_store import ProductVectorStore
+from curio.app.config import get_settings
+from curio.domains.fashion.catalog import CustomerData, ProductCatalog, load_shopper_purchases
+from curio.domains.fashion.recommenders.collaborative import CollaborativeRecommender
+from curio.domains.fashion.recommenders.content_based import ContentBasedRecommender
+from curio.domains.fashion.recommenders.learned import LearnedRecommender, load_model
+from curio.domains.fashion.recommenders.popularity import PopularityRecommender
+from curio.domains.fashion.recommenders.repeat import RepeatPurchaseRecommender
+from curio.domains.fashion.vector_store import ProductVectorStore
 from scripts.prepare_data import co_purchases
 
 TOP_K = 12
@@ -120,7 +120,7 @@ def evaluate(
     ranker_path: Path | None = None,
 ) -> dict:
     """Evaluate prepared users with training and holdout purchases; download no models."""
-    from clothes_recommender.recommenders.graph import GraphRecommender
+    from curio.domains.fashion.recommenders.graph import GraphRecommender
 
     data_dir = Path(data_dir)
     catalog = ProductCatalog.from_parquet(data_dir / "products.parquet")

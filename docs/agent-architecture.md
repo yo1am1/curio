@@ -1,28 +1,50 @@
 # Curio agent: architecture and review
 
 This page describes how Curio's agent plans, acts, verifies and hands control back to
-the shopper, in the fashion, cocktail and book domains. It also records the review of
+the shopper, in the fashion, cocktail and book domains, and in "Plan my evening", which
+composes them. It also records the review of
 the recommendation system and the earlier assistant that led to this design.
 
-## One engine, three toolkits
+## One engine, four toolkits
 
-The loop lives once, in `chat/engine.py` (`AgentEngine`). Each domain plugs in a
-`Toolkit`: its tool schemas and policies, planning, how READ tools run, how APPROVE
-effects are validated, the grounding check, the deterministic fallback and the reply
-fields.
+The loop lives once, in `curio.engine` (`engine/agent.py`, `AgentEngine`). Each domain
+plugs in a `Toolkit` (`engine/toolkit.py`): its tool schemas and policies, planning, how
+READ tools run, how APPROVE effects are validated, the grounding check, the deterministic
+fallback and the reply fields. `BaseToolkit` gives every optional hook (context cleaning,
+history, planning, refresh, proposal display, `vet_proposal`, suggestions) a no-op default, so
+a toolkit subclass writes only what its domain needs; every domain toolkit and the tea example
+subclass it.
 
-| | Fashion (`ShoppingAssistant`) | Cocktails (`CocktailAssistant`) | Books (`BookAssistant`) |
-|---|---|---|---|
-| Toolkit | `chat/assistant.py`, `chat/tools.py` | `chat/cocktail_agent.py`, `chat/cocktail_tools.py` | `chat/book_agent.py`, `chat/book_tools.py` |
-| Planning | Structured `SearchIntent` from the LLM, then an initial catalog search | The message is the query; no extra model call before the tool loop | As cocktails |
-| Grounding | Euro amounts (including outfit totals) and product IDs | Drink IDs, catalog drink names and recipe amounts | Book IDs, catalog titles and Goodreads ratings; paired drinks' numbers, names and amounts |
-| Reply items | `products` | `cocktails` | `books`; a pairing's drinks in `cocktails` and `pairing` |
+The code has three layers, and `tests/test_architecture.py` enforces their boundaries:
+
+- `curio.engine`: the loop, the `Toolkit` protocol and `BaseToolkit`, policies and the shared `AskShopper`,
+  signed proposals (`ActionSigner`, `narrow_args`), the generic grounding machinery (price and
+  ID checks, name matching, `merge_reports`), the chat model factory and the wire models every
+  turn shares. It imports no domain and not the app.
+- `curio.domains.<name>`: a domain's catalog and recommenders beside its `agent/` package
+  (toolkit, tools, prompts, grounding check and session schemas: its context fields, card IDs
+  and approved effects). A domain imports the engine and itself; only the composed domains
+  build on others: `pairings` on `books` and `cocktails`, and `evening` on `fashion`,
+  `books`, `cocktails` and `pairings`.
+- `curio.app`: settings, the domain registry, the API and the UI. `app/schemas.py` combines
+  every domain's payloads into the one `/chat` wire format, and `app/assistants.py` binds
+  each toolkit to the engine with it (`Schemas`).
+
+[`examples/hello_domain`](../examples/hello_domain) is a complete small domain on the same
+engine, without the app.
+
+| | Fashion (`ShoppingAssistant`) | Cocktails (`CocktailAssistant`) | Books (`BookAssistant`) | Evening (`EveningAssistant`) |
+|---|---|---|---|---|
+| Toolkit | `domains/fashion/agent/` | `domains/cocktails/agent/` | `domains/books/agent/`; PairCocktail from `domains/pairings/agent/` | `domains/evening/agent/` |
+| Planning | Structured `SearchIntent` from the LLM, then an initial catalog search | The message is the query; no extra model call before the tool loop | As cocktails | As cocktails; the plan step lists the remembered tastes of every domain |
+| Grounding | Euro amounts (including outfit totals) and product IDs | Drink IDs, catalog drink names and recipe amounts | Book IDs, catalog titles and Goodreads ratings; paired drinks' numbers, names and amounts | All of these, against the plan's parts |
+| Reply items | `products` | `cocktails` | `books`; a pairing's drinks in `cocktails` and `pairing` | The plan in `evening`; its pieces, book and drink in `products`, `books`, `cocktails` |
 
 The engine owns everything shared: the tool-call and time budgets, policy enforcement,
 signed proposals and resume, clarifying questions, merging approved effects into the
 turn, the self-correction step, the streamed trace and the error mapping. `POST /chat`
 picks the assistant by `ChatRequest.domain` (default `fashion`) from the loaded domains in
-the domain registry (`services.DOMAINS`, see the
+the domain registry (`app.services.DOMAINS`, see the
 [technical guide](technical-guide.md#domain-registry)). Every domain is optional: a request
 for a domain the server does not serve gets 503 with how to prepare it, and a served domain
 without an LLM gets 503 saying how to enable chat. Every assistant is built once at startup
@@ -31,11 +53,29 @@ to its tool's domain but verifies on any. A new domain's assistant is a `Toolkit
 same engine, built by its loader from that kit.
 
 Books were the test of that claim. The book toolkit needed no change to the loop, budgets,
-signing, resume, grounding flow, streaming or UI chat code. The shared schemas only gained
-data: the book approval tools in `ApprovalTool`, `book_preferences` and `book_shortlist` on
-`TurnContext`, two `AppliedEffect` kinds, and one entry each in the engine's tables that
-say which context field an approved effect updates (`_MEMORY_EFFECTS`,
-`_SHORTLIST_EFFECTS`).
+signing, resume, grounding flow, streaming or UI chat code. The book domain declares its own
+session fields (`book_preferences`, `book_shortlist` on `BookContext`), card IDs and approved
+effects (`BookEffect`, which names the context field each effect field updates); the app adds
+them to its wire models and the book approval tools to `ApprovalTool`.
+
+The book → drink pairing is the one cross-domain feature. The book toolkit registers
+PairCocktail and exposes a `DrinkPairing` extension point; the pairings domain implements it
+(`CocktailPairing`) with the pairer and `PairedDrinkCheck`, and the app plugs it in when both
+books and cocktails are served. So `books` never imports `cocktails` or `pairings`.
+
+"Plan my evening" is the composition showcase: a domain whose toolkit uses three others'
+recommenders through one deterministic planner, with no change to the engine. Its toolkit's
+items are products, books and drinks together (`Turn[Product | Book | Cocktail]`, keyed in
+separate ID ranges), its effect `EveningEffect` names three context fields in `adds`, so the
+engine's existing effect merging saves one approval to three lists, and its grounding is the
+three domains' checks merged, plus three of its own: catalog drink names in any case and
+unmarked ("pour a mojito"; names that are also ordinary words, such as "Manhattan" or
+"Thriller", only in a drink context; names inside the plan's products, books, authors or own
+text are allowed), "<title> by <author>" against that book's authors, and prices in another
+currency ($, £), which never match the euro catalog. A save (SaveEvening) may name only the current
+plan's parts: the toolkit's `vet_proposal` hook, which the engine calls before it applies or
+signs any APPROVE action, refuses other IDs with a tool message. The hook is generic and
+optional, so the engine stays domain-free.
 
 ## One turn
 
@@ -44,7 +84,7 @@ flowchart TD
     M[Shopper message] --> P[Plan: structured intent + approved memory]
     P --> S[Initial catalog search]
     S --> L{Tool loop<br/>max 5 calls, 90 s}
-    L -- READ --> R[Domain READ tools<br/>fashion: SearchCatalog · InspectProducts · FindRelated · PersonalPicks · BuildOutfit · SwapOutfitItem<br/>cocktails: SearchCocktails · InspectCocktails · SimilarCocktails · WhatCanIMake<br/>books: SearchBooks · InspectBooks · ReadersAlsoLiked · BooksByAuthor · PairCocktail]
+    L -- READ --> R[Domain READ tools<br/>fashion: SearchCatalog · InspectProducts · FindRelated · PersonalPicks · BuildOutfit · SwapOutfitItem<br/>cocktails: SearchCocktails · InspectCocktails · SimilarCocktails · WhatCanIMake<br/>books: SearchBooks · InspectBooks · ReadersAlsoLiked · BooksByAuthor · PairCocktail<br/>evening: PlanEvening · SwapEveningPart]
     R --> L
     L -- ASK --> Q[AskShopper: question + quick replies]
     L -- APPROVE --> A{Auto-approve<br/>allowed?}
@@ -93,7 +133,7 @@ pages show ("3 shoppers who bought … also bought this"), so explanations stay 
 #### Outfits: multi-step planning with human approval
 
 "Build me a summer outfit for a wedding under €80" is one `BuildOutfit` call. The planner
-(`outfits.py`, described in the [technical guide](technical-guide.md#outfit-builder)) plans
+(`domains/fashion/outfits.py`, described in the [technical guide](technical-guide.md#outfit-builder)) plans
 slots from the occasion (a women's wedding: dress, shoes, bag, accessory), searches each
 slot's candidates with CLIP restricted to its product types and the audience's sections,
 checks that the cheapest pieces fit the budget, then fills the slots in order. Each slot may
@@ -180,6 +220,26 @@ reply carries the drinks in `cocktails` and the explained `pairing`; its suggest
 "Another pairing", "Make it alcohol-free" and readers-also-liked. For another pairing the
 model sees the drinks earlier answers showed ("Drinks shown (an earlier pairing): drink #269
 Old Fashioned") and passes them as `exclude_drink_ids`.
+
+### Evening
+
+| Tool | Policy | Backed by |
+|---|---|---|
+| PlanEvening | read | `EveningPlanner.plan`: occasion (plus budget, audience, mood, alcohol-free); streams a step for the theme, the outfit, the book and the drink, and one per missing part |
+| SwapEveningPart | read | `EveningPlanner.swap` on the plan the client holds: another or a cheaper outfit piece (part outfit with its slot), another book (its drink is re-paired), another or an alcohol-free drink |
+| AskShopper | ask | Shared; used when the request names no occasion ("plan my evening") |
+| SaveEvening | approve | Validated product, book and drink IDs; one `EveningEffect` adds them to the fashion shortlist, the reading list and the saved cocktails. The shopper can untick any of them |
+
+Remembered tastes from every domain apply to every call: avoided and liked genres and avoided
+authors to the book, the alcohol-free taste and avoided ingredients to the drink, the
+per-piece price limit to the outfit, and a remembered menswear or womenswear section chooses
+the audience. The server keeps no plan: the reply carries `evening` with its `state`, the UI
+sends it back as `TurnContext.evening`, and the toolkit restores it from the catalogs (and
+re-pairs the drink) for the session prompt, so "another book", "cheaper shoes" or "make the
+drink alcohol-free" become SwapEveningPart calls and "save the evening" a SaveEvening
+proposal with every part. Children's and young-adult books always get alcohol-free drinks,
+as in pairings; the prompt adds the cocktail safety rules, and the fallback ends with the
+pairer's note.
 
 ## Human in the loop
 
@@ -281,6 +341,26 @@ model calls the tool again to talk about them.
 An invented drink ("**Negroni** (drink #257)" when the pairing returned an Old Fashioned)
 is an unverified claim like an invented rating: one rewrite, then the fallback.
 
+### Evening
+
+`EveningGroundingCheck` merges the three domains' checks against this turn's plans, the plan
+the client holds (re-read and re-paired) and the parts a swap replaced:
+
+- Euro amounts and product IDs as fashion checks them; besides piece prices it allows the
+  outfit's total, budget, what is left, the cheapest option of a gap and a remembered limit.
+  Answers cite pieces as "product #N".
+- Titles, book IDs ("[id N]", "book #N") and Goodreads ratings as books check them; the
+  pairer's reasons count as tool text, so a lore line's title may be repeated.
+- Drink names (where marked), drink numbers ("drink #N") and recipe amounts as
+  `PairedDrinkCheck` checks them, against the plans' drinks only: drinks of earlier answers
+  are context, never evidence.
+- Each check accepts the other parts' names: an H&M piece called "Paloma" is not the Paloma
+  cocktail, and a drink named like a book is the drink.
+
+The fallback restates the plan from the catalogs: each piece with its price, the outfit
+total, the book with its rating, the drink with its alcohol status, what is missing, the
+"why it works" line and the pairer's note.
+
 ## Budgets and failure handling
 
 - At most five tool calls per turn, then a grounded fallback.
@@ -337,6 +417,10 @@ actions. Gaps addressed here:
 ## Limits
 
 - The shortlist, reading list and memory last for the browser session only, kept per domain.
+- Evening themes are a hand-written, English-only word table with eight themes; an occasion
+  with no theme word becomes a cosy evening. The outfit, book and drink are chosen one after
+  the other (the drink from the book), not jointly, and nothing checks that the outfit's
+  colours suit the book or drink.
 - The grounding check verifies prices, IDs, drink names, amounts, book titles and ratings,
   not descriptive claims.
 - Book titles that are a single short word ("It", "Dune") are not checked, so the agent

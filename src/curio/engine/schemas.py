@@ -1,0 +1,147 @@
+"""Wire models every agent turn shares: the trace, proposals, decisions, effects and replies.
+
+These models know no domain. A domain extends them with its own payloads (its catalog
+cards, remembered tastes and session fields), and an app combines those extensions into
+the models it serves and passes their classes to `AgentEngine` as `Schemas`;
+`curio.app.schemas` does that for the HTTP API. The engine's own models are enough for a
+small domain on its own (`examples/hello_domain`).
+"""
+
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
+from typing import Any, ClassVar, Literal, Self
+
+from pydantic import BaseModel, Field, SerializeAsAny
+
+
+class AgentStep(BaseModel):
+    """One observable step of a turn, streamed to the UI as it happens."""
+
+    kind: Literal["plan", "tool", "guardrail", "approval", "answer"]
+    name: str
+    summary: str
+    status: Literal["ok", "error", "blocked", "pending", "skipped"] = "ok"
+    detail: dict[str, Any] = Field(default_factory=dict)
+    duration_ms: int = 0
+
+
+class Clarification(BaseModel):
+    question: str
+    options: list[str]
+
+
+class GroundingReport(BaseModel):
+    """Result of checking the final answer's claims against tool evidence."""
+
+    status: Literal["verified", "repaired", "fallback", "not_applicable"]
+    checked: int = 0
+    issues: list[str] = Field(default_factory=list)
+
+
+class Intent(BaseModel):
+    """What the shopper asked for in this turn.
+
+    A domain may subclass it with its own filters (fashion's `SearchIntent`). Proposals are
+    signed over it, so a turn resumed after the shopper's decision keeps the same filters.
+    """
+
+    query: str
+
+    def resumed(self) -> Self:
+        """This intent for a turn resumed after the shopper answered a proposal."""
+        return self
+
+
+class ChatTurn(BaseModel):
+    """One earlier message. Domains add the IDs of the cards an assistant turn showed."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=4000)
+
+
+class TurnContext(BaseModel):
+    """Client-held session state the agent may read; the server stays stateless.
+
+    Domains add their own fields (shortlists, remembered tastes).
+    """
+
+    # Human-in-the-loop policy: approval tools listed here run without asking.
+    auto_approve: list[str] = Field(default_factory=list, max_length=20)
+
+
+class PendingAction(BaseModel):
+    """A state-changing action proposed by the agent, waiting for the shopper's decision.
+
+    The server signs every field here except `summary` (display-only), so a client can
+    approve exactly what the agent proposed, or narrow it, but never forge or widen it.
+    `intent` keeps the proposing turn's filters for the resumed turn. Apps add display-only
+    fields (the cards the proposal touches) in a subclass.
+    """
+
+    id: str
+    tool: str
+    args: dict[str, Any]
+    request: str = Field(max_length=2000)
+    issued_at: int
+    signature: str
+    intent: SerializeAsAny[Intent] | None = None
+    summary: str = ""
+
+
+class ActionDecision(BaseModel):
+    action: PendingAction
+    approved: bool
+    # Optional narrowing edits: a subset of proposed IDs / preference values.
+    edited_args: dict[str, Any] | None = None
+
+
+class AppliedEffect(BaseModel):
+    """A state change the client should now apply to its shortlist or memory.
+
+    Each domain subclasses it with its own kinds and fields, and says which `TurnContext`
+    field each of them updates, so the engine can apply an approved effect to the rest of
+    the turn the way the client will.
+    """
+
+    kind: str
+    # Effect field -> context field holding remembered values; approved values are merged in.
+    remembers: ClassVar[Mapping[str, str]] = {}
+    # Effect field -> context field holding a list of IDs; approved IDs are appended.
+    adds: ClassVar[Mapping[str, str]] = {}
+
+
+class AssistantReply(BaseModel):
+    """The end of a turn. Domains add their items through `Toolkit.reply_fields`."""
+
+    text: str
+    intent: SerializeAsAny[Intent]
+    status: Literal["complete", "needs_input", "needs_approval"] = "complete"
+    steps: list[AgentStep] = Field(default_factory=list)
+    clarification: Clarification | None = None
+    pending_action: SerializeAsAny[PendingAction] | None = None
+    applied: list[SerializeAsAny[AppliedEffect]] = Field(default_factory=list)
+    grounding: GroundingReport | None = None
+    suggestions: list[str] = Field(default_factory=list)
+
+
+class StepEvent(BaseModel):
+    type: Literal["step"] = "step"
+    step: AgentStep
+
+
+class ReplyEvent(BaseModel):
+    type: Literal["reply"] = "reply"
+    reply: SerializeAsAny[AssistantReply]
+
+
+AgentEvent = StepEvent | ReplyEvent
+
+
+@dataclass(frozen=True)
+class Schemas:
+    """The model classes an engine builds: the engine's own, or an app's subclasses."""
+
+    intent: Callable[..., Intent] = Intent
+    context: Callable[[], TurnContext] = TurnContext
+    pending_action: Callable[..., PendingAction] = PendingAction
+    reply: Callable[..., AssistantReply] = AssistantReply

@@ -1,9 +1,10 @@
-# Multi-domain contract (fashion, cocktails, books)
+# Multi-domain contract (fashion, cocktails, books, evening)
 
 Shared interfaces for the cocktail domain (v1.0), the book domain and the fashion outfit
 builder (1.1.0). Every teammate codes against this file; change it only together with
-every consumer. The [books](#books), [fashion outfits](#fashion-outfits) and
-[book → cocktail pairing](#book--cocktail-pairing) sections follow the cocktail sections.
+every consumer. The [books](#books), [fashion outfits](#fashion-outfits),
+[book → cocktail pairing](#book--cocktail-pairing) and [Plan my evening](#plan-my-evening)
+sections follow the cocktail sections.
 
 ## Data
 
@@ -35,9 +36,9 @@ not TheCocktailDB drink ids, so per-drink pages cannot be linked). UIs credit
 Settings: `Settings.cocktails_path -> data_dir / "cocktails.parquet"`. The domain is enabled
 when that file exists. No API key and no network at serving time.
 
-## Python interfaces (`clothes_recommender.cocktails`)
+## Python interfaces (`curio.domains.cocktails`)
 
-Types: `cocktails/domain.py` (already written: Cocktail, Ingredient, CocktailHit,
+Types: `domains/cocktails/models.py` (already written: Cocktail, Ingredient, CocktailHit,
 PantryMatch, CocktailPreferences, CocktailQuery, AlcoholFilter, IngredientTerm).
 
 - `Cocktail.alcohol_free` is True only for `alcoholic == "Non alcoholic"`. `Optional alcohol`
@@ -48,7 +49,7 @@ PantryMatch, CocktailPreferences, CocktailQuery, AlcoholFilter, IngredientTerm).
   `CocktailPreferences.liked_ingredients`/`avoided_ingredients`; blank or longer items are a
   validation error (HTTP 422).
 
-`cocktails/catalog.py`:
+`domains/cocktails/catalog.py`:
 
 ```python
 class CocktailCatalog:
@@ -66,7 +67,7 @@ class CocktailCatalog:
     def canonical_ingredient(self, name: str) -> str | None: ...  # case/space-insensitive lookup
 ```
 
-`cocktails/recommend.py` (pure numpy/python, deterministic, ties by lower drink_id):
+`domains/cocktails/recommend.py` (pure numpy/python, deterministic, ties by lower drink_id):
 
 ```python
 class CocktailRecommender:
@@ -106,7 +107,7 @@ class CocktailRecommender:
         # coverage, then name. Empty pantry -> [].
 ```
 
-## Agent (`clothes_recommender.chat`)
+## Agent (`curio.domains.cocktails.agent`)
 
 The plan → act → verify loop, budgets, approvals (signed proposals), streaming steps and
 grounding stay shared. Cocktail tools:
@@ -129,7 +130,7 @@ alcohol status; no encouragement of excessive drinking.
 
 ## Serving: every domain is optional
 
-`services.DOMAINS` is the registry (display order): one `DomainSpec(id, label, setup_hint,
+`app.services.DOMAINS` is the registry (display order): one `DomainSpec(id, label, setup_hint,
 runtime_type, load)` per domain. `load(settings, kit)` returns the domain's runtime, or `None`
 while its data is missing; a runtime has `assistant: AgentEngine | None`, `item_count()` and
 `close()` (`FashionServices`, `CocktailServices`). `Services.domains` maps ids to the loaded
@@ -137,7 +138,7 @@ runtimes; `services.fashion` / `services.cocktails` are typed shortcuts. Fashion
 `products.parquet`, `users.parquet` and `purchases.parquet` exist; cocktails when
 `cocktails.parquet` loads. `ENABLED_DOMAINS` (comma-separated ids) limits what is loaded; an
 unknown id is a startup error. Adding a domain: one `DomainSpec`, its id in
-`chat.schemas.Domain`, its endpoints behind a dependency like `FashionDep`, and one `DomainView`
+`app.schemas.Domain`, its endpoints behind a dependency like `FashionDep`, and one `DomainView`
 in `ui.DOMAIN_VIEWS`. Books (`BookServices`) are served when `books.parquet` and
 `book_neighbours.parquet` both load; a missing or broken file disables only books.
 
@@ -232,9 +233,9 @@ without one the UI asks Open Library by ISBN and shows its placeholder when ther
 cover). UIs credit "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.0)" and "Some
 covers: Open Library".
 
-### Python interfaces (`clothes_recommender.books`)
+### Python interfaces (`curio.domains.books`)
 
-Types in `books/domain.py`: `Book` (the columns above, with `source_url` instead of
+Types in `domains/books/models.py`: `Book` (the columns above, with `source_url` instead of
 `goodreads_book_id` and `author` = first author), `BookRef`, `BookHit` (`book`, `score`,
 `reasons`), `BookPreferences` (`liked_genres`, `avoided_genres`, `avoided_authors`, each at
 most 10), `BookQuery` (`query` ≤ 200, `genres` ≤ 5, `mood`, `author`, `min_rating` 0-5,
@@ -242,7 +243,7 @@ most 10), `BookQuery` (`query` ≤ 200, `genres` ≤ 5, `mood`, `author`, `min_r
 `BecauseYouLiked` (`liked` 1-20 ids, exclusions, `top_k`). Genre and author terms are
 stripped and bounded (`GenreTerm` ≤ 60, `AuthorTerm` ≤ 100 characters; HTTP 422 otherwise).
 
-`books/catalog.py`:
+`domains/books/catalog.py`:
 
 ```python
 class BookCatalog:
@@ -262,7 +263,7 @@ class BookCatalog:
     def titles(self) -> list[str]: ...
 ```
 
-`books/recommend.py` (numpy/scipy, deterministic, ties by lower book_id):
+`domains/books/recommend.py` (numpy/scipy, deterministic, ties by lower book_id):
 
 ```python
 class BookRecommender:
@@ -355,7 +356,7 @@ the reading list or typed), and ratings must match an evidence book's Goodreads 
 
 The outfit builder is fashion-only and adds fields; nothing existing changes shape.
 
-### Python interfaces (`clothes_recommender.outfits`)
+### Python interfaces (`curio.domains.fashion.outfits`)
 
 - `SlotName = Literal["top", "bottom", "dress", "outerwear", "shoes", "bag", "accessory"]`,
   `Audience = Literal["women", "men", "kids"]`, `SwapMode = Literal["other", "cheaper"]`.
@@ -378,6 +379,9 @@ The outfit builder is fashion-only and adds fields; nothing existing changes sha
   Outfit]`, `outfit(request) -> Outfit`, `swap(state, slot, mode, refine, *,
   max_item_price) -> Swap(outfit, slot, old, new | None)` (raises `OutfitError` for a slot
   the outfit lacks or an outfit with no known piece), `restore(state) -> Outfit | None`.
+- `OutfitRequest(occasion, budget, audience, slots, max_item_price, queries)`: `queries`,
+  `(slot, query)` pairs, replace the occasion template's query for those slots (types and
+  weights stay); `plan_slots(occasion, audience, slots, queries)` takes the same pairs.
 
 ### Agent
 
@@ -416,9 +420,9 @@ outfit's `amounts()`, for the outfit built this turn and the one the client sent
 A cross-domain feature over the books and cocktails domains; nothing existing changes shape
 except the additions below.
 
-### Python interfaces (`clothes_recommender.pairings`)
+### Python interfaces (`curio.domains.pairings`)
 
-- `domain.py`: `PairingRequest(book_id | book_ids (≤ 20), liked_genres, avoided_genres (≤ 10
+- `models.py`: `PairingRequest(book_id | book_ids (≤ 20), liked_genres, avoided_genres (≤ 10
   `GenreTerm`s each), alcohol_free, cocktail_preferences: CocktailPreferences | None,
   exclude_drink_ids (≤ 15), seed (0-10,000), top_k (1-5))`, extra fields forbidden, and at
   least a book or a liked genre. `BookPairing(profile: FlavourProfile, pairings:
@@ -474,3 +478,100 @@ extras.
 - Books page: "Your reading list's cocktail" (`pairing_reading_list`) when the reading list
   or liked genres are set. Book chat sends `cocktail_preferences`, stores `pairing` on the
   turn and renders it as a card; the starters add "Pair a cocktail with my reading list".
+
+## Plan my evening
+
+A composed domain, `curio.domains.evening`, the only one that may import `fashion`, `books`,
+`cocktails` and `pairings` (`tests/test_architecture.py`; no domain imports `evening`).
+Nothing existing changes shape except the additions below; other domains' replies have no
+`evening` key.
+
+### Python interfaces (`curio.domains.evening`)
+
+- `themes.py`: `ThemeId = Literal["cosy", "romantic", "glamorous", "summery", "mysterious",
+  "thoughtful", "adventurous", "playful"]`; `Theme(id, label, icon, words, feeling,
+  outfit_occasion, slots, queries, men_queries, books: tuple[BookSearch, ...], drink_words,
+  drink_feeling)` with `queries_for(audience)`; `BookSearch(query, genres, mood, min_rating,
+  exclude_genres)`; `THEMES`, `THEMES_BY_ID`, `DEFAULT_THEME` (cosy), `FALLBACK_BOOKS`;
+  `detect_theme(occasion, mood=None) -> ThemeMatch(theme, words, source: "mood" |
+  "occasion" | "default")` with `evidence(occasion)`.
+- `models.py`: `EveningTastes(book_preferences, cocktail_preferences, max_item_price)`;
+  `EveningRequest(EveningTastes)` adds `occasion` (2-200, not blank), `budget` (0 < b ≤
+  5,000, the outfit's), `audience` (`women` | `men`), `mood` (≤ 40) and `alcohol_free`; extra
+  fields are forbidden. `EveningState(occasion, mood, theme, budget, audience, alcohol_free,
+  outfit: OutfitState | None, book_id, drink_id, skipped_books (≤ 20), skipped_drinks (≤
+  15))`: what a client holds and sends back. `EveningPlan(occasion, theme: ThemeInfo(id,
+  label, icon, feeling, evidence), outfit: OutfitPart(outfit: Outfit, reason) | None, book:
+  BookPart(book, reason) | None, drink: DrinkPart(cocktail, reasons (≥ 1), pairs_with,
+  evening_fit, alcohol_free_reason, note) | None, why, missing: list[MissingPart(part,
+  reason)], notes, status: "complete" | "partial" | "empty", change: str | None, state)`;
+  `EveningPlan.amounts()` is the outfit's. `EveningSwap(evening, part: "outfit" | "book" |
+  "drink", slot, mode: "other" | "cheaper" | "alcohol_free", refine (≤ 100), tastes)`.
+- `planner.py`: `EveningPlanner(*, outfits: OutfitPlanner | None, books: BookRecommender |
+  None, book_catalog: BookCatalog | None, pairer: BookCocktailPairer | None, cocktails:
+  CocktailCatalog | None)`; `parts -> ["outfit", "book", "drink"]` (those it can plan),
+  `plan(EveningRequest) -> EveningPlan`, `restore(state, tastes) -> EveningPlan`,
+  `swap(state, part, *, slot, mode, refine, tastes) -> EveningPlan` (raises `EveningError`
+  for a swap the plan cannot make). `budget_in(text)`, `wants_alcohol_free(text)` read a
+  budget and an alcohol-free wish from the occasion. `OUTFIT_NEEDS_FASHION`,
+  `BOOK_NEEDS_BOOKS`, `DRINK_NEEDS_COCKTAILS` and `DRINK_NEEDS_BOOK` are the `missing`
+  reasons.
+
+Rules: the drink always comes from `BookCocktailPairer.pair` on the plan's book (the client's
+drink is kept on restore only when the pairer still pairs it); alcohol-free and the
+children's and young-adult rule as in pairings; children's books are never the evening's
+book; remembered avoided genres and authors win over a theme's genre; the outfit stays
+within the budget; a part that cannot be planned is in `missing`, never an error;
+deterministic.
+
+### Serving and API
+
+- `DomainSpec` gains `compose(domains, kit) -> runtime | None` (a composed domain has no
+  `load`) and `missing(services) -> str`; `DomainSpec.hint(services)` is the 503 detail and
+  the `/domains` hint. `EVENING` (`id="evening"`, label `Evening`) composes
+  `EveningServices(planner, assistant)` whenever books and cocktails are served and their
+  pairer built; `item_count()` is the number of parts it plans, and its `notice` (the
+  outfit's `OUTFIT_NEEDS_FASHION` without fashion) is appended to its `/domains` hint.
+  `ENABLED_DOMAINS` accepts `evening` and limits only data domains; naming `evening`
+  enables the domains it builds on (`DomainSpec.builds_on`: books, cocktails and, when
+  prepared, fashion).
+- `POST /evening/plan` body `EveningRequest` -> `EveningPlan`; `POST /evening/swap` body
+  `EveningSwap` -> `EveningPlan` (422 for an `EveningError` or an invalid body). Both 503 with
+  `EVENING_MISSING` naming the missing books or cocktails.
+- `Domain` adds `"evening"`, `ApprovalTool` adds `"SaveEvening"` (`auto_approve` ≤ 7),
+  `TurnContext.evening: EveningState | None`, `AppliedEffect` adds `EveningEffect(kind=
+  "evening", product_ids, book_ids, drink_ids)` (adds to `shortlist`, `book_shortlist`,
+  `cocktail_shortlist`), and `AssistantReply.evening: EveningPlan | None`, serialized last and
+  only for evening replies.
+
+### Agent
+
+| Tool | Policy | Args |
+|---|---|---|
+| PlanEvening | read | occasion (2-200), budget (≤ 5,000), audience (`women`, `men`), mood (≤ 40), alcohol_free |
+| SwapEveningPart | read | part (`outfit` needs a slot; `book`, `drink` take none), mode (`other`, `cheaper` for the outfit only, `alcohol_free` for the drink only), refine (≤ 100) |
+| AskShopper | ask | shared |
+| SaveEvening | approve | product_ids (≤ 5), book_ids (≤ 2), drink_ids (≤ 2), at least one |
+
+PlanEvening streams "Evening theme", "Evening outfit", "Evening book", "Evening drink" (or a
+skipped step per missing part), then "PlanEvening". Answers cite pieces as "product #N",
+books as "book #N" or "[id N]" and drinks as "drink #N"; `EveningGroundingCheck` merges the
+fashion, book and paired-drink checks. Turn items are products, books and drinks keyed in
+separate ranges (`BOOK_KEY`, `DRINK_KEY`).
+
+### UI
+
+- `DOMAIN_VIEWS["evening"]`: label ":material/bedtime: Evening", the "Plan my evening" page
+  (`/evening`), copy titled "Plan my evening.", approval setting `ask_shortlist` ->
+  `SaveEvening`, session keys `chat_history_evening`, `chat_queued_evening`,
+  `chat_decision_evening`.
+- Session key `chat_evening`: the latest evening reply's `evening.state`, sent as `evening`
+  with every evening chat request (with every domain's tastes and lists) and cleared by "New
+  conversation". `evening_plan` holds the page's plan, `evening_saving` the open save dialog.
+- The plan renders as `evening_cards`: the theme badge and evidence, the "why it works" line
+  (`evening_why_<key>`), three cards in a row (`evening_outfit_<key>`, `evening_book_<key>`,
+  `evening_drink_<key>`) with swap buttons, and Save evening. On the page the buttons call
+  `/evening/swap` and Save evening opens an approval dialog with a checkbox per part; in chat
+  they send "Another top for my evening", "Cheaper shoes", "Another book", "Another drink",
+  "Make the drink alcohol-free" and "Save the evening" to the agent. An applied `evening`
+  effect adds each part to its own list.

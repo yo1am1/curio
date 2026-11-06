@@ -6,11 +6,114 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-06
+
+### Highlights
+
+- Curio is now an engine for trustworthy recommendation agents, proven on fashion, cocktails
+  and books, three deliberately different domains that compose.
+- **Plan my evening** turns one occasion into an outfit, a book and a drink paired with it.
+- Content safety: shots, crude drink names and adult books stay out unless asked for.
+- The Python package is renamed from `clothes_recommender` to `curio`.
+
+### Breaking
+
+- The package is `curio` (`src/curio`), not `clothes_recommender`. The PyPI project stays
+  `curio-recommendations`.
+- Entry points: the API is `uvicorn curio.app.api:create_app --factory`, and the UI is
+  `streamlit run src/curio/app/ui/main.py`.
+- Imports follow three layers: `curio.engine` (domain-free), `curio.domains.<name>` and
+  `curio.app`. The engine imports no domain; only `pairings` and `evening` import other
+  domains. `tests/test_architecture.py` enforces it.
+
+### Added
+
+- **Plan my evening** (`curio.domains.evening`), a composed domain. The deterministic,
+  offline `EveningPlanner` reads a free-text occasion ("rainy Sunday in", "date night under
+  €100", "book club, alcohol-free"), picks one of eight themes and plans an outfit
+  (fashion's `OutfitPlanner`), a book (the book recommender) and a drink the book → cocktail
+  pairer pairs with that book. Each part has a reason, and one "why it works" line cites
+  them all. Alcohol-free and the children's and young-adult rule work as in pairings.
+  Without fashion it plans the book and the drink and says the outfit needs the catalogue.
+- `POST /evening/plan` and `POST /evening/swap` (another or cheaper piece, another book with
+  a re-paired drink, another or alcohol-free drink), stateless over a client-held
+  `EveningState`.
+- The **evening agent** (`/chat` with `domain: "evening"`): PlanEvening and SwapEveningPart
+  (READ), AskShopper, and SaveEvening (APPROVE, signed and narrowable), which saves every part
+  to its own list through one `EveningEffect`. Grounding reuses the fashion, book and
+  paired-drink checks.
+- Composed domains in the registry (`DomainSpec.compose`, `builds_on`): `evening` is served
+  whenever books and cocktails are, including in the quick-start demo.
+- UI: an **Evening** entry in the domain switch and a Plan my evening page with occasion
+  chips, a budget, women or men, alcohol-free, three cards with swaps and Save evening
+  through an approval dialog. Evening chat shows the same cards.
+- `BaseToolkit` in `curio.engine`: no-op defaults for the optional `Toolkit` hooks
+  (`clean_context`, `history`, `plan`, `refresh`, `proposed`, `approval_text`,
+  `pending_display`, `vet_proposal`, `suggestions`); the required methods stay abstract.
+  The tea example and every domain toolkit subclass it.
+- `OutfitRequest.queries` sets a query per outfit slot.
+- Docs: `docs/data-and-licences.md` (moved from the README) and `docs/how-it-was-built.md`.
+- Tests for the planner, the API, the evening agent and the UI, end-to-end runs on the real
+  data, and `tests/test_architecture.py` rules for `evening`.
+
+### Changed
+
+- **Curio is presented as one engine for trustworthy recommendation agents.** The README
+  leads with why three domains, what the engine guarantees, a domain in one file, Plan my
+  evening and the domains, with five screenshots and a shorter overview animation.
+- `docs/architecture.svg` shows the three layers and the composed domains.
+- The overview animation (`scripts.record_overview`) opens on Plan my evening (a date night
+  under €100, with one swap), then the agent's step trace and grounding check, then The
+  Great Gatsby's drink pairing.
+- **The Python package is now `curio`**: imports, the Docker image, the Compose services,
+  `scripts/quickstart.sh` and CI use it. A small `curio.meta` shim keeps sniffio from
+  mistaking it for the Curio async library, which shares the import name.
+- **Three layers instead of one `chat/` package.** `curio.engine` holds the domain-free agent:
+  `AgentEngine`, the `Toolkit` protocol and `BaseToolkit`, policies, signed proposals,
+  grounding helpers, the chat model factory and the shared wire models. Each
+  `curio.domains.<name>` holds its catalog and recommenders beside an `agent/` package.
+  `curio.app` holds settings, the domain registry, the `/chat` wire models, the API, the UI
+  and the demo data. Pairings reach the book agent through a `DrinkPairing` extension point.
+  Each domain declares its own context fields and approved effects. Routes and JSON replies
+  are unchanged.
+- **The Streamlit UI is a package** (`curio.app.ui`) instead of one 4,100-line file: `main`
+  (the entry point), `shell`, `client`, `common`, `chat`, `effects`, `fashion`, `cocktails`,
+  `books` and `evening`. No behaviour change.
+- **Content safety.** Search, similar drinks and "What can I make?" leave out crude drink
+  names unless the search names the drink. Shots (the Shot category, and shots, slammers
+  and flaming drinks by name, such as Jello shots) stay out of "What can I make?" and
+  default recipe search, as in pairings, unless the request asks for them. Book search and
+  recommendations leave out erotica and abuse shelves unless the query asks for them.
+- The UI opens on Plan my evening when the server serves it; the brand reads "Trustworthy
+  recommendation agents".
+- The one-command demo includes books by default (`DEMO_BOOKS=0` or `CURIO_BOOKS=0` opts
+  out), so it has pairings and Plan my evening.
+- Fashion shows cleaned product names (`Product.display_name`: "PQ BOSTON SILK SKIRT" →
+  "Boston Silk Skirt"); grounding accepts either form.
+- Occasion outfits vary per occasion and prefer mid-priced pieces.
+- Book cards name the primary author only; descriptions drop Goodreads librarian notes.
+- Pairings: 1984 gets Victory Gin, in the style of The Great Gatsby's gin rickey.
+- "What can I make?" ranks a drink missing its base spirit below one missing a mixer or
+  garnish.
+- Docs: `docs/README.md` is an index, and the fashion research notes moved to
+  `docs/research/fashion/` with their data.
+- Tests mirror the layout: `tests/agents`, `tests/app` and `tests/domains/<domain>`.
+
+### Removed
+
+- The contribution system, since Curio is a solo project: `CONTRIBUTING.md`, the issue forms,
+  the pull request template, `CODEOWNERS`, the `PR title` workflow and `.github/rulesets/`.
+  CI, the Release workflow, Dependabot and `SECURITY.md` stay.
+- `docs/session-handoff.md` and `docs/engineering-workflow.md`, replaced by
+  `docs/how-it-was-built.md`.
+- `scripts/take_screenshots.py`; `scripts.capture_readme` writes the README images.
+
 ### Fixed
 
-- Release: the image job publishes whenever ghcr.io lacks the current version's image, not
-  only right after the release is created, so a failed push (1.3.0's first push was denied
-  while ghcr.io linked the new package) is repaired by the next run.
+- Release: the image job publishes whenever ghcr.io lacks the current version's image, so a
+  failed push (1.3.0's first push was denied) is repaired by the next run.
+- Approval cards show the cleaned product name ("Jamie Skinny Cropped", not "Jamie Skinny
+  Cropped Trs Pid").
 
 ## [1.3.0] - 2026-11-06
 
@@ -404,11 +507,11 @@ Fixes from the v1.0 release audit:
 Fashion MVP ("fashion edition"): personalized recommendations from historical H&M
 purchases with a learned ranker and buy-again baseline, CLIP text and photo search,
 product connections from co-purchases and Shopify categories, offline evaluation, and a
-tool-using shopping assistant with a conversation home and floating panel. Earlier
-development is recorded in [docs/engineering-workflow.md](docs/engineering-workflow.md)
-and [docs/session-handoff.md](docs/session-handoff.md).
+tool-using shopping assistant with a conversation home and floating panel. How it was
+built is summarised in [docs/how-it-was-built.md](docs/how-it-was-built.md).
 
-[Unreleased]: https://github.com/yo1am1/curio/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/yo1am1/curio/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/yo1am1/curio/compare/v1.3.0...v2.0.0
 [1.3.0]: https://github.com/yo1am1/curio/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/yo1am1/curio/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/yo1am1/curio/compare/v1.1.0...v1.2.0

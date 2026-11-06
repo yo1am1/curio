@@ -36,7 +36,8 @@ esac
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
 
 
-def run_quickstart(tmp_path: Path, **env: str) -> tuple[list[str], str]:
+def run_quickstart(tmp_path: Path, **env: str | None) -> tuple[list[str], str]:
+    """Run the script with `env` on top of a test environment; None unsets a variable."""
     fake = tmp_path / "bin" / "uv"
     fake.parent.mkdir()
     fake.write_text(FAKE_UV)
@@ -47,8 +48,10 @@ def run_quickstart(tmp_path: Path, **env: str) -> tuple[list[str], str]:
         "PATH": f"{fake.parent}{os.pathsep}{os.environ['PATH']}",
         "UV_LOG": str(log),
         "CURIO_BOOKS": "0",
+        "DATA_DIR": str(tmp_path / "data"),
         **env,
     }
+    environ = {k: v for k, v in environ.items() if v is not None}
     done = subprocess.run(
         ["bash", str(ROOT / "scripts" / "quickstart.sh")],
         env=environ,
@@ -84,3 +87,22 @@ def test_the_ui_opens_to_the_network_only_on_request_and_says_so(tmp_path):
     assert option(command(calls, "uvicorn"), "--host") == "127.0.0.1"  # the API never moves
     assert "Warning: UI_HOST=0.0.0.0 serves the UI beyond this computer" in output
     assert "LLM key" in output
+
+
+def test_books_are_prepared_by_default_with_an_opt_out(tmp_path):
+    """The one-command demo includes books, so it has pairings and Plan my evening."""
+    (tmp_path / "default").mkdir()
+    calls, output = run_quickstart(tmp_path / "default", CURIO_BOOKS=None)
+    assert any("-m scripts.prepare_cocktails" in call for call in calls)
+    assert any("-m scripts.prepare_books" in call for call in calls)
+    assert "Preparing the book catalog" in output
+    (tmp_path / "off").mkdir()
+    calls, _ = run_quickstart(tmp_path / "off", CURIO_BOOKS="0")
+    assert any("-m scripts.prepare_cocktails" in call for call in calls)
+    assert not any("-m scripts.prepare_books" in call for call in calls)
+
+
+def test_the_docker_demo_prepares_books_by_default_with_an_opt_out():
+    compose = (ROOT / "docker-compose.yml").read_text()
+    assert "DEMO_BOOKS: ${DEMO_BOOKS:-1}" in compose
+    assert 'if [ "$$DEMO_BOOKS" = 1 ]' in compose

@@ -404,9 +404,9 @@ def test_cli_prepares_to_explicit_experiment_directory(archive_factory, tmp_path
 
 
 def test_enriched_preparation_remains_compatible_with_serving(data_dir: Path) -> None:
-    from clothes_recommender.catalog import CustomerData, ProductCatalog, load_shopper_purchases
-    from clothes_recommender.recommenders.collaborative import CollaborativeRecommender
-    from clothes_recommender.recommenders.popularity import PopularityRecommender
+    from curio.domains.fashion.catalog import CustomerData, ProductCatalog, load_shopper_purchases
+    from curio.domains.fashion.recommenders.collaborative import CollaborativeRecommender
+    from curio.domains.fashion.recommenders.popularity import PopularityRecommender
 
     catalog = ProductCatalog.from_parquet(data_dir / "products.parquet")
     customers = CustomerData.from_parquet(

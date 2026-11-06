@@ -7,8 +7,8 @@ import httpx
 import pandas as pd
 import pytest
 
-from clothes_recommender.books.catalog import COLUMNS, NEIGHBOUR_COLUMNS, BookCatalog
-from clothes_recommender.books.recommend import BookRecommender
+from curio.domains.books.catalog import COLUMNS, NEIGHBOUR_COLUMNS, BookCatalog
+from curio.domains.books.recommend import BookRecommender
 from scripts import prepare_books
 from scripts.prepare_books import (
     BOOKS_CSV,
@@ -195,6 +195,8 @@ def test_split_authors_and_describe():
 
 def test_clean_description_strips_html_and_cuts_at_a_word(monkeypatch):
     assert clean_description("<p>Fire &amp; <i>blood</i></p>") == "Fire & blood"
+    junk = "There is an alternate cover edition for this ASIN here and here.<br/> Fire."
+    assert clean_description(junk) == "Fire."
     monkeypatch.setattr(prepare_books, "MAX_DESCRIPTION", 12)
     assert clean_description("one two three, four five") == "one two…"
 

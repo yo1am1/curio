@@ -5,13 +5,15 @@ the scripted stub in tests/e2e/llm_stub.py was used:
 
     uv run python -m tests.e2e.llm_stub --port 8790
     LLM_PROVIDER=openai LLM_MODEL=stub LLM_BASE_URL=http://127.0.0.1:8790/v1 LLM_API_KEY=x \
-        uv run uvicorn clothes_recommender.api:create_app --factory
-    uv run streamlit run src/clothes_recommender/ui.py
+        uv run uvicorn curio.app.api:create_app --factory
+    uv run streamlit run src/curio/app/ui/main.py
     uv run python -m scripts.capture_readme --out docs/screenshots
 
-`--only books` refreshes just the book screenshots, `--only outfit` the outfit builder and
-`--only pairing` the book → cocktail pairing (books and cocktails both prepared).
-Example customer 3 is used for the feed; its default picks all have photos.
+It writes the five screenshots the README shows (the overview animation comes from
+scripts.record_overview). `--only agent` refreshes the agent's step trace and the approval
+card, `--only photo` the photo search, `--only pairing` the book → cocktail pairing (books
+and cocktails prepared) and `--only evening` Plan my evening (fashion, books and cocktails
+prepared; no LLM needed).
 """
 
 import argparse
@@ -30,11 +32,12 @@ parser.add_argument("--executable-path", help="Chromium binary (default: Playwri
 parser.add_argument(
     "--only",
     nargs="+",
-    choices=["fashion", "cocktails", "books", "outfit", "pairing", "phone"],
+    choices=["agent", "photo", "pairing", "evening"],
     help="Capture only these groups (default: all). Books need scripts.prepare_books.",
 )
 ARGS = parser.parse_args()
 UI = ARGS.ui_url
+OCCASION = "Date night under €100"
 OUT = ARGS.out
 OUT.mkdir(parents=True, exist_ok=True)
 DONE = """() =>
@@ -87,16 +90,6 @@ def send(p, text):
     settle(p)
 
 
-def pick_example(p, index):
-    p.get_by_role("button", name="Shopping history", exact=True).click()
-    body = p.get_by_test_id("stPopoverBody")
-    body.locator('[data-testid="stSelectbox"]:visible').first.click()
-    p.get_by_role("option").nth(index).click()
-    settle(p)
-    p.keyboard.press("Escape")
-    settle(p)
-
-
 def scroll_main(p, y):
     p.evaluate(
         """y => {
@@ -112,20 +105,17 @@ def desk(b, h=1100):
     return b.new_context(viewport={"width": 1440, "height": h}, device_scale_factor=2).new_page()
 
 
-def fashion(b) -> None:
-    """Feed, agent, approval, memory, home, discover, product dialog, connections."""
-    # Feed: default personalized ranking for a fully photographed example.
-    p = desk(b)
-    p.goto(f"{UI}/fashion")
-    settle(p)
-    pick_example(p, 2)
-    save(p, "curio-fashion")
-
-    # Agent: search with trace, grounding badge and cards.
+def agent(b) -> None:
+    """The agent's step trace with its grounding check, then the approval card."""
     p = desk(b, 1250)
     p.goto(UI)
     settle(p)
+    # A visit opens on Plan my evening; choosing Fashion lands on its chat (Ask Curio).
+    p.get_by_test_id("stButtonGroup").first.get_by_text("Fashion", exact=True).click()
+    settle(p)
     send(p, "Black trousers under €30")
+    p.get_by_text(re.compile(r"How Curio worked")).last.click()
+    settle(p)
     show_last_answer(p)
     save(p, "curio-agent")
     # Approval: propose saving two pieces, untick one.
@@ -136,31 +126,16 @@ def fashion(b) -> None:
     card = p.locator('[class*="st-key-approval_home_"]').last
     card.get_by_role("checkbox").last.click(force=True)
     settle(p)
+    card.evaluate("el => el.scrollIntoView({block: 'center'})")
+    p.wait_for_timeout(500)
     save(p, "curio-approval")
-    card.get_by_role("button", name="Approve").click()
-    settle(p)
-    send(p, "Remember that my budget is up to €40")
-    p.locator('[class*="st-key-approval_home_"]').last.get_by_role("button", name="Approve").click()
-    settle(p)
-    send(p, "Blue jeans")
-    p.get_by_text(re.compile(r"How Curio worked")).last.click()
-    settle(p)
-    save(p, "curio-memory")
 
-    # Home (empty) desktop.
-    p = desk(b)
-    p.goto(UI)
-    settle(p)
-    save(p, "curio-home")
 
-    # Discover by description and photo.
+def photo(b) -> None:
+    """Photo search with an example garment."""
     p = desk(b, 1250)
     p.goto(f"{UI}/discover")
     settle(p)
-    p.locator(".st-key-text_example_0 button").click()
-    settle(p)
-    scroll_main(p, 360)
-    save(p, "curio-discover-text")
     p.get_by_text("Photo", exact=True).click()
     settle(p)
     p.get_by_text("Or pick an example photo").click()
@@ -175,116 +150,10 @@ def fashion(b) -> None:
     settle(p)
     save(p, "curio-discover-photo")
 
-    # Product dialog with bought-together pieces, opened from the example feed.
-    p = desk(b)
-    p.goto(f"{UI}/fashion")
-    settle(p)
-    pick_example(p, 2)
-    p.get_by_role("button", name=re.compile("^View ")).first.click()
-    settle(p)
-    dialog = p.get_by_role("dialog")
-    dialog.get_by_text("Bought together", exact=True).click()
-    settle(p)
-    if dialog.get_by_text("No related pieces").count():
-        dialog.get_by_text("Similar styles", exact=True).click()
-        settle(p)
-    save(p, "curio-product-detail")
-
-    # Product connections.
-    p = desk(b, 1500)
-    p.goto(f"{UI}/connections")
-    settle(p)
-    pick_example(p, 2)
-    p.locator("canvas, svg.marks").first.wait_for()
-    p.wait_for_timeout(1500)
-    save(p, "curio-connections")
-
-
-def cocktails(b) -> None:
-    """Cocktail agent with memory, recipe search and pantry."""
-    # Cocktail agent with remembered alcohol-free taste.
-    p = desk(b, 1250)
-    p.goto(UI)
-    settle(p)
-    p.get_by_test_id("stButtonGroup").first.get_by_text("Cocktails", exact=True).click()
-    settle(p)
-    send(p, "Remember I don't drink alcohol")
-    p.locator('[class*="st-key-approval_home_"]').last.get_by_role("button", name="Approve").click()
-    settle(p)
-    send(p, "Something fruity")
-    p.get_by_text(re.compile(r"How Curio worked")).last.click()
-    settle(p)
-    save(p, "curio-cocktail-agent")
-
-    # Cocktails page: search, pantry.
-    p = desk(b, 1250)
-    p.goto(f"{UI}/cocktails")
-    settle(p)
-    p.get_by_label("Describe a drink").fill("Something fresh with lime and mint")
-    p.get_by_role("button", name="Find drinks").click()
-    settle(p)
-    scroll_main(p, 330)
-    save(p, "curio-cocktails")
-    p.get_by_text("What can I make?", exact=True).first.click()
-    settle(p)
-    picker = p.get_by_label("Ingredients you have")
-    for ing in ("Gin", "Tonic water", "Lime"):
-        picker.click()
-        p.keyboard.type(ing)
-        p.get_by_role("option", name=re.compile(f"^{ing}$", re.I)).first.click()
-        settle(p)
-    p.keyboard.press("Escape")
-    settle(p)
-    scroll_main(p, 330)
-    save(p, "curio-cocktails-pantry")
-
-
-def books(b) -> None:
-    """Book search seeded by a title, "Because you liked…" and the book agent with memory."""
-    p = desk(b, 1250)
-    p.goto(f"{UI}/books")
-    settle(p)
-    p.get_by_label("Describe a book").fill("Fantasy like The Name of the Wind")
-    p.get_by_role("button", name="Find books").click()
-    settle(p)
-    scroll_main(p, 330)
-    save(p, "curio-books")
-    p.locator('[class*="st-key-book_card_search_"]').first.get_by_role(
-        "button", name=re.compile("^View ")
-    ).click()
-    settle(p)
-    save(p, "curio-book-detail")
-
-    p = desk(b, 1250)
-    p.goto(UI)
-    settle(p)
-    p.get_by_test_id("stButtonGroup").first.get_by_text("Books", exact=True).click()
-    settle(p)
-    send(p, "Remember I never read horror")
-    p.locator('[class*="st-key-approval_home_"]').last.get_by_role("button", name="Approve").click()
-    settle(p)
-    send(p, "Fantasy like The Name of the Wind")
-    p.get_by_text(re.compile(r"How Curio worked")).last.click()
-    settle(p)
-    show_last_answer(p)
-    save(p, "curio-book-agent")
-
-
-def outfit(b) -> None:
-    """The outfit builder: slots with photos and reasons, the budget bar and its actions."""
-    p = desk(b, 1150)
-    p.goto(UI)
-    settle(p)
-    send(p, "Build me a summer outfit for a wedding under €80")
-    card = p.locator('[class*="st-key-outfit_home_"]').last
-    card.evaluate("el => el.scrollIntoView({block: 'start'})")
-    scroll_main(p, 0)  # the card stays at the top of the chat panel; the page header returns
-    save(p, "curio-outfit")
-
 
 def pairing(b) -> None:
     """Book → cocktail pairing in the book dialog: The Great Gatsby's drinks and reasons."""
-    p = desk(b, 1150)
+    p = desk(b, 1350)
     p.goto(f"{UI}/books")
     settle(p)
     p.get_by_label("Describe a book").fill("The Great Gatsby")
@@ -302,28 +171,21 @@ def pairing(b) -> None:
     save(p, "curio-pairing")
 
 
-def phone(b) -> None:
-    """Home and feed on a phone."""
-    # Phone: home and feed.
-    m = b.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2).new_page()
-    m.goto(UI)
-    settle(m)
-    save(m, "curio-home-mobile", width=780)
-    m.goto(f"{UI}/fashion")
-    settle(m)
-    pick_example(m, 2)
-    scroll_main(m, 0)
-    save(m, "curio-mobile", width=780)
+def evening(b) -> None:
+    """Plan my evening, whole page: the occasion, its theme, why it works and the three cards."""
+    p = desk(b, 1450)
+    p.goto(f"{UI}/evening")
+    settle(p)
+    box = p.locator(".st-key-evening_occasion input")
+    box.fill(OCCASION)
+    box.press("Enter")
+    settle(p)
+    p.locator(".st-key-evening_plan_button button").click()
+    settle(p)
+    save(p, "curio-evening")
 
 
-GROUPS = {
-    "fashion": fashion,
-    "cocktails": cocktails,
-    "books": books,
-    "outfit": outfit,
-    "pairing": pairing,
-    "phone": phone,
-}
+GROUPS = {"agent": agent, "photo": photo, "pairing": pairing, "evening": evening}
 
 with sync_playwright() as pw:
     browser = pw.chromium.launch(executable_path=ARGS.executable_path)

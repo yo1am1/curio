@@ -7,7 +7,7 @@ import httpx
 import pandas as pd
 import pytest
 
-from clothes_recommender.cocktails.catalog import COLUMNS, CocktailCatalog
+from curio.domains.cocktails.catalog import COLUMNS, CocktailCatalog
 from scripts import prepare_cocktails
 from scripts.prepare_cocktails import (
     DEFAULT_SHA256,

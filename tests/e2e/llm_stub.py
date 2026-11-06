@@ -19,7 +19,13 @@ deterministic rules keyed on the shopper's words, which makes every flow reprodu
   screen; "another pairing" repeats the last subject without the drinks shown, and
   "alcohol-free" asks for alcohol-free drinks. Answers cite the drinks as "**Name** (drink
   #N)" with the tool's first reason; "surprise me" invents a drink the pairing did not return,
-  twice, so the grounding fallback can be seen end to end.
+  twice, so the grounding fallback can be seen end to end;
+- the evening host plans an evening with PlanEvening (the occasion, budget, audience and
+  alcohol-free as written), asks for the occasion when the request names none ("plan my
+  evening"), swaps a part of the current plan with SwapEveningPart ("another book", "another
+  drink", "make the drink alcohol-free", "cheaper shoes") and proposes SaveEvening with every
+  ID of the current plan ("save the evening"). Answers cite only the plan's lines; "surprise
+  me" invents a drink twice, so the evening's grounding fallback can be seen end to end.
 
 Run standalone: `python -m tests.e2e.llm_stub --port 8790`.
 """
@@ -55,6 +61,20 @@ PAIRED_LINE = re.compile(r"^\d+\. drink #(\d+) ([^|\n]+) \| ([^|\n]+) \|.*\| why
 DRINKS_SHOWN = re.compile(r"Drinks shown \(an earlier pairing\): (.+)$", re.M)
 PAIR_WORDS = re.compile(r"\b(drink|drinks|cocktail|cocktails|pour|pair|pairing|sip)\b")
 INVENTED_DRINK = "**Negroni** (drink #257)"
+# The evening tool result (`render_plan`) and the session's current plan.
+EVENING_THEME = re.compile(r"^Evening plan for “[^”]*” · theme (\w+)", re.M)
+EVENING_CHANGE = re.compile(r"^Change: (.+)$", re.M)
+EVENING_PIECE = re.compile(
+    r"^- (\w+): product #(\d+) ([^|\n]+) \| [^|\n]+ \| [^|\n]+ \| €([\d.]+)", re.M
+)
+EVENING_TOTAL = re.compile(r"^Outfit: total (€[\d.]+(?: of a €[\d.]+ budget)?)", re.M)
+EVENING_BOOK = re.compile(r"^Book: book #(\d+) ([^|\n]+) \| ([^|\n]+) \| ★ ([\d.]+)", re.M)
+EVENING_DRINK = re.compile(
+    r"^Drink: drink #(\d+) ([^|\n]+) \| ([^|\n]+) \| ingredients: .*? \| why: ([^;\n]+)", re.M
+)
+EVENING_MISSING = re.compile(r"^Missing (\w+): (.+)$", re.M)
+EVENING_WHY = re.compile(r"^Why it works: (.+)$", re.M)
+EVENING_SESSION = re.compile(r"current evening plan \([^)]*\): (.+?)\.(?: |$)", re.S)
 _ids = count(1)
 
 
@@ -84,6 +104,8 @@ class Script:
             return self._bartender(messages)
         if "SearchBooks" in tools:
             return self._librarian(messages)
+        if "PlanEvening" in tools:
+            return self._host(messages)
         return self._stylist(messages)
 
     # --- Fashion ----------------------------------------------------------------------------
@@ -447,6 +469,110 @@ class Script:
             lines.append(
                 f"- **{name.strip()}** (drink #{drink_id}, {label.strip()}): {reason.strip()}"
             )
+        if "contains alcohol" in result:
+            lines.append("\nPlease drink responsibly.")
+        return "\n".join(lines)
+
+    # --- Evening ------------------------------------------------------------------------------
+
+    def _host(self, messages: list[dict]) -> dict:
+        last = messages[-1]
+        user = self._last_user(messages)
+        low = user.lower()
+        request = self._request(messages)
+        if last["role"] == "tool":
+            result = _text(last["content"])
+            if not result.startswith("Evening plan for"):
+                return {"content": result[:300]}
+            if "surprise me" in request:
+                return {"content": f"Skip the plan and pour a {INVENTED_DRINK}."}
+            return {"content": self._evening_answer(result)}
+        if low.startswith("verification failed"):
+            if "surprise me" in request:
+                return {"content": f"Trust me: a {INVENTED_DRINK} is the one."}  # still invented
+            return {"content": "Here is the evening I could verify from the catalogs."}
+        if low.startswith("[decision on your proposal]"):
+            if "approved" in low:
+                return {"content": "Done: each part is saved to its own list."}
+            return {"content": "No problem, nothing was saved."}
+        system = _text(messages[0]["content"])
+        plan = EVENING_SESSION.search(system)
+        current = plan.group(1) if plan else ""
+        if current and re.search(r"\b(save|keep)\b", low):
+            args = {
+                "product_ids": [int(i) for i in re.findall(r"product #(\d+)", current)][:5],
+                "book_ids": [int(i) for i in re.findall(r"book #(\d+)", current)][:2],
+                "drink_ids": [int(i) for i in re.findall(r"drink #(\d+)", current)][:2],
+            }
+            return {"tool_calls": [_tool_call("SaveEvening", {k: v for k, v in args.items() if v})]}
+        if current and re.search(r"\b(another|different|other) book\b", low):
+            return {"tool_calls": [_tool_call("SwapEveningPart", {"part": "book"})]}
+        if current and "drink" in low and re.search(r"alcohol[- ]free|no alcohol", low):
+            args = {"part": "drink", "mode": "alcohol_free"}
+            return {"tool_calls": [_tool_call("SwapEveningPart", args)]}
+        if current and re.search(r"\b(another|different|other) drink\b", low):
+            return {"tool_calls": [_tool_call("SwapEveningPart", {"part": "drink"})]}
+        slots = re.findall(r"(\w+) product #\d+", current)
+        slot = next((name for name in slots if re.search(rf"\b{name}\b", low)), None)
+        if slot and re.search(r"\b(swap|another|cheaper|different)\b", low):
+            args = {
+                "part": "outfit",
+                "slot": slot,
+                "mode": "cheaper" if "cheaper" in low else "other",
+            }
+            return {"tool_calls": [_tool_call("SwapEveningPart", args)]}
+        occasion = re.sub(
+            r"^(?:please\s+)?(?:plan|organise|organize)\s+(?:me\s+)?(?:an?\s+|my\s+)?", "", low
+        ).strip(" .!?")
+        if not occasion or occasion in ("evening", "my evening", "something", "an evening"):
+            question = {
+                "question": "Happy to. What's the occasion?",
+                "options": ["Rainy Sunday in", "Date night under €100", "Book club, alcohol-free"],
+            }
+            return {"tool_calls": [_tool_call("AskShopper", question)]}
+        args: dict = {"occasion": user.strip(" .!?")[:200]}
+        if match := BUDGET.search(low):
+            args["budget"] = float(match.group(1))
+        if re.search(r"alcohol[- ]free|no alcohol|sober", low):
+            args["alcohol_free"] = True
+        if re.search(r"\b(for men|for him)\b", low):
+            args["audience"] = "men"
+        elif re.search(r"\b(for women|for her)\b", low):
+            args["audience"] = "women"
+        return {"tool_calls": [_tool_call("PlanEvening", args)]}
+
+    @staticmethod
+    def _evening_answer(result: str) -> str:
+        """An answer built only from the PlanEvening / SwapEveningPart result."""
+        theme = EVENING_THEME.search(result)
+        lines = [f"Here's your {theme.group(1).lower()} evening." if theme else "Your evening:"]
+        if change := EVENING_CHANGE.search(result):
+            lines.insert(0, change.group(1))
+        pieces = EVENING_PIECE.findall(result)
+        if pieces:
+            lines.append("\n**Outfit**")
+            for slot, product_id, name, price in pieces:
+                lines.append(
+                    f"- {slot}: {name.strip()} (product #{product_id}) · €{float(price):.2f}"
+                )
+            if total := EVENING_TOTAL.search(result):
+                lines.append(f"- Total: {total.group(1)}")
+        if book := EVENING_BOOK.search(result):
+            book_id, title, authors, rating = book.groups()
+            lines.append(
+                f"\n**Book**: **{title.strip()}** (book #{book_id}) by "
+                f"{authors.split(',')[0].strip()} · ★ {rating}"
+            )
+        if drink := EVENING_DRINK.search(result):
+            drink_id, name, label, reason = drink.groups()
+            lines.append(
+                f"\n**Drink**: **{name.strip()}** (drink #{drink_id}, {label.strip()}): "
+                f"{reason.strip()}"
+            )
+        for part, reason in EVENING_MISSING.findall(result):
+            lines.append(f"\nNo {part} yet: {reason.strip()}")
+        if why := EVENING_WHY.search(result):
+            lines.append(f"\n_Why it works_: {why.group(1).strip()}")
         if "contains alcohol" in result:
             lines.append("\nPlease drink responsibly.")
         return "\n".join(lines)
