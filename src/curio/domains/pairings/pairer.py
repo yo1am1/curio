@@ -75,6 +75,8 @@ SIGNATURE_BONUS = 0.4
 SIGNATURE_STEP = 0.06
 GLASS_BONUS = 0.08
 LORE_BONUS = 0.6
+# Lore about one named book (1984's Victory Gin) is that book's own drink: it leads.
+TITLE_LORE_BONUS = 1.2
 # The pool keeps recipes scoring at least this share of the best one, at most
 # POOL_SETS * top_k of them.
 POOL_SHARE = 0.3
@@ -416,8 +418,8 @@ class BookCocktailPairer:
             score = sum(
                 w * self._fits[t, alcohol_free].get(drink_id, 0.0) for t, w in weights.items()
             )
-            if not alcohol_free and self._lore_for(profile, drink_id):
-                score += LORE_BONUS
+            if not alcohol_free and (lore := self._lore_for(profile, drink_id)):
+                score += TITLE_LORE_BONUS if lore.title else LORE_BONUS
             if score > 0:
                 scores[drink_id] = round(score, 9)
         return scores
@@ -478,7 +480,8 @@ class BookCocktailPairer:
 
     def _lore_for(self, profile: _Profile, drink_id: int) -> Lore | None:
         keys = ((author, drink_id) for author in sorted(profile.authors))
-        return next((self._lore[key] for key in keys if key in self._lore), None)
+        found = (self._lore[key] for key in keys if key in self._lore)
+        return next((lore for lore in found if _lore_book(profile, lore) is not None), None)
 
     # --- Explanations ----------------------------------------------------------------------------
 
@@ -497,7 +500,8 @@ class BookCocktailPairer:
         if lore is not None:
             # The author's own drink: the lore chose it, so it leads; the theme follows only
             # when the recipe really pours that style.
-            book = next(b for b in profile.books if name_key(b.author) == name_key(lore.author))
+            book = _lore_book(profile, lore)
+            assert book is not None  # `_lore_for` only returns lore with its book
             ingredients = _join([i.name for i in cocktail.ingredients])
             reasons = [
                 f"{book.title} is by {book.author}. {lore.text} → {cocktail.name} ({ingredients})"
@@ -557,6 +561,19 @@ class BookCocktailPairer:
 
 
 # --- Helpers -------------------------------------------------------------------------------------
+
+
+def _lore_book(profile: "_Profile", lore: Lore) -> Book | None:
+    """The profile's book the lore is about: by its author, and the named one if any."""
+    return next(
+        (
+            b
+            for b in profile.books
+            if name_key(b.author) == name_key(lore.author)
+            and (lore.title is None or name_key(b.title) == name_key(lore.title))
+        ),
+        None,
+    )
 
 
 def _words(theme: Theme, soft: bool) -> dict[str, float]:

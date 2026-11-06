@@ -114,3 +114,14 @@ def test_every_set_is_explained_and_alcohol_labelled(real):
                 assert 1 <= len(item.reasons) <= 3
                 assert title in item.reasons[0]
                 assert item.cocktail.category != "Shot"
+
+
+def test_1984_gets_orwells_victory_gin_and_animal_farm_does_not(real):
+    result = pairings(real, "1984")
+    assert result.pairings[0].cocktail.name == "Pink Gin"
+    assert result.pairings[0].reasons[0] == (
+        "1984 is by George Orwell. Winston Smith drinks Victory Gin, flavoured with cloves, in "
+        "1984 → Pink Gin (Bitters, Gin)"
+    )
+    farm = pairings(real, "Animal Farm", top_k=5)
+    assert not any("Victory Gin" in reason for p in farm.pairings for reason in p.reasons)

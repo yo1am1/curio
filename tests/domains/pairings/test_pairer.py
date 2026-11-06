@@ -4,7 +4,10 @@ avoided genres, explanations and determinism."""
 import pytest
 from pydantic import ValidationError
 
+from curio.domains.books.catalog import BookCatalog
+from curio.domains.cocktails.catalog import CocktailCatalog
 from curio.domains.cocktails.models import CocktailPreferences
+from curio.domains.cocktails.recommend import CocktailRecommender
 from curio.domains.pairings.models import PairingRequest
 from curio.domains.pairings.pairer import (
     DRINK_NOTE,
@@ -12,7 +15,9 @@ from curio.domains.pairings.pairer import (
     PairingError,
     UnknownBookError,
 )
-from curio.domains.pairings.themes import THEMES, Lore
+from curio.domains.pairings.themes import LORE, THEMES, Lore
+from tests.conftest import book_frame, cocktail_frame
+from tests.domains.pairings.conftest import PAIRING_BOOKS, PAIRING_DRINKS
 
 BIG_SLEEP, GONE_GIRL, GATSBY, WIND, DUNE, POTTER, HOBBIT, DRACULA = range(1, 9)
 PRIDE, CASINO, CAROL, UNSHELVED = range(9, 13)
@@ -301,7 +306,6 @@ def test_requests_are_tightly_bounded(request_body):
 
 
 def test_lore_for_missing_drinks_is_ignored(pairer):
-    from curio.domains.cocktails.recommend import CocktailRecommender
     from tests.domains.pairings.conftest import pairing_books, pairing_cocktails
 
     cocktails = pairing_cocktails()
@@ -332,3 +336,28 @@ def book_shares(pairer):
         return pairer.themes_of(pairing_books().get(book_id), avoided)
 
     return shares
+
+
+def test_lore_for_one_named_book_leads_for_that_book_only():
+    """1984's Victory Gin belongs to 1984, not to every Orwell book."""
+    orwell = [
+        (13, "1984", ["George Orwell"], None, None, 1949, 4.14, 2_000_000, 328,
+         ["Classics", "Science fiction"], ["dystopia", "classics"], True),
+        (14, "Animal Farm", ["George Orwell"], None, None, 1945, 3.87, 1_800_000, 122,
+         ["Classics", "Science fiction"], ["dystopia", "classics"], True),
+    ]  # fmt: skip
+    pink_gin = (99, "Pink Gin", "Alcoholic", "Ordinary Drink", "Cocktail glass",
+                [("Bitters", "3 dashes"), ("Gin", "2 oz")])  # fmt: skip
+    drinks = CocktailCatalog(cocktail_frame([*PAIRING_DRINKS, pink_gin]))
+
+    books = BookCatalog(book_frame([*PAIRING_BOOKS, *orwell]))
+    pairer = BookCocktailPairer(books, drinks, CocktailRecommender(drinks), lore=LORE)
+    nineteen = pair(pairer, book_id=13)
+    assert names(nineteen)[0] == "Pink Gin"
+    assert (
+        nineteen.pairings[0]
+        .reasons[0]
+        .startswith("1984 is by George Orwell. Winston Smith drinks Victory Gin")
+    )
+    farm = pair(pairer, book_id=14, top_k=5)
+    assert not any("Victory Gin" in r for p in farm.pairings for r in p.reasons)

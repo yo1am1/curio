@@ -12,7 +12,8 @@ recipes are reached through the theme's `soft_terms` (coffee, tea, chocolate, fr
 only when the pairing must be alcohol-free, with a matching `soft_style`.
 
 `LORE` adds a few well-documented literary drinks (the Vesper of Casino Royale, the gin
-rickeys of The Great Gatsby) for books by their authors.
+rickeys of The Great Gatsby, the Victory Gin of 1984) for books by their authors, or for
+one book when the lore names it.
 """
 
 from collections.abc import Mapping
@@ -48,6 +49,8 @@ class Lore:
     author: str  # catalog spelling of the first author
     drink: str  # catalog drink name
     text: str
+    # The one book it belongs to (catalog title), or None for every book by the author.
+    title: str | None = None
 
 
 @dataclass(frozen=True)
@@ -953,6 +956,12 @@ LORE = (
         "Named after Hemingway's 1932 book, from his own recipe",
     ),
     Lore("Raymond Chandler", "Gimlet", "Philip Marlowe drinks gimlets in The Long Goodbye"),
+    Lore(
+        "George Orwell",
+        "Pink Gin",
+        "Winston Smith drinks Victory Gin, flavoured with cloves, in 1984",
+        title="1984",
+    ),
 )
 
 # Shelves and genres that make a book a children's or young-adult read: its pairings are
