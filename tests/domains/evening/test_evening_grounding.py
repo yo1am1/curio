@@ -42,3 +42,17 @@ def test_distinctive_names_count_anywhere_and_plan_words_are_allowed():
     assert check("A mojito, of course.").status == "verified"
     assert check("Sip something on a dark and stormy night.").status != "fallback"
     assert check("Pour a dark and stormy.", cited=["a dark and stormy night"]).status != "fallback"
+
+
+def test_a_product_may_be_named_by_its_raw_or_its_display_name():
+    from curio.domains.fashion.models import Product
+
+    top = Product(
+        product_id=108775015, name="PQ PALOMA TOP", product_type="Top",
+        product_group="Garment Upper body", section="Ladieswear", colour="Black",
+        description="A top.", price=19.99,
+    )  # fmt: skip
+    assert top.display_name == "Paloma Top"
+    for said in ("Paloma Top", "PQ PALOMA TOP"):
+        report = check(f"Wear the **{said}** (product #108775015, €19.99).", products=[top])
+        assert report.status == "verified", (said, report.issues)

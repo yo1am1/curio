@@ -413,3 +413,13 @@ def test_evening_chat_says_why_and_drink_responsibly_once_and_stacks_the_cards(a
     texts = [m.value for m in turn.markdown] + [c.value for c in turn.caption]
     assert sum("why it works" in t.casefold() for t in texts) == 1
     assert sum("drink responsibly" in t.casefold() for t in texts) == 1
+
+
+def test_cards_show_the_cleaned_product_name(api):
+    plan = plan_json()
+    piece = plan["outfit"]["outfit"]["slots"][0]["product"]
+    piece |= {"name": "PQ CHUNKY KNIT SWEATER", "display_name": "Chunky Knit Sweater"}
+    app = evening_app("evening_page()", evening_plan=plan).run()
+    assert not app.exception
+    shown = {t.value for t in app.text}
+    assert "Chunky Knit Sweater" in shown and "PQ CHUNKY KNIT SWEATER" not in shown

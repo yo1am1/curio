@@ -50,7 +50,7 @@ EVENING_REPAIR_INSTRUCTION = (
 
 def product_line(product: Product) -> str:
     return (
-        f"product #{product.product_id} {product.name} | {product.product_type} | "
+        f"product #{product.product_id} {product.display_name} | {product.product_type} | "
         f"{product.colour} | €{product.price:.2f}"
     )
 

@@ -265,14 +265,14 @@ class FashionToolkit:
         detail = {"slot": action.slot, "mode": action.mode, "old_id": swap.old.product_id}
         if swap.new is None:
             kind = "cheaper " if action.mode == "cheaper" else "other "
-            summary = f"Found no {kind}{label} within the budget; kept the {swap.old.name}."
+            summary = f"Found no {kind}{label} within the budget; kept the {swap.old.display_name}."
             step = AgentStep(
                 kind="tool", name="SwapOutfitItem", summary=summary, status="skipped", detail=detail
             )
             return f"{summary} The outfit is unchanged.\n{render_outfit(swap.outfit)}", step
         summary = (
-            f"Swapped {label}: {swap.old.name} → {swap.new.name} · {_euro(swap.new.price)}; "
-            f"total {_euro(swap.outfit.total)}."
+            f"Swapped {label}: {swap.old.display_name} → {swap.new.display_name} · "
+            f"{_euro(swap.new.price)}; total {_euro(swap.outfit.total)}."
         )
         step = AgentStep(
             kind="tool",
@@ -281,8 +281,8 @@ class FashionToolkit:
             detail=detail | {"new_id": swap.new.product_id},
         )
         replaced = (
-            f"Replaced the {swap.old.name} [id {swap.old.product_id}] "
-            f"({_euro(swap.old.price)}) with the {swap.new.name}.\n"
+            f"Replaced the {swap.old.display_name} [id {swap.old.product_id}] "
+            f"({_euro(swap.old.price)}) with the {swap.new.display_name}.\n"
         )
         return replaced + render_outfit(swap.outfit), step
 
@@ -314,7 +314,7 @@ class FashionToolkit:
             return AgentStep(
                 kind="tool",
                 name="FindRelated",
-                summary=f"Found no {label} {product.name}.",
+                summary=f"Found no {label} {product.display_name}.",
                 status="skipped",
                 detail={"product_id": action.product_id, "relation": action.relation},
             )
@@ -325,7 +325,7 @@ class FashionToolkit:
         return AgentStep(
             kind="tool",
             name="FindRelated",
-            summary=f"Found {len(turn.items)} {label} {product.name}.",
+            summary=f"Found {len(turn.items)} {label} {product.display_name}.",
             detail={"product_id": action.product_id, "relation": action.relation},
         )
 
@@ -360,7 +360,7 @@ class FashionToolkit:
             products = self._catalog.get_many(dict.fromkeys(action.product_ids))
             if not products:
                 raise ToolError("None of those product IDs are in the catalog.")
-            names = ", ".join(p.name for p in products)
+            names = ", ".join(p.display_name for p in products)
             verb = "Would save" if dry_run else "Saved"
             return (
                 FashionEffect(kind="shortlist", product_ids=[p.product_id for p in products]),
@@ -408,7 +408,7 @@ class FashionToolkit:
                 "filters."
             )
         return "Here are the pieces I could confirm:\n" + "\n".join(
-            f"- {p.name} · {p.colour} · €{p.price:.2f}" for p in items
+            f"- {p.display_name} · {p.colour} · €{p.price:.2f}" for p in items
         )
 
     def reply_fields(self, turn: Turn[Product]) -> dict[str, Any]:
@@ -425,14 +425,14 @@ class FashionToolkit:
                 options.insert(0, "Picks from my shopping history")
             return options
         first = products[0]
-        options = [f"What goes with the {first.name}?", "Something cheaper"]
+        options = [f"What goes with the {first.display_name}?", "Something cheaper"]
         if len(products) >= 2:
             options.append("Compare the first two")
         shortlisted = set(turn.context.shortlist) | {
             pid for effect in turn.applied for pid in effect.product_ids
         }
         if first.product_id not in shortlisted:
-            options.append(f"Shortlist the {first.name}")
+            options.append(f"Shortlist the {first.display_name}")
         return options[:4]
 
     # --- Helpers --------------------------------------------------------------------------
@@ -464,7 +464,9 @@ class FashionToolkit:
         if shortlist:
             parts.append(
                 "shortlist: "
-                + "; ".join(f"[id {p.product_id}] {p.name} €{p.price:.2f}" for p in shortlist)
+                + "; ".join(
+                    f"[id {p.product_id}] {p.display_name} €{p.price:.2f}" for p in shortlist
+                )
             )
         else:
             parts.append("the shortlist is empty")
@@ -589,14 +591,14 @@ def _filled_step(filled: FilledSlot) -> AgentStep:
     return AgentStep(
         kind="tool",
         name="Fill slot",
-        summary=f"Filled {label}: {product.name} · {_euro(product.price)}. {slot.reason}",
+        summary=f"Filled {label}: {product.display_name} · {_euro(product.price)}. {slot.reason}",
         detail={"slot": slot.slot, "product_id": product.product_id},
     )
 
 
 def _outfit_line(outfit: Outfit) -> str:
     pieces = "; ".join(
-        f"{s.slot} [id {s.product.product_id}] {s.product.name} {_euro(s.product.price)}"
+        f"{s.slot} [id {s.product.product_id}] {s.product.display_name} {_euro(s.product.price)}"
         for s in outfit.slots
         if s.product is not None
     )

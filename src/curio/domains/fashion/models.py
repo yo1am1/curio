@@ -8,7 +8,9 @@ from typing import Protocol
 
 import numpy as np
 from PIL.Image import Image
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator
+
+from curio.domains.fashion.names import display_name
 
 
 class Product(BaseModel):
@@ -29,6 +31,13 @@ class Product(BaseModel):
     def _parse_json(cls, value: object) -> object:
         # Parquet stores the mapping as a JSON string.
         return json.loads(value) if isinstance(value, str) else value
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def display_name(self) -> str:
+        """The name for the UI and the agents' text ("PQ BOSTON SILK SKIRT" -> "Boston Silk
+        Skirt"); `name` stays the raw catalog name."""
+        return display_name(self.name)
 
 
 class User(BaseModel):

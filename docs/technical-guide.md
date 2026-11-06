@@ -37,6 +37,14 @@ their main product group, and a purchase with co-purchased complements for the g
 recommenders' output; nothing is tuned for these customers. "Browse all customers" keeps
 everyone else accessible, and offline evaluation scores all eligible customers.
 
+**Display names.** H&M names carry merchandising codes and capitals ("PQ BOSTON SILK
+SKIRT", "Flirty Mysan ring pk.", "Nora dress(1)", "Maxi tansitional boot").
+`fashion/names.display_name` drops the codes and stock notes ("new", "old", "(1)", "pk", "RW",
+"TRS", "PQ", "TD", "Pid"), spells packs out ("2PK" → "2-pack"), fixes "tansitional",
+title-cases shouty names and collapses spaces; it changes 2,062 of the 8,054 distinct names.
+`Product.display_name` carries it in every API response, and the UI and the agents' text use
+it, while `name` stays the raw catalog name in the data and IDs. Grounding accepts either.
+
 ### Outfit builder
 
 `src/curio/domains/fashion/outfits.py` holds the planner, used by the agent's `BuildOutfit` and

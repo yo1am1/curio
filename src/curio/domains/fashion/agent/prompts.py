@@ -84,7 +84,7 @@ def render_products(
     lines = []
     for position, p in enumerate(products, start=1):
         line = (
-            f"{position}. [id {p.product_id}] {p.name} | {p.product_type} | {p.section} | "
+            f"{position}. [id {p.product_id}] {p.display_name} | {p.product_type} | {p.section} | "
             f"{p.colour} | €{p.price:.2f} | {p.description}"
         )
         if reasons and reasons.get(p.product_id):

@@ -959,11 +959,11 @@ class OutfitPlanner:
             weight, baskets, partner = max(together, key=lambda t: (t[0], -t[2].product_id))
             score += CO_PURCHASE_BONUS + CO_PURCHASE_WEIGHT * weight
             noun = "basket" if baskets == 1 else "baskets"
-            reason = f"Bought together with the {partner.name} in {baskets} {noun}."
+            reason = f"Bought together with the {partner.display_name} in {baskets} {noun}."
         elif similarities:
             similarity, partner = max(similarities, key=lambda s: (s[0], -s[1].product_id))
             if similarity >= VISUAL_REASON_THRESHOLD:
-                reason = f"Its photo matches the look of the {partner.name}."
+                reason = f"Its photo matches the look of the {partner.display_name}."
         return score, reason
 
     def _vectors_for(self, products: Iterable[Product]) -> dict[int, np.ndarray]:

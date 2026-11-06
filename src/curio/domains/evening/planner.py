@@ -378,11 +378,12 @@ class EveningPlanner:
         label = SLOT_LABELS[slot].lower()
         if swap.new is None:
             kind = "cheaper" if mode == "cheaper" else "other"
-            change = f"No {kind} {label} fits the budget; kept {swap.old.name}."
+            change = f"No {kind} {label} fits the budget; kept {swap.old.display_name}."
         else:
             change = (
-                f"{'A cheaper' if mode == 'cheaper' else 'Another'} {label}: {swap.old.name} → "
-                f"{swap.new.name} (€{swap.new.price:.2f}); outfit total "
+                f"{'A cheaper' if mode == 'cheaper' else 'Another'} {label}: "
+                f"{swap.old.display_name} → {swap.new.display_name} (€{swap.new.price:.2f}); "
+                "outfit total "
                 f"€{swap.outfit.total:.2f}."
             )
         return plan.model_copy(update={"change": change})
@@ -692,7 +693,8 @@ def _key_piece(outfit: Outfit) -> Product | None:
 def _piece(product: Product) -> str:
     """ "Osman crew sweater (€24.99)"; the type is left out when the name says it."""
     kind = product.product_type.lower()
-    name = product.name if kind in product.name.lower() else f"{product.name} {kind}"
+    shown = product.display_name
+    name = shown if kind in shown.lower() else f"{shown} {kind}"
     return f"{name} ({_euro(product.price)})"
 
 

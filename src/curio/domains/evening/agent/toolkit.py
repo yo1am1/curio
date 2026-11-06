@@ -491,7 +491,7 @@ def _item_line(item: EveningItem) -> str:
         return f"{item.title} by {item.author} · ★ {item.average_rating:.2f}"
     if isinstance(item, Cocktail):
         return f"{item.name} · {alcohol_label(item)}"
-    return f"{item.name} · {item.colour} · €{item.price:.2f}"
+    return f"{item.display_name} · {item.colour} · €{item.price:.2f}"
 
 
 def _plan_line(plan: EveningPlan) -> str:
@@ -499,9 +499,9 @@ def _plan_line(plan: EveningPlan) -> str:
     if plan.outfit is not None:
         outfit = plan.outfit.outfit
         pieces = "; ".join(
-            f"{s.slot} product #{s.product.product_id} {s.product.name} €{s.product.price:.2f}"
+            f"{s.slot} product #{p.product_id} {p.display_name} €{p.price:.2f}"
             for s in outfit.slots
-            if s.product is not None
+            if (p := s.product) is not None
         )
         parts.append(f"outfit total €{outfit.total:.2f}: {pieces}")
     if plan.book is not None:
@@ -517,7 +517,7 @@ def _part_steps(plan: EveningPlan) -> Iterator[AgentStep]:
     """One step per part, as the plan reports it."""
     if plan.outfit is not None:
         outfit = plan.outfit.outfit
-        names = ", ".join(p.name for p in outfit.products)
+        names = ", ".join(p.display_name for p in outfit.products)
         budget = f" of €{outfit.budget:.2f}" if outfit.budget is not None else ""
         yield AgentStep(
             kind="tool",

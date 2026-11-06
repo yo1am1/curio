@@ -138,7 +138,7 @@ class EveningGroundingCheck:
         )
         ids, id_issues = check_ids(text, _PRODUCT_ID, (p.product_id for p in products), "product")
         fashion = grounding_report(priced + ids, price_issues + id_issues)
-        product_names = [p.name for p in products]
+        product_names = [n for p in products for n in (p.name, p.display_name)]
         drink_names = [c.name for c in drinks]
         book_names = [b.title for b in books] + [b.series for b in books if b.series]
         book_names += [author for b in books for author in b.authors]

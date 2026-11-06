@@ -63,6 +63,12 @@ def call_api(method: str, path: str, missing_ok: bool = False, **kwargs) -> dict
     return response.json()
 
 
+def product_name(product: dict) -> str:
+    """A product's name as shown: the API's cleaned `display_name` ("PQ BOSTON SILK SKIRT"
+    -> "Boston Silk Skirt"), or the raw name from an older API."""
+    return product.get("display_name") or product["name"]
+
+
 @st.cache_data(ttl=30, max_entries=2000)
 def product_photo(product_id: int) -> bytes | None:
     # Fetched server-side rather than by URL: in Docker the browser can't resolve the API host.
@@ -122,14 +128,14 @@ def show_products(
                 ),
             ):
                 if (photo := product_photo(product["product_id"])) is not None:
-                    st.image(photo, caption=product["name"], width="stretch")
+                    st.image(photo, caption=product_name(product), width="stretch")
                 else:
                     with st.container(key=f"missing_photo_{context}_{product['product_id']}_{i}"):
                         st.caption("No photo available.", text_alignment="center")
                 with st.container(
                     key=f"product_info_{context}_{product['product_id']}_{i}", gap=None
                 ):
-                    st.text(product["name"])
+                    st.text(product_name(product))
                     st.markdown(f"**€{product['price']:.2f}**")
                     st.caption(f"{product['product_type']} · {product['colour']}")
                 evidence = reasons[i] if reasons is not None else []
@@ -143,7 +149,7 @@ def show_products(
                         for detail in dict.fromkeys(evidence):
                             st.text(detail)
                 if st.button(
-                    f"View {product['name']}",
+                    f"View {product_name(product)}",
                     key=f"detail_{context}_{product['product_id']}_{i}",
                     width="stretch",
                 ):
@@ -222,7 +228,7 @@ def recommendations_tab() -> None:
                     st.dataframe(
                         [
                             {
-                                "Product": item["product"]["name"],
+                                "Product": product_name(item["product"]),
                                 "Type": item["product"]["product_type"],
                                 "Price (€)": item["product"]["price"],
                                 "Date": item.get("purchase_date", ""),
@@ -288,11 +294,11 @@ def product_details(product_id: int) -> None:
         left, right = st.columns([0.45, 0.55], gap="large")
         with left:
             if (photo := product_photo(product_id)) is not None:
-                st.image(photo, caption=product["name"], width="stretch")
+                st.image(photo, caption=product_name(product), width="stretch")
             else:
                 st.info("A photo is not available for this item.")
         with right:
-            st.subheader(product["name"])
+            st.subheader(product_name(product))
             st.markdown(f"**€{product['price']:.2f}**")
             st.caption(
                 f"{product['product_type']} · {product['colour']} · {product.get('section', '')}"
@@ -318,7 +324,7 @@ def product_details(product_id: int) -> None:
                 ):
                     # Dialogs rerun on their own; a full rerun closes this one and opens chat.
                     queue_message(
-                        f"What goes with the {product['name']} (product {product_id})?",
+                        f"What goes with the {product_name(product)} (product {product_id})?",
                         True,
                         domain=FASHION,
                     )
@@ -341,7 +347,7 @@ def product_details(product_id: int) -> None:
         # Related-item buttons cannot open a second native dialog inside this one.
         for hit in hits:
             item = hit["product"]
-            st.text(f"{item['name']} · {item['colour']} · €{item['price']:.2f}")
+            st.text(f"{product_name(item)} · {item['colour']} · €{item['price']:.2f}")
     elif hits is not None:
         st.info("No related pieces are available yet.")
 
@@ -545,7 +551,7 @@ def knowledge_graph_tab() -> None:
         graph = call_api("GET", f"/products/{product_id}/graph", params={"top_k": 12})
     selected_id = None
     selected_product_id = product_id
-    selected_label = product["name"]
+    selected_label = product_name(product)
     if graph is not None:
         spec, table = graph_view(graph, product_id, st.context.theme.type)
         if not table:
@@ -1248,7 +1254,7 @@ def add_to_shortlist(product: dict, announce: bool = True) -> bool:
         return False
     items.append(product)
     if announce:
-        st.toast(f"Saved {product['name']} to your shortlist.", icon=":material/favorite:")
+        st.toast(f"Saved {product_name(product)} to your shortlist.", icon=":material/favorite:")
     return True
 
 
@@ -1460,9 +1466,9 @@ def show_chat_products(products: list[dict], index: int, context: str) -> None:
             ),
         ):
             if (photo := product_photo(pid)) is not None:
-                st.image(photo, caption=product["name"], width=56 if compact else "stretch")
+                st.image(photo, caption=product_name(product), width=56 if compact else "stretch")
             with st.container(gap=None):
-                st.text(product["name"])
+                st.text(product_name(product))
                 st.caption(f"€{product['price']:.2f} · {product['colour']}")
             with st.container(horizontal=True, gap="small"):
                 if st.button("View", key=f"chat_view_{context}_{index}_{pid}"):
@@ -1602,7 +1608,7 @@ def outfit_card(outfit: dict, index: int, context: str, latest: bool) -> None:
                     st.image(photo, width=56 if compact else 180)
                 with st.container(gap=None):
                     st.markdown(f"**{label}**")
-                    st.text(product["name"])
+                    st.text(product_name(product))
                     st.caption(f"€{product['price']:.2f} · {product['colour']}")
                 if latest:
                     # Short text-only buttons fit side by side in a narrow slot column.
@@ -1980,7 +1986,7 @@ def apply_effects(reply: dict) -> None:
             for pid in effect.get("product_ids", []):
                 product = products.get(pid) or call_api("GET", f"/products/{pid}")
                 if product and add_to_shortlist(product, announce=False):
-                    saved.append(product["name"])
+                    saved.append(product_name(product))
             for bid in effect.get("book_ids", []):
                 book = books.get(bid) or call_api("GET", f"/books/{bid}")
                 if book and add_book(book, announce=False):
@@ -2178,8 +2184,8 @@ def compare_dialog(product_ids: list[int]) -> None:
     for column, product in zip(st.columns(len(products)), products, strict=True):
         with column, st.container(key=f"compare_{product['product_id']}"):
             if (photo := product_photo(product["product_id"])) is not None:
-                st.image(photo, caption=product["name"], width="stretch")
-            st.text(product["name"])
+                st.image(photo, caption=product_name(product), width="stretch")
+            st.text(product_name(product))
             st.markdown(f"**€{product['price']:.2f}**")
             if product["price"] == cheapest:
                 st.badge("Lowest price", color="green")
@@ -2262,15 +2268,15 @@ def fashion_session_panel() -> None:
                 vertical_alignment="center",
             ):
                 if (photo := product_photo(product["product_id"])) is not None:
-                    st.image(photo, caption=product["name"], width=40)
+                    st.image(photo, caption=product_name(product), width=40)
                 with st.container(gap=None, width="stretch"):
-                    st.text(product["name"])
+                    st.text(product_name(product))
                     st.caption(f"€{product['price']:.2f}")
                 st.button(
                     "Remove",
                     icon=":material/close:",
                     key=f"shortlist_remove_{product['product_id']}",
-                    help=f"Remove {product['name']}",
+                    help=f"Remove {product_name(product)}",
                     type="tertiary",
                     on_click=remove_from_shortlist,
                     args=(product["product_id"],),
@@ -3492,7 +3498,7 @@ def save_evening_dialog() -> None:
     st.caption("Curio saves each part to its own list. Untick anything you don't want.")
     kept: dict[str, list[int]] = {"product_ids": [], "book_ids": [], "drink_ids": []}
     for product in products:
-        label = f"{product['name']} · €{product['price']:.2f} → shortlist"
+        label = f"{product_name(product)} · €{product['price']:.2f} → shortlist"
         if st.checkbox(label, value=True, key=f"save_evening_product_{product['product_id']}"):
             kept["product_ids"].append(product["product_id"])
     for book in books:
@@ -3552,7 +3558,7 @@ def evening_outfit_card(plan: dict, key: str, chat: bool, active: bool) -> None:
                 if (photo := product_photo(product["product_id"])) is not None:
                     st.image(photo, width=56)
                 with st.container(gap=None, width="stretch"):
-                    st.text(product["name"])
+                    st.text(product_name(product))
                     st.caption(f"{slot['label']} · €{product['price']:.2f} · {product['colour']}")
                     if active:
                         label = slot["label"].lower()
