@@ -1733,7 +1733,13 @@ def show_chat_turn(turn: dict, index: int, context: str, latest: bool = False):
             st.badge(label, color=color, icon=icon)
         if evening := turn.get("evening"):
             with st.container(key=f"chat_evening_{context}_{index}"):
-                evening_cards(evening, key=f"chat_{context}_{index}", chat=True, active=latest)
+                evening_cards(
+                    evening,
+                    key=f"chat_{context}_{index}",
+                    chat=True,
+                    active=latest,
+                    said=turn["content"],
+                )
         products = [] if evening else turn.get("products") or []
         if outfit := turn.get("outfit"):
             outfit_card(outfit, index, context, latest)
@@ -3591,7 +3597,9 @@ def evening_book_card(plan: dict, key: str, chat: bool, active: bool) -> None:
             )  # fmt: skip
 
 
-def evening_drink_card(plan: dict, key: str, chat: bool, active: bool) -> None:
+def evening_drink_card(
+    plan: dict, key: str, chat: bool, active: bool, *, note: bool = True
+) -> None:
     with st.container(key=f"evening_drink_{key}", border=True):
         st.markdown(":material/local_bar: **Drink**")
         part = plan.get("drink")
@@ -3620,27 +3628,51 @@ def evening_drink_card(plan: dict, key: str, chat: bool, active: bool) -> None:
                     disabled=drink["alcoholic"] == "Non alcoholic",
                     help="An alcohol-free drink paired with the same book",
                 )  # fmt: skip
-        st.caption(plain(part["note"]))
+        if note:
+            st.caption(plain(part["note"]))
 
 
-def evening_cards(plan: dict, *, key: str, chat: bool = False, active: bool = True) -> None:
-    """The plan: its theme, three cards in a row (stacked on a phone), why it works, and
-    Save evening. In chat the buttons ask the agent; on the page they call the API."""
+def says_why(text: str, plan: dict) -> bool:
+    """Whether an answer already gives the plan's "why it works" line."""
+    folded = text.casefold()
+    return "why it works" in folded or plan["why"].casefold() in folded
+
+
+def says_responsibly(text: str) -> bool:
+    """Whether an answer already asks to drink responsibly."""
+    return "responsibl" in text.casefold()
+
+
+def evening_cards(
+    plan: dict, *, key: str, chat: bool = False, active: bool = True, said: str = ""
+) -> None:
+    """The plan: its theme, three cards in a row (stacked in the chat column and on a
+    phone), why it works, and Save evening. In chat the buttons ask the agent; on the page
+    they call the API. `said` is the answer the cards come with: what it already says (why
+    it works, drink responsibly) is not repeated on the cards."""
     theme = plan["theme"]
     with st.container(horizontal=True, vertical_alignment="center", key=f"evening_theme_{key}"):
         st.badge(theme["label"], icon=f":material/{theme['icon']}:", color="violet")
         evidence = theme["evidence"]
         st.caption(plain(f"{evidence[:1].upper()}{evidence[1:]}, so {theme['feeling']}."))
-    with st.container(key=f"evening_why_{key}"):
-        st.markdown(f":material/auto_awesome: **Why it works** · {plain(plan['why'])}")
-    # The outfit lists several pieces, so it gets the widest card.
-    outfit, book, drink = st.columns([1.3, 1, 1], gap="medium")
-    with outfit:
+    if not says_why(said, plan):
+        with st.container(key=f"evening_why_{key}"):
+            st.markdown(f":material/auto_awesome: **Why it works** · {plain(plan['why'])}")
+    note = not says_responsibly(said)
+    if chat:
+        # The chat column is narrow: one card under another reads better than three columns.
         evening_outfit_card(plan, key, chat, active)
-    with book:
         evening_book_card(plan, key, chat, active)
-    with drink:
-        evening_drink_card(plan, key, chat, active)
+        evening_drink_card(plan, key, chat, active, note=note)
+    else:
+        # The outfit lists several pieces, so it gets the widest card.
+        outfit, book, drink = st.columns([1.3, 1, 1], gap="medium")
+        with outfit:
+            evening_outfit_card(plan, key, chat, active)
+        with book:
+            evening_book_card(plan, key, chat, active)
+        with drink:
+            evening_drink_card(plan, key, chat, active, note=note)
     if active and plan.get("status") != "empty":
         if chat:
             st.button(

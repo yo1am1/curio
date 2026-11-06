@@ -388,3 +388,28 @@ def test_new_conversation_forgets_the_evening_state(api):
     app = evening_app("agent_home()", chat_evening={"occasion": "x", "theme": "cosy"}).run()
     app.button(key="chat_reset_home").click().run()
     assert "chat_evening" not in app.session_state
+
+
+def test_evening_chat_says_why_and_drink_responsibly_once_and_stacks_the_cards(api):
+    _, state = api
+    plan = state["plan"]
+    note = plan["drink"]["note"]
+    said = f"A cosy evening.\n\nWhy it works: {plan['why']}\n\n{note}"
+    state["replies"] = [reply(text=said)]
+    app = evening_app("agent_home()").run()
+    app.button(key="chat_starter_home_0").click().run()
+    assert not app.exception
+    turn = app.chat_message[-1]
+    texts = [m.value for m in turn.markdown] + [c.value for c in turn.caption]
+    assert sum("why it works" in t.casefold() for t in texts) == 1
+    assert sum("drink responsibly" in t.casefold() for t in texts) == 1
+    # One card under another in the chat column, not three columns.
+    assert not turn.columns
+    # An answer that leaves them out gets them from the cards, still once each.
+    state["replies"] = [reply(text="Here it is.")]
+    again = evening_app("agent_home()").run()
+    again.button(key="chat_starter_home_0").click().run()
+    turn = again.chat_message[-1]
+    texts = [m.value for m in turn.markdown] + [c.value for c in turn.caption]
+    assert sum("why it works" in t.casefold() for t in texts) == 1
+    assert sum("drink responsibly" in t.casefold() for t in texts) == 1
