@@ -1,4 +1,4 @@
-"""Display names for H&M products, checked on 30 real catalog names."""
+"""Display names for H&M products, checked on 31 real catalog names."""
 
 import pytest
 
@@ -36,6 +36,7 @@ REAL_NAMES = [
     ("Laurent slim fit jogger old", "Laurent slim fit jogger"),
     ("Jamie Skinny Cropped Trs Pid", "Jamie Skinny Cropped"),
     ("Wave Linen Relaxed fit PID", "Wave Linen Relaxed fit"),
+    ("PQ/PU Olivia cross bag", "Olivia cross bag"),
 ]
 
 

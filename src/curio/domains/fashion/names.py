@@ -10,7 +10,7 @@ typo, title-cases shouty words and collapses spaces. It never returns an empty n
 import re
 
 # Whole tokens that are codes or stock notes, never part of what the piece is.
-DROPPED = frozenset({"new", "old", "pk", "pk.", "rw", "trs", "pq", "td", "pid"})
+DROPPED = frozenset({"new", "old", "pk", "pk.", "rw", "trs", "pq", "td", "pid", "pq/pu", "pu/pq"})
 _COPY = re.compile(r"\s*\(\d+\)")  # "Nora dress(1)", "Asta Dress (1)"
 _PACK = re.compile(r"\b(\d+)\s*-?\s*pk\b\.?", re.IGNORECASE)  # "2PK", "9-pk", "3 PK"
 _TYPOS = {"tansitional": "transitional"}

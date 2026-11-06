@@ -412,6 +412,7 @@ class EveningPlanner:
             slots=theme.slots,
             max_item_price=tastes.max_item_price,
             queries=theme.queries_for(audience),
+            variety=state.occasion,
         )
         try:
             outfit = self._outfits.outfit(request)

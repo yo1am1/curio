@@ -17,6 +17,7 @@ Later slots prefer pieces real shoppers bought together with the pieces already 
 says which reason applied.
 """
 
+import hashlib
 import math
 import re
 from collections.abc import Generator, Iterable, Mapping, Sequence
@@ -164,6 +165,13 @@ VISUAL_WEIGHT = 0.08
 CO_PURCHASE_BONUS = 0.02
 CO_PURCHASE_WEIGHT = 0.03
 OVERSPEND_WEIGHT = 0.03
+# An occasion outfit (`OutfitRequest.variety`) avoids the cheapest tenth of a slot's
+# candidates unless the budget leaves nothing else, and a deterministic jitter seeded from
+# the occasion lets near-ties differ between occasions, so evenings do not converge on the
+# same few pieces. Both are on the scale of the bonuses above: they reorder near-ties only.
+BUDGET_PIECE_SHARE = 0.1
+BUDGET_PIECE_PENALTY = 0.02
+VARIETY_WEIGHT = 0.02
 # Products of a wearable type that are not worn ("TC LAUNDRY MESH BAG 2-PACK").
 _NOT_WORN = re.compile(r"\b(laundry|toiletry|wash bag|phone case|water ?bottle)\b", re.IGNORECASE)
 # A photo this close to a chosen piece's photo is called out as matching its look.
@@ -286,6 +294,10 @@ class OutfitRequest:
     # (slot, query) pairs that replace the occasion template's query for those slots, so a
     # caller can ask for a look ("chunky knit sweater") and keep the template's types.
     queries: tuple[tuple[SlotName, str], ...] = ()
+    # A seed (the occasion in the caller's words) for an occasion outfit's variety: a soft
+    # preference for mid-priced pieces and a deterministic jitter among near-ties. None
+    # keeps the plain ranking.
+    variety: str | None = None
 
 
 # --- Progress, streamed while an outfit is built ----------------------------------------------
@@ -690,6 +702,22 @@ class _Pool:
         return min((c.cents for c in self.candidates), default=None)
 
 
+def _budget_tier(pool: _Pool, options: Sequence[_Candidate]) -> int | None:
+    """The price at or under which a candidate is in the slot's cheapest tenth, when the
+    budget leaves something above it; None when only the cheapest tenth fits."""
+    prices = sorted(c.cents for c in pool.candidates)
+    if len(prices) < 2:
+        return None
+    tier = prices[max(0, math.ceil(len(prices) * BUDGET_PIECE_SHARE) - 1)]
+    return tier if any(c.cents > tier for c in options) else None
+
+
+def _jitter(seed: str, product_id: int) -> float:
+    """A deterministic number in [0, 1) for a product under an occasion."""
+    digest = hashlib.sha256(f"{' '.join(seed.casefold().split())}|{product_id}".encode())
+    return int.from_bytes(digest.digest()[:8], "big") / 2**64
+
+
 def _cents(euros: float) -> int:
     return round(euros * 100)
 
@@ -769,7 +797,7 @@ class OutfitPlanner:
             if remaining is not None:
                 later_weight = sum(pools[later].spec.weight for later in kept[position:])
                 share = remaining * pool.spec.weight / later_weight
-            pick = self._pick(pool, chosen, limit, share, excluded)
+            pick = self._pick(pool, chosen, limit, share, excluded, request.variety)
             if pick is None:  # pragma: no cover - the reserve guarantees a candidate
                 slots[index] = _empty(pool.spec, "Nothing fits what is left of the budget.")
                 continue
@@ -902,6 +930,7 @@ class OutfitPlanner:
         limit: int | None,
         share: float | None,
         excluded: set[int],
+        variety: str | None = None,
     ) -> tuple[Product, str] | None:
         options = [
             c
@@ -911,11 +940,16 @@ class OutfitPlanner:
         if not options:
             return None
         vectors = self._vectors_for([*chosen, *(c.product for c in options)])
+        cheap = _budget_tier(pool, options) if variety is not None else None
         scored = []
         for candidate in options:
             score, reason = self._fit(candidate, pool.spec, chosen, vectors)
             if share is not None and share > 0 and candidate.cents > share:
                 score -= OVERSPEND_WEIGHT * (candidate.cents - share) / share
+            if variety is not None:
+                if cheap is not None and candidate.cents <= cheap:
+                    score -= BUDGET_PIECE_PENALTY
+                score += VARIETY_WEIGHT * _jitter(variety, candidate.product.product_id)
             scored.append((-score, candidate.cents, candidate.product.product_id, reason))
         _, _, product_id, reason = min(scored)
         best = next(c for c in options if c.product.product_id == product_id)
