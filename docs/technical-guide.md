@@ -533,17 +533,19 @@ setup hint of whichever domain is missing, and the UI shows its pairing controls
 
 ## Quick start
 
-Two equivalent ways to run Curio with the cocktail domain, without the H&M download:
+Two equivalent ways to run Curio with cocktails, books and Plan my evening (without the
+outfit), without the H&M download:
 
 ```bash
 docker compose --profile demo up --build   # Docker
 scripts/quickstart.sh                      # uv, no Docker
 ```
 
-Add books with `DEMO_BOOKS=1 docker compose --profile demo up --build` or
-`CURIO_BOOKS=1 scripts/quickstart.sh`: the first run then also prepares goodbooks-10k
-(about 150 MB to download, under a minute and about 1 GB of RAM; ~9 MB on disk). Both ways
-serve books whenever they are prepared, so the flag is only needed once.
+The first run prepares goodbooks-10k besides the recipes (about 150 MB to download, under a
+minute and about 1 GB of RAM; ~9 MB on disk), so the one-command demo has book pairings and
+Plan my evening. Opt out with `DEMO_BOOKS=0 docker compose --profile demo up --build` or
+`CURIO_BOOKS=0 scripts/quickstart.sh` for cocktails only. Both ways serve books whenever they
+are prepared.
 
 On the first run both download the pinned recipe file (about 400 KB, SHA-256 checked) and
 then start the API (port 8000) and the UI (port 8501); later runs reuse the recipes. Expect
@@ -551,12 +553,12 @@ a few minutes for the first Docker build or `uv sync` (PyTorch is a dependency o
 fashion engine even though the demo never loads it), then seconds to start.
 
 - **Docker** (`demo` profile): `demo-data` prepares the recipes into the `demo-data`
-  volume (nothing is written to `./data`), plus the books with `DEMO_BOOKS=1`; `demo-api`
+  volume (nothing is written to `./data`), plus the books unless `DEMO_BOOKS=0`; `demo-api`
   serves them with `ENABLED_DOMAINS=cocktails,books` (it never loads CLIP or opens Qdrant),
   and `demo-ui` starts once the API is healthy. `docker compose --profile demo down -v`
   removes the volume.
 - **`scripts/quickstart.sh`**: runs `uv sync --locked --extra ui --extra anthropic`, writes
-  `data/cocktails.parquet` if it is missing (and the book files with `CURIO_BOOKS=1`),
+  `data/cocktails.parquet` if it is missing (and the book files unless `CURIO_BOOKS=0`),
   starts the API in the background, prints which domains and chat are available, then runs
   the UI; Ctrl+C stops both. `ENABLED_DOMAINS` (default `cocktails,books`; a domain that is
   not prepared is skipped), `API_PORT` and `UI_PORT` change what it serves and where. With

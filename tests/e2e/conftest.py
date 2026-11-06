@@ -199,7 +199,7 @@ def quickstart_ui_url(quickstart_api_url: str, artifacts: Path) -> Iterator[str]
 
 @pytest.fixture(scope="session")
 def demo_api_url(artifacts: Path, tmp_path_factory) -> Iterator[str]:
-    """The quick-start demo with books (DEMO_BOOKS=1): recipes and books, no H&M data, no
+    """The quick-start demo (books on by default): recipes and books, no H&M data, no
     image index and no LLM. It opens no Qdrant index, so it runs beside the full-data API."""
     files = ("cocktails.parquet", "books.parquet", "book_neighbours.parquet")
     if missing := [name for name in files if not (DATA_DIR / name).exists()]:

@@ -25,8 +25,8 @@ drink paired with that book from one sentence.
 
 ![A 40-second tour: the agent answering with its steps, Plan my evening producing an outfit, a book and a drink, a drink paired with The Great Gatsby, and photo search](docs/screenshots/curio-overview.webp)
 
-Try it in one command, with no large download: `docker compose --profile demo up --build`
-([quick start](#quick-start)).
+Try it in one command, with no H&M download: `docker compose --profile demo up --build` serves
+cocktails, books and Plan my evening ([quick start](#quick-start)).
 
 ## Why three domains
 
@@ -217,18 +217,18 @@ One command gives you Curio with cocktails, books and Plan my evening (without t
 and no 3.5 GB H&M download. With Docker:
 
 ```bash
-DEMO_BOOKS=1 docker compose --profile demo up --build
+docker compose --profile demo up --build
 ```
 
 Or with [uv](https://docs.astral.sh/uv/) and no Docker:
 
 ```bash
-CURIO_BOOKS=1 scripts/quickstart.sh
+scripts/quickstart.sh
 ```
 
-Both prepare the cocktail recipes on the first run (a checksum-verified ~400 KB download)
-and, with the books flag, goodbooks-10k (~150 MB, under a minute). Leave the flag out for
-cocktails only. Open http://localhost:8501. The quick start serves this computer only;
+Both prepare the cocktail recipes (a checksum-verified ~400 KB download) and goodbooks-10k
+(~150 MB, under a minute) on the first run. For cocktails only, opt out of the books with
+`DEMO_BOOKS=0` (Docker) or `CURIO_BOOKS=0` (uv). Open http://localhost:8501. The quick start serves this computer only;
 `UI_HOST=0.0.0.0` opens the UI to your network. Search and recommendations work without an
 LLM. Chat needs one: copy `.env.example` to `.env` and set `LLM_MODEL` (plus `LLM_API_KEY` /
 `LLM_BASE_URL`). The Docker demo can also run a local model with Ollama
