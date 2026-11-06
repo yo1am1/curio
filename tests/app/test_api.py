@@ -76,7 +76,7 @@ def client(services) -> Iterator[TestClient]:
 
 def test_health_reports_index_size_and_chat_status(client) -> None:
     from curio.app.api import CHAT_DISABLED
-    from curio.app.services import BOOKS_MISSING, COCKTAILS_MISSING
+    from curio.app.services import BOOKS_MISSING, COCKTAILS_MISSING, EVENING_MISSING
 
     assert client.get("/health").json() == {
         "status": "ok",
@@ -114,6 +114,14 @@ def test_health_reports_index_size_and_chat_status(client) -> None:
                 "chat_enabled": False,
                 "item_count": 0,
                 "hint": BOOKS_MISSING,
+            },
+            {
+                "id": "evening",
+                "label": "Evening",
+                "enabled": False,
+                "chat_enabled": False,
+                "item_count": 0,
+                "hint": EVENING_MISSING.format(missing=f"{BOOKS_MISSING} {COCKTAILS_MISSING}"),
             },
         ],
     }
@@ -559,6 +567,7 @@ def test_domains_and_health_report_the_cocktail_domain(client, cocktail_services
         ("fashion", "Fashion", True, False),
         ("cocktails", "Cocktails", False, False),
         ("books", "Books", False, False),
+        ("evening", "Evening", False, False),
     ]
     agent = _cocktail_agent_services(cocktail_services)
     with TestClient(create_app(agent)) as cocktails:

@@ -25,11 +25,13 @@ from curio.app.services import (
     BOOKS,
     COCKTAILS,
     DOMAINS,
+    EVENING,
     FASHION,
     BookServices,
     CocktailServices,
     DomainRuntime,
     DomainSpec,
+    EveningServices,
     FashionServices,
     Services,
     build_services,
@@ -50,6 +52,8 @@ from curio.domains.cocktails.models import (
     CocktailQuery,
     PantryMatch,
 )
+from curio.domains.evening.models import EveningPlan, EveningRequest, EveningSwap
+from curio.domains.evening.planner import EveningError
 from curio.domains.fashion.models import Product, ProductFilter, ScoredProduct, User
 from curio.domains.fashion.outfits import (
     MAX_SLOTS,
@@ -193,7 +197,7 @@ def _require[R: DomainRuntime](spec: DomainSpec[R], services: Services) -> R:
     """The domain's runtime, or 503 with how to prepare it."""
     runtime = spec.of(services)
     if runtime is None:
-        raise HTTPException(status_code=503, detail=spec.setup_hint)
+        raise HTTPException(status_code=503, detail=spec.hint(services))
     return runtime
 
 
@@ -218,7 +222,13 @@ def get_pairing(services: ServicesDep) -> BookCocktailPairer:
     return books.pairing
 
 
+def get_evening(services: ServicesDep) -> EveningServices:
+    """Plan my evening: 503 naming whichever of books and cocktails is missing."""
+    return _require(EVENING, services)
+
+
 FashionDep = Annotated[FashionServices, Depends(get_fashion)]
+EveningDep = Annotated[EveningServices, Depends(get_evening)]
 CocktailsDep = Annotated[CocktailServices, Depends(get_cocktails)]
 BooksDep = Annotated[BookServices, Depends(get_books)]
 PairingDep = Annotated[BookCocktailPairer, Depends(get_pairing)]
@@ -232,9 +242,12 @@ def domain_infos(services: Services) -> list[DomainInfo]:
         chat = runtime is not None and runtime.assistant is not None
         hint = None
         if runtime is None:
-            hint = spec.setup_hint
+            hint = spec.hint(services)
         elif not chat:
             hint = CHAT_DISABLED
+        # A composed domain served without one of its optional parts says which.
+        if runtime is not None and (notice := getattr(runtime, "notice", None)):
+            hint = f"{hint} {notice}" if hint else notice
         infos.append(
             DomainInfo(
                 id=spec.id,
@@ -429,6 +442,29 @@ def create_app(services: Services | None = None) -> FastAPI:
         except PairingError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
+    @app.post("/evening/plan")
+    def plan_evening(request: EveningRequest, evening: EveningDep) -> EveningPlan:
+        """One evening for an occasion: an outfit (when fashion is served), a book and a drink
+        the pairer pairs with it, each with its reason, plus a 'why it works' line. A part
+        the server cannot plan is listed in `missing` with the reason."""
+        return evening.planner.plan(request)
+
+    @app.post("/evening/swap")
+    def swap_evening_part(request: EveningSwap, evening: EveningDep) -> EveningPlan:
+        """Change one part of the evening the client holds: another or a cheaper outfit piece,
+        another book (its drink is re-paired) or another or an alcohol-free drink."""
+        try:
+            return evening.planner.swap(
+                request.evening,
+                request.part,
+                slot=request.slot,
+                mode=request.mode,
+                refine=request.refine,
+                tastes=request.tastes,
+            )
+        except EveningError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+
     @app.get("/products/{product_id}")
     def get_product(product_id: int, fashion: FashionDep) -> Product:
         product = fashion.catalog.get(product_id)
@@ -606,7 +642,7 @@ def create_app(services: Services | None = None) -> FastAPI:
         spec = domain_spec(domain)
         runtime = services.domains.get(domain)
         if spec is None or runtime is None:
-            detail = spec.setup_hint if spec else f"Unknown domain {domain}."
+            detail = spec.hint(services) if spec else f"Unknown domain {domain}."
             raise HTTPException(status_code=503, detail=detail)
         if runtime.assistant is None:
             raise HTTPException(status_code=503, detail=CHAT_DISABLED)

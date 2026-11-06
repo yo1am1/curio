@@ -13,6 +13,11 @@ unprepared domain follow from that entry.
 Cross-domain features link loaded domains after loading (`link_domains`): with books and
 cocktails both served, the book runtime gets a `BookCocktailPairer` and its agent the
 PairCocktail tool.
+
+A composed domain has no data of its own: its spec has `compose` instead of `load`, and it is
+built from the loaded domains after linking. "Plan my evening" (`evening`) is served whenever
+books and cocktails are (with fashion its plans have an outfit too); ENABLED_DOMAINS limits
+the data domains it builds on, not the composed domain itself.
 """
 
 import dataclasses
@@ -26,7 +31,12 @@ from typing import Protocol, cast
 import pandas as pd
 from langchain_core.language_models import BaseChatModel
 
-from curio.app.assistants import BookAssistant, CocktailAssistant, ShoppingAssistant
+from curio.app.assistants import (
+    BookAssistant,
+    CocktailAssistant,
+    EveningAssistant,
+    ShoppingAssistant,
+)
 from curio.app.config import Settings
 from curio.app.demo import DemoCustomer, select_demo_customers
 from curio.app.schemas import Domain
@@ -34,6 +44,7 @@ from curio.domains.books.catalog import BookCatalog
 from curio.domains.books.recommend import BookRecommender
 from curio.domains.cocktails.catalog import CocktailCatalog
 from curio.domains.cocktails.recommend import CocktailRecommender
+from curio.domains.evening.planner import OUTFIT_NEEDS_FASHION, EveningPlanner
 from curio.domains.fashion.catalog import CustomerData, ProductCatalog, load_shopper_purchases
 from curio.domains.fashion.embeddings import ClipEncoder
 from curio.domains.fashion.navigator import RecommenderNavigator
@@ -142,6 +153,26 @@ class BookServices:
 
 
 @dataclass(frozen=True)
+class EveningServices:
+    """Plan my evening, composed from the served books, cocktails and (optionally) fashion."""
+
+    planner: EveningPlanner
+    assistant: EveningAssistant | None = None
+
+    def item_count(self) -> int:
+        """The parts it can plan: 3, or 2 without fashion."""
+        return len(self.planner.parts)
+
+    @property
+    def notice(self) -> str | None:
+        """What a served evening still lacks: the outfit without fashion data."""
+        return None if "outfit" in self.planner.parts else OUTFIT_NEEDS_FASHION
+
+    def close(self) -> None:
+        """The parts belong to their own domains; nothing to release."""
+
+
+@dataclass(frozen=True)
 class DomainSpec[R: DomainRuntime]:
     id: Domain
     label: str
@@ -150,12 +181,20 @@ class DomainSpec[R: DomainRuntime]:
     runtime_type: type[R]
     # Returns None while the domain's data is missing; raises when present but unusable,
     # unless the loader itself decides a broken file should only disable the domain.
-    load: Callable[[Settings, AgentKit | None], R | None]
+    load: Callable[[Settings, AgentKit | None], R | None] | None = None
+    # A composed domain instead builds on the loaded domains (None while they are missing).
+    compose: Callable[[Mapping[str, "DomainRuntime"], AgentKit | None], R | None] | None = None
+    # For a composed domain: what is missing, given what the server serves.
+    missing: Callable[["Services"], str] | None = None
 
     def of(self, services: "Services") -> R | None:
         """This domain's runtime in `services`, or None when it is not served."""
         runtime = services.domains.get(self.id)
         return runtime if isinstance(runtime, self.runtime_type) else None
+
+    def hint(self, services: "Services") -> str:
+        """How to serve this domain: its setup hint, or a composed domain's missing parts."""
+        return self.missing(services) if self.missing is not None else self.setup_hint
 
 
 @dataclass(frozen=True)
@@ -178,6 +217,10 @@ class Services:
         return BOOKS.of(self)
 
     @property
+    def evening(self) -> EveningServices | None:
+        return EVENING.of(self)
+
+    @property
     def pairing(self) -> BookCocktailPairer | None:
         """Book → cocktail pairing, served when books and cocktails both are."""
         books = self.books
@@ -194,6 +237,7 @@ FASHION_MISSING = (
 )
 COCKTAILS_MISSING = "Cocktail recipes are not prepared: run scripts.prepare_cocktails."
 BOOKS_MISSING = "The book catalog is not prepared: run scripts.prepare_books."
+EVENING_MISSING = "Plan my evening needs the book catalog and the cocktail recipes: {missing}"
 
 
 def fashion_prepared(settings: Settings) -> bool:
@@ -342,8 +386,62 @@ BOOKS: DomainSpec[BookServices] = DomainSpec(
     runtime_type=BookServices,
     load=load_books,
 )
+
+
+def compose_evening(
+    domains: Mapping[str, DomainRuntime], kit: AgentKit | None
+) -> EveningServices | None:
+    """Plan my evening over the loaded domains: books and cocktails (with their pairer) are
+    required; fashion adds the outfit."""
+    books, cocktails = domains.get(BOOKS.id), domains.get(COCKTAILS.id)
+    if not isinstance(books, BookServices) or not isinstance(cocktails, CocktailServices):
+        return None
+    if books.pairing is None:
+        return None  # the pairer failed to build; the drink could not come from it
+    fashion = domains.get(FASHION.id)
+    fashion = fashion if isinstance(fashion, FashionServices) else None
+    planner = EveningPlanner(
+        outfits=fashion.outfits if fashion is not None else None,
+        books=books.recommender,
+        book_catalog=books.catalog,
+        pairer=books.pairing,
+        cocktails=cocktails.catalog,
+    )
+    assistant = None
+    if kit is not None:
+        assistant = EveningAssistant(
+            kit.chat_model,
+            planner,
+            books=books.catalog,
+            cocktails=cocktails.catalog,
+            products=fashion.catalog if fashion is not None else None,
+            signer=kit.signer,
+        )
+    return EveningServices(planner=planner, assistant=assistant)
+
+
+def evening_missing(services: "Services") -> str:
+    """Which part an unserved evening lacks, and how to prepare it."""
+    hints = []
+    if services.books is None:
+        hints.append(BOOKS_MISSING)
+    if services.cocktails is None:
+        hints.append(COCKTAILS_MISSING)
+    if not hints:
+        hints.append("book-cocktail pairing could not be built; see the API log.")
+    return EVENING_MISSING.format(missing=" ".join(hints))
+
+
+EVENING: DomainSpec[EveningServices] = DomainSpec(
+    id="evening",
+    label="Evening",
+    setup_hint=EVENING_MISSING.format(missing=f"{BOOKS_MISSING} {COCKTAILS_MISSING}"),
+    runtime_type=EveningServices,
+    compose=compose_evening,
+    missing=evening_missing,
+)
 # The registry, in display order: the UI defaults to the first domain that is served.
-DOMAINS: tuple[DomainSpec, ...] = (FASHION, COCKTAILS, BOOKS)
+DOMAINS: tuple[DomainSpec, ...] = (FASHION, COCKTAILS, BOOKS, EVENING)
 
 
 def domain_spec(domain_id: str) -> DomainSpec | None:
@@ -365,10 +463,12 @@ def build_services(settings: Settings) -> Services:
     loaded: dict[str, DomainRuntime] = {}
     try:
         for spec in selected:
-            runtime = spec.load(settings, kit)
-            if runtime is not None:
+            if spec.load is not None and (runtime := spec.load(settings, kit)) is not None:
                 loaded[spec.id] = cast(DomainRuntime, runtime)
         link_domains(loaded)
+        for spec in DOMAINS:
+            if spec.compose is not None and (runtime := spec.compose(loaded, kit)) is not None:
+                loaded[spec.id] = cast(DomainRuntime, runtime)
     except BaseException:
         Services(loaded).close()  # a later domain failed: release the earlier ones
         raise
@@ -407,7 +507,9 @@ def _selected_domains(settings: Settings) -> list[DomainSpec]:
         raise ValueError(
             f"ENABLED_DOMAINS names unknown domains {unknown}; known: {', '.join(sorted(known))}."
         )
-    skipped = [spec.id for spec in DOMAINS if spec.id not in settings.enabled_domains]
+    # Composed domains follow the domains they build on, so they are never "skipped".
+    data = [spec for spec in DOMAINS if spec.load is not None]
+    skipped = [spec.id for spec in data if spec.id not in settings.enabled_domains]
     if skipped:
         logger.info("ENABLED_DOMAINS skips %s.", ", ".join(skipped))
-    return [spec for spec in DOMAINS if spec.id in settings.enabled_domains]
+    return [spec for spec in data if spec.id in settings.enabled_domains]
