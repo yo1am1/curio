@@ -247,7 +247,7 @@ index](docs/technical-guide.md#fashion-data), then run the full stack:
 uv sync --all-extras
 cp .env.example .env
 uv run uvicorn curio.app.api:create_app --factory
-uv run streamlit run src/curio/app/ui.py     # in a second terminal
+uv run streamlit run src/curio/app/ui/main.py     # in a second terminal
 ```
 
 With Docker, `docker compose --profile fashion up --build` starts it. Every domain is

@@ -112,6 +112,6 @@ fi
 ui_url_host="$UI_HOST"
 [[ "$UI_HOST" == 0.0.0.0 || "$UI_HOST" == localhost ]] && ui_url_host=127.0.0.1
 say "Curio is ready: open http://${ui_url_host}:${UI_PORT} (Ctrl+C stops both servers)"
-uv run --no-sync streamlit run src/curio/app/ui.py \
+uv run --no-sync streamlit run src/curio/app/ui/main.py \
     --server.address "$UI_HOST" --server.port "$UI_PORT" --server.headless true \
     --browser.gatherUsageStats false

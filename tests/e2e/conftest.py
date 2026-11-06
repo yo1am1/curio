@@ -120,7 +120,7 @@ def _streamlit(api_url: str, log: Path) -> Iterator[str]:
                 "-m",
                 "streamlit",
                 "run",
-                "src/curio/app/ui.py",
+                "src/curio/app/ui/main.py",
                 "--server.headless",
                 "true",
                 "--server.port",

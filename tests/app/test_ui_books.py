@@ -132,7 +132,7 @@ def api(monkeypatch):
         raise AssertionError(f"Unexpected API call: {request.url}")
 
     client = httpx.Client(base_url="http://offline.test", transport=httpx.MockTransport(handle))
-    monkeypatch.setattr(ui, "api_client", lambda: client)
+    monkeypatch.setattr(ui.client, "api_client", lambda: client)
     ui.book_index.clear()
     yield calls, state
     client.close()
@@ -324,7 +324,7 @@ def covers(monkeypatch):
         return httpx.Response(state["status"], headers=content, request=httpx.Request("HEAD", url))
 
     monkeypatch.setattr(httpx, "head", head)
-    monkeypatch.setattr(ui, "_cover_outage_until", 0.0)
+    monkeypatch.setattr(ui.books, "_cover_outage_until", 0.0)
     ui._open_library_cover.clear()
     yield asked, state
     ui._open_library_cover.clear()

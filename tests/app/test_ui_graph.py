@@ -151,7 +151,7 @@ def mocked_api(monkeypatch, request_bodies):
         return httpx.Response(200, json=payload)
 
     client = httpx.Client(base_url="http://offline.test", transport=httpx.MockTransport(request))
-    monkeypatch.setattr(ui, "api_client", lambda: client)
+    monkeypatch.setattr(ui.client, "api_client", lambda: client)
     ui.product_photo.clear()
     ui.query_photo.clear()
     yield calls, overrides
@@ -256,7 +256,7 @@ def test_missing_photos_tolerate_network_errors(monkeypatch):
     client = httpx.Client(
         base_url="http://offline.test", transport=httpx.MockTransport(unavailable)
     )
-    monkeypatch.setattr(ui, "api_client", lambda: client)
+    monkeypatch.setattr(ui.client, "api_client", lambda: client)
     ui.product_photo.clear()
     assert ui.product_photo(123456) is None
     ui.product_photo.clear()
@@ -376,7 +376,7 @@ def test_graph_tab_passes_actual_viewer_theme(mocked_api, monkeypatch):
         rendered.append(theme_type)
         return original_view(graph, product_id, theme_type)
 
-    monkeypatch.setattr(ui, "graph_view", view)
+    monkeypatch.setattr(ui.fashion, "graph_view", view)
     app = AppTest.from_function(run_ui).run()
     assert not app.exception
     assert rendered == ["dark"]
@@ -515,7 +515,7 @@ def run_product_cards():
 
 
 def test_cards_have_fresh_three_column_rows_plain_names_and_collapsed_evidence(monkeypatch):
-    monkeypatch.setattr(ui, "product_photo", lambda _: None)
+    monkeypatch.setattr(ui.fashion, "product_photo", lambda _: None)
     app = AppTest.from_function(run_product_cards).run()
     assert not app.exception
     assert len(app.get("column")) == 9

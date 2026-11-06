@@ -6,7 +6,7 @@ the scripted stub in tests/e2e/llm_stub.py was used:
     uv run python -m tests.e2e.llm_stub --port 8790
     LLM_PROVIDER=openai LLM_MODEL=stub LLM_BASE_URL=http://127.0.0.1:8790/v1 LLM_API_KEY=x \
         uv run uvicorn curio.app.api:create_app --factory
-    uv run streamlit run src/curio/app/ui.py
+    uv run streamlit run src/curio/app/ui/main.py
     uv run python -m scripts.capture_readme --out docs/screenshots
 
 It writes the ten images the README shows. `--only books` refreshes just the book search,

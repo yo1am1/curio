@@ -109,7 +109,7 @@ def api(monkeypatch):
         raise AssertionError(f"Unexpected API call: {request.url}")
 
     client = httpx.Client(base_url="http://offline.test", transport=httpx.MockTransport(handle))
-    monkeypatch.setattr(ui, "api_client", lambda: client)
+    monkeypatch.setattr(ui.client, "api_client", lambda: client)
     ui.product_photo.clear()
     yield calls, routes, chat
     client.close()
@@ -278,7 +278,7 @@ def _run_main():
 
 
 def test_shortlist_remove_buttons_have_text_and_photos_have_names(api, monkeypatch):
-    monkeypatch.setattr(ui, "product_photo", lambda _: _png())
+    monkeypatch.setattr(ui.fashion, "product_photo", lambda _: _png())
     app = script("ui.fashion_session_panel()", shortlist=[COAT]).run()
     assert not app.exception
     remove = app.button(key="shortlist_remove_1")
@@ -387,7 +387,7 @@ def test_first_typed_message_gets_the_full_height_transcript(monkeypatch):
         return httpx.Response(200, text=json.dumps({"type": "reply", "reply": reply}) + "\n")
 
     client = httpx.Client(base_url="http://offline.test", transport=httpx.MockTransport(handle))
-    monkeypatch.setattr(ui, "api_client", lambda: client)
+    monkeypatch.setattr(ui.client, "api_client", lambda: client)
 
     def transcript_height(app) -> int:
         found = []

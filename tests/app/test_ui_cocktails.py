@@ -129,7 +129,7 @@ def api(monkeypatch):
         raise AssertionError(f"Unexpected API call: {request.url}")
 
     client = httpx.Client(base_url="http://offline.test", transport=httpx.MockTransport(handle))
-    monkeypatch.setattr(ui, "api_client", lambda: client)
+    monkeypatch.setattr(ui.client, "api_client", lambda: client)
     ui.product_photo.clear()
     yield calls, state
     client.close()

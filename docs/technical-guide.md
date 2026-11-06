@@ -452,7 +452,8 @@ src/curio/
     ├── services.py       # Composition root and domain registry
     ├── demo.py           # Demo customers
     ├── api.py            # FastAPI app
-    └── ui.py, ui.css     # Streamlit client
+    └── ui/               # Streamlit client: main.py (entry), shell, client, common, chat,
+                          # effects, fashion, cocktails, books, evening; ui.css
 examples/hello_domain/    # A complete teas domain on the engine, in one file (teas.py)
 scripts/prepare_data.py # Sample the H&M Kaggle archive (or its unzipped CSVs) into data/
 scripts/fetch_photos.py # Download the sampled products' photos from the mirror
@@ -487,7 +488,7 @@ From that registry, without per-domain code:
   FastAPI dependency per domain (`FashionDep`, `CocktailsDep`, `BooksDep`).
 - `POST /chat` routes by `ChatRequest.domain` to that runtime's assistant.
 
-The UI mirrors this with `DOMAIN_VIEWS` in `app/ui.py`: one `DomainView` per domain (switch
+The UI mirrors this with `DOMAIN_VIEWS` (`app/ui/common.py`, filled in `app/ui/shell.py`): one `DomainView` per domain (switch
 label, copy, session-state keys, grounding badges, approval tools, pages, session panel,
 chat-request fields, footer). It reads availability from `/health`, registers only the
 pages of served domains, opens on Evening's Plan my evening page when the API serves the
@@ -630,7 +631,7 @@ uv run python -m scripts.build_index                   # all products: ~5 min at
 uv run python -m scripts.fetch_query_photos --articles data/raw/articles.csv
 uv run python -m scripts.evaluate --qdrant-path .qdrant --output data/evaluation.json
 uv run uvicorn curio.app.api:create_app --factory --reload   # http://localhost:8000/docs
-uv run streamlit run src/curio/app/ui.py     # http://localhost:8501
+uv run streamlit run src/curio/app/ui/main.py     # http://localhost:8501
 ```
 
 To enable the learned ranking shown in the screenshots, train its optional model
