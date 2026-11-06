@@ -381,3 +381,42 @@ def test_a_validation_error_in_an_evening_tool_becomes_a_tool_error(agent, monke
     [message] = tool_results(seen)
     assert message.startswith("The evening could not be planned with these values (budget:")
     assert any(s.name == "PlanEvening" and s.status == "error" for s in reply.steps)
+
+
+# --- Grounding: unmarked drinks, bylines, currencies -------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("sentence", "issue"),
+    [
+        ("Then pour a manhattan.", "manhattan was not returned by PairCocktail"),
+        ("A MARTINI suits it too.", "MARTINI was not returned by PairCocktail"),
+        (
+            "Read **The Name of the Wind** by Brandon Sanderson.",
+            "The Name of the Wind is not by Brandon Sanderson",
+        ),
+        ("All three for $69.97.", "$69.97 is not a price in euros, the catalog's currency"),
+        ("All three for £60.", "£60 is not a price in euros, the catalog's currency"),
+    ],
+)
+def test_evening_grounding_catches_unmarked_drinks_wrong_authors_and_currencies(
+    agent, sentence, issue
+):
+    answer = f"{grounded_answer(cosy_plan())} {sentence}"
+    reply = agent(action("PlanEvening", {"occasion": "rainy Sunday in"}), answer, answer).reply(
+        "Plan a rainy Sunday in", []
+    )
+    assert reply.grounding.status == "fallback"
+    assert issue in reply.grounding.issues
+
+
+def test_plan_words_product_names_and_the_right_author_stay_verified(agent):
+    plan = cosy_plan()
+    answer = (
+        f"{grounded_answer(plan)} The Name of the Wind by Rothfuss suits {plan.theme.feeling}; "
+        "a honey bee cocktail is what you pour."
+    )
+    reply = agent(action("PlanEvening", {"occasion": "rainy Sunday in"}), answer).reply(
+        "Plan a rainy Sunday in", []
+    )
+    assert reply.grounding.status == "verified", reply.grounding.issues

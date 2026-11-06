@@ -23,7 +23,7 @@ from curio.domains.books.taxonomy import MOODS
 from curio.domains.cocktails.agent.prompts import alcohol_label
 from curio.domains.cocktails.catalog import CocktailCatalog
 from curio.domains.cocktails.models import Cocktail
-from curio.domains.evening.agent.grounding import EveningGroundingCheck
+from curio.domains.evening.agent.grounding import EveningGroundingCheck, ordinary_names
 from curio.domains.evening.agent.prompts import (
     EVENING_ANSWER_PROMPT,
     EVENING_REPAIR_INSTRUCTION,
@@ -90,12 +90,14 @@ class EveningToolkit:
         self._books = books
         self._cocktails = cocktails
         self._products = products
+        drink_names = [c.name for c in cocktails]
         self._grounding = EveningGroundingCheck(
             titles=books.titles(),
             other_names=[*books.authors(), *books.genres(), *MOODS],
-            drink_names=(c.name for c in cocktails),
+            drink_names=drink_names,
             ingredients=cocktails.ingredients(),
             glass_names={c.glass for c in cocktails},
+            ordinary=ordinary_names(drink_names, (f"{b.title} {b.description}" for b in books)),
         )
 
     def key(self, item: EveningItem) -> int:
@@ -259,6 +261,8 @@ class EveningToolkit:
             text.extend(plan.drink.reasons)
         if plan.book is not None:
             text.append(plan.book.reason)
+        # The plan's own words may be repeated: "a dark and stormy night" is not the drink.
+        text += [plan.occasion, plan.theme.feeling, plan.why, *plan.notes]
 
     def apply(
         self, action: BaseModel, *, dry_run: bool = False

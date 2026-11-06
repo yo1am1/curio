@@ -65,7 +65,11 @@ recommenders through one deterministic planner, with no change to the engine. It
 items are products, books and drinks together (`Turn[Product | Book | Cocktail]`, keyed in
 separate ID ranges), its effect `EveningEffect` names three context fields in `adds`, so the
 engine's existing effect merging saves one approval to three lists, and its grounding is the
-three domains' checks merged.
+three domains' checks merged, plus three of its own: catalog drink names in any case and
+unmarked ("pour a mojito"; names that are also ordinary words, such as "Manhattan" or
+"Thriller", only in a drink context; names inside the plan's products, books, authors or own
+text are allowed), "<title> by <author>" against that book's authors, and prices in another
+currency ($, £), which never match the euro catalog.
 
 ## One turn
 
