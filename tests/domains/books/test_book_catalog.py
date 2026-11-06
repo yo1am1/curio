@@ -6,6 +6,7 @@ from curio.domains.books.catalog import (
     BookCatalog,
     BookDataMissingError,
     name_key,
+    strip_edition_notes,
     trusted_cover_url,
 )
 from curio.domains.books.taxonomy import genres_for, is_descriptive, shelf_label
@@ -143,3 +144,45 @@ def test_a_catalog_prepared_without_isbns_still_loads():
     current = old.assign(isbn=["9780439023481", None, "not an isbn", *[None] * (len(old) - 3)])
     books = list(BookCatalog(current))
     assert [b.isbn for b in books[:3]] == ["9780439023481", None, None]
+
+
+@pytest.mark.parametrize(
+    ("raw", "clean"),
+    [
+        (
+            "There are alternate cover editions for this ASIN here and here . If you ain't "
+            "scared, you ain't human.",
+            "If you ain't scared, you ain't human.",
+        ),
+        ("There is an alternate cover edition here . A man.", "A man."),
+        (
+            "Also see: Alternate Cover Editions for this ISBN [ACE] ACE #1 - ACE #2 Melanie "
+            "Stryder refuses to fade away.",
+            "Melanie Stryder refuses to fade away.",
+        ),
+        (
+            "Librarian's note: An alternate cover edition can be found here In 1937 Ernest "
+            "Hemingway traveled to Spain.",
+            "In 1937 Ernest Hemingway traveled to Spain.",
+        ),
+        ("Alternate cover for ISBN 0380896354 / 9780380896356 Merle Corey.", "Merle Corey."),
+        ("Alternate cover edition for B00GR5JZHQ A PANDEMIC.", "A PANDEMIC."),
+        (
+            "This book was mistakenly published under ISBN13: 9780965017763 . Set in the far "
+            "future.",
+            "Set in the far future.",
+        ),
+        # Ordinary text that merely mentions an edition or an alternate world stays.
+        ("Exclusive hardcover edition, collects five comics.", None),
+        ("In an alternate version of frontier America, Alvin is born.", None),
+        ("There are six things very wrong with my life.", None),
+    ],
+)
+def test_librarian_notes_are_stripped_from_descriptions(raw, clean):
+    assert strip_edition_notes(raw) == (raw if clean is None else clean)
+
+
+def test_the_loader_cleans_descriptions_of_already_prepared_files():
+    frame = book_frame()
+    frame.loc[0, "description"] = "An alternate cover edition can be found here . Kvothe."
+    assert BookCatalog(frame).get(1).description == "Kvothe."

@@ -300,7 +300,9 @@ of about 9 MB together:
 - `books.parquet`: one row per book. Titles lose the "(Series, #1)" suffix, which becomes
   `series` and `series_position`; authors are split; reader shelves are cleaned of
   bookkeeping ("to-read", "owned", "kindle", "read-in-2015"); genres come from shelf shares;
-  descriptions are plain text, cut at 600 characters; only https covers on
+  descriptions are plain text without the Goodreads librarian notes some start with ("There is
+  an alternate cover edition for this ASIN here and here.", 160 books; the catalog loader
+  strips them from files prepared earlier too), cut at 600 characters; only https covers on
   `images.gr-assets.com` are kept (a third of the books have Goodreads' "no photo"
   placeholder, which is dropped). `isbn` is a checked ISBN-13 for 9,277 books, converted
   from the ISBN-10 column after restoring its lost leading zeros; the ISBN-13 column is a

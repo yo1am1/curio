@@ -45,6 +45,7 @@ from curio.domains.books.catalog import (
     NEIGHBOUR_COLUMNS,
     OUTPUT_COLUMNS,
     isbn13,
+    strip_edition_notes,
     trusted_cover_url,
 )
 from curio.domains.books.taxonomy import MAX_TAGS, genres_for, is_descriptive, shelf_label
@@ -233,8 +234,9 @@ def describe(shelf_counts: Mapping[str, int]) -> tuple[list[str], list[str]]:
 
 
 def clean_description(raw: str) -> str:
-    """Plain text from Goodreads' HTML blurb, cut at a word boundary."""
-    text = " ".join(html.unescape(_HTML_TAG.sub(" ", raw)).split())
+    """Plain text from Goodreads' HTML blurb without a leading librarian note ("There is an
+    alternate cover edition here."), cut at a word boundary."""
+    text = strip_edition_notes(" ".join(html.unescape(_HTML_TAG.sub(" ", raw)).split()))
     if len(text) <= MAX_DESCRIPTION:
         return text
     return text[:MAX_DESCRIPTION].rsplit(" ", 1)[0].rstrip(",;:") + "…"

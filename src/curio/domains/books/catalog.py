@@ -43,6 +43,32 @@ OPEN_LIBRARY_BOOK = "https://openlibrary.org/isbn/{}"
 _ISBN13 = re.compile(r"97[89]\d{10}")
 
 _WHITESPACE = re.compile(r"\s+")
+# Goodreads librarian notes some descriptions start with ("There is an alternate cover
+# edition for this ASIN here and here."): a note names an edition, cover, ISBN or ASIN and
+# ends at what it points to ("here", an ISBN, an ASIN, "[ACE] ACE #1"); `_MORE` takes the
+# references that follow ("can be found here and here", "/ 9780380896356").
+_NOTE_KEY = (
+    r"alternat(?:e|ive)(?:[- ]|/new )(?:hard)?covers?\b|alternat(?:e|ive) editions?\b|"
+    r"\bcover editions?\b|\bcover of this edition\b|\bISBN|\bASIN\b|printing edition"
+)
+_NOTE_LEAD = r"(?:(?:librarian'?s?\s+)?note\s*:|also see\s*:|see\b)"
+_NOTE_REF = (
+    r"(?:here\b(?:\s*\([a-z]+\))?(?:\s*(?:,|and)\s*here\b(?:\s*\([a-z]+\))?)*"
+    r"(?::\s*https?://\S+)?|https?://\S+|\[ACE\](?:\s*-?\s*ACE\s*#\d+)*|B0[0-9A-Z]{8}\b"
+    r"|97[89]\d{10}\b|\d{9}[\dX]\b|\(omnibus edition\)|go to this alternate cover edition\b"
+    r"|(?:January|February|March|April|May|June|July|August|September|October|November"
+    r"|December) \d{4}\b)"
+)
+_NOTE = re.compile(
+    rf"^{_NOTE_LEAD}?[^.]{{0,140}}?(?:{_NOTE_KEY})[^.]{{0,80}}?{_NOTE_REF}", re.IGNORECASE
+)
+_MORE = re.compile(
+    r"^[\s:/.,;#-]*(?:(?:can|cab)\s+be\s+found|located|exists?|is|are"
+    r"|see\s*:\s*original record|(?:of|for) this (?:book|edition)(?: of this book)?|for"
+    rf"|ISBN(?:\s*1[03])?|ASIN|and)?[\s:/.,;#-]*{_NOTE_REF}",
+    re.IGNORECASE,
+)
+_NOTE_TAIL = re.compile(r"^[\s.;:,/-]+")
 _PUNCTUATION = re.compile(r"[^\w\s]")
 
 
@@ -109,6 +135,18 @@ def _isbn10_valid(ten: str) -> bool:
 def _with_check_digit(twelve: str) -> str:
     total = sum(int(c) * (1 if i % 2 == 0 else 3) for i, c in enumerate(twelve))
     return twelve + str((10 - total % 10) % 10)
+
+
+def strip_edition_notes(text: str) -> str:
+    """The description without a leading Goodreads librarian note ("There is an alternate
+    cover edition for this ASIN here and here."); text without one is returned unchanged."""
+    match = _NOTE.match(text)
+    if match is None:
+        return text
+    rest = text[match.end() :]
+    while more := _MORE.match(rest):
+        rest = rest[more.end() :]
+    return _NOTE_TAIL.sub("", rest) or text
 
 
 def open_library_cover_url(isbn: str | None) -> str | None:
@@ -205,7 +243,7 @@ def _book(record: dict) -> Book:
         average_rating=float(record["average_rating"]),
         ratings_count=int(record["ratings_count"]),
         pages=_int(record["pages"]),
-        description=_text(record["description"]),
+        description=strip_edition_notes(_text(record["description"])),
         genres=_list(record["genres"]),
         tags=_list(record["tags"]),
         image_url=trusted_cover_url(record["image_url"]),
