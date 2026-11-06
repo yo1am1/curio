@@ -1,6 +1,6 @@
 cff-version: 1.3.0
 message: "If you use or build on Curio, please credit it as below."
-title: "Curio: agentic recommendations for fashion, cocktails and books"
+title: "Curio: an engine for trustworthy recommendation agents"
 type: software
 authors:
   - family-names: Trepalin
