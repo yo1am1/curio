@@ -6,6 +6,26 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-06
+
+### Added
+
+- **Container image** on the GitHub Container Registry: every release publishes
+  `ghcr.io/yo1am1/curio:X.Y.Z` and `:latest` (smoke-tested before the push) through a
+  `release` deployment environment.
+- **Repository rules as code**: `CONTRIBUTING.md` (trunk-based flow, squash merges,
+  Conventional Commit titles, the release procedure), `SECURITY.md`, a pull request template,
+  issue forms, `CODEOWNERS`, Dependabot for `uv.lock`, GitHub Actions and the Docker base
+  image, and importable rulesets for `main` and the `v*` tags (`.github/rulesets/`).
+- `PR title` workflow: a pull request title must be a Conventional Commit, since it becomes
+  the squash commit on `main`.
+
+### Changed
+
+- The Release workflow runs only after CI passes on `main` and releases the exact commit CI
+  tested; it fails when the version has no changelog section. Long-lived release and archive
+  branches are gone: `main` is the only branch, and releases are tags.
+
 ## [1.2.1] - 2026-11-06
 
 ### Added
@@ -382,9 +402,10 @@ tool-using shopping assistant with a conversation home and floating panel. Earli
 development is recorded in [docs/engineering-workflow.md](docs/engineering-workflow.md)
 and [docs/session-handoff.md](docs/session-handoff.md).
 
-[Unreleased]: https://github.com/yo1am1/curio/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/yo1am1/curio/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/yo1am1/curio/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/yo1am1/curio/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/yo1am1/curio/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/yo1am1/curio/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/yo1am1/curio/compare/release/fashion-mvp...release/v1.0
-[0.2.0]: https://github.com/yo1am1/curio/tree/release/fashion-mvp
+[1.0.0]: https://github.com/yo1am1/curio/compare/96dfa33...v1.0.0
+[0.2.0]: https://github.com/yo1am1/curio/tree/96dfa33
