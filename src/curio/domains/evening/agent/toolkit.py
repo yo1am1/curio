@@ -45,7 +45,7 @@ from curio.domains.fashion.models import Product
 from curio.domains.fashion.outfits import SECTION_AUDIENCE, SLOT_LABELS
 from curio.engine.grounding import amounts_in
 from curio.engine.schemas import AgentStep, GroundingReport
-from curio.engine.toolkit import ToolError, Turn
+from curio.engine.toolkit import BaseToolkit, ToolError, Turn
 
 __all__ = ["EveningToolkit"]
 
@@ -71,7 +71,7 @@ BOOK_KEY = 10**12
 DRINK_KEY = 2 * 10**12
 
 
-class EveningToolkit:
+class EveningToolkit(BaseToolkit[EveningItem]):
     tools = EVENING_TOOLS
     policies = EVENING_POLICIES
     invalid_action = INVALID_ACTION
@@ -108,9 +108,6 @@ class EveningToolkit:
         return item.product_id
 
     # --- Turn phases ----------------------------------------------------------------------
-
-    def clean_context(self, context: EveningContext) -> EveningContext:
-        return context
 
     def history(
         self, turns: Sequence[EveningChatTurn]
@@ -151,9 +148,6 @@ class EveningToolkit:
             summary=summary,
             detail={"parts": served, "has_plan": context.evening is not None},
         )
-
-    def refresh(self, turn: Turn[EveningItem], approved: EveningEffect | None = None) -> None:
-        """Nothing to do: every evening tool reads remembered tastes from `turn.context`."""
 
     def prompt(
         self, turn: Turn[EveningItem], message: str, history: Sequence[BaseMessage]

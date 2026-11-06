@@ -61,7 +61,7 @@ from curio.domains.fashion.outfits import (
 from curio.domains.fashion.search import ProductSearch
 from curio.engine.grounding import amounts_in
 from curio.engine.schemas import AgentStep, GroundingReport
-from curio.engine.toolkit import ToolError, Turn
+from curio.engine.toolkit import BaseToolkit, ToolError, Turn
 
 __all__ = ["FashionToolkit"]
 
@@ -77,7 +77,7 @@ OUTFIT = "outfit"
 CURRENT_OUTFIT = "current_outfit"
 
 
-class FashionToolkit:
+class FashionToolkit(BaseToolkit[Product]):
     tools = TOOLS
     policies = POLICIES
     invalid_action = INVALID_ACTION

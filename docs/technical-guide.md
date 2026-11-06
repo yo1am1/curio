@@ -429,7 +429,7 @@ flowchart LR
 src/curio/
 ├── engine/               # Domain-independent: imports no domain and not the app
 │   ├── agent.py          # AgentEngine: plan, bounded tool loop, approvals, verify, fallback
-│   ├── toolkit.py        # The Toolkit protocol a domain implements, Turn, ToolError
+│   ├── toolkit.py        # The Toolkit protocol, BaseToolkit, Turn, ToolError
 │   ├── tools.py          # Policy (READ / ASK / APPROVE) and the shared AskShopper tool
 │   ├── schemas.py        # AgentStep, Intent, PendingAction, AppliedEffect, AssistantReply…
 │   ├── signing.py        # ActionSigner (HMAC proposals), narrow_args
@@ -503,7 +503,7 @@ loads.
 Books were added this way, which is the recipe for the next domain: its catalog and
 recommender (`domains/books/`), a runtime dataclass and a loader in `app/services.py`, a
 `DomainSpec` appended to `DOMAINS`, its id in `app.schemas.Domain`, its endpoints behind a `BooksDep`
-dependency, and a `DomainView` with its pages in `DOMAIN_VIEWS`. Its agent is a `Toolkit` for
+dependency, and a `DomainView` with its pages in `DOMAIN_VIEWS`. Its agent is a `BaseToolkit` for
 the shared engine ([agent architecture](agent-architecture.md)). The shared parts needed
 only data-driven additions: the domain's approval tools in `ApprovalTool`, its context
 fields on `TurnContext` (`book_preferences`, `book_shortlist`), its effect kinds on

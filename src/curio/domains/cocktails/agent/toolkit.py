@@ -56,7 +56,7 @@ from curio.domains.cocktails.recommend import (
     tokens,
 )
 from curio.engine.schemas import AgentStep, GroundingReport
-from curio.engine.toolkit import ToolError, Turn
+from curio.engine.toolkit import BaseToolkit, ToolError, Turn
 
 __all__ = ["CocktailToolkit"]
 
@@ -73,7 +73,7 @@ MAX_CANDIDATES = 50
 EXAMPLE_PANTRY = "What can I make with lime and mint?"
 
 
-class CocktailToolkit:
+class CocktailToolkit(BaseToolkit[Cocktail]):
     tools = COCKTAIL_TOOLS
     policies = COCKTAIL_POLICIES
     invalid_action = INVALID_ACTION
@@ -141,9 +141,6 @@ class CocktailToolkit:
             summary=summary,
             detail=tastes.model_dump(exclude_defaults=True) | {"from_memory": from_memory},
         )
-
-    def refresh(self, turn: Turn[Cocktail], approved: CocktailEffect | None = None) -> None:
-        """Nothing to do: every cocktail tool reads remembered tastes from `turn.context`."""
 
     def prompt(
         self, turn: Turn[Cocktail], message: str, history: Sequence[BaseMessage]

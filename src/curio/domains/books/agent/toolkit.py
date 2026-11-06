@@ -46,7 +46,7 @@ from curio.domains.books.recommend import BookRecommender
 from curio.domains.books.taxonomy import MOODS
 from curio.engine.grounding import merge_reports
 from curio.engine.schemas import AgentStep, GroundingReport, TurnContext
-from curio.engine.toolkit import ToolError, Turn
+from curio.engine.toolkit import BaseToolkit, ToolError, Turn
 
 __all__ = ["BookToolkit", "DrinkPairing"]
 
@@ -110,7 +110,7 @@ class DrinkPairing(Protocol):
         ...
 
 
-class BookToolkit:
+class BookToolkit(BaseToolkit[Book]):
     tools = BOOK_TOOLS
     policies = BOOK_POLICIES
     invalid_action = INVALID_ACTION
@@ -180,9 +180,6 @@ class BookToolkit:
             summary += " Drink pairings stay alcohol-free (remembered cocktail taste)."
             detail["pairing_alcohol_free"] = True
         yield AgentStep(kind="plan", name="Understand request", summary=summary, detail=detail)
-
-    def refresh(self, turn: Turn[Book], approved: BookEffect | None = None) -> None:
-        """Nothing to do: every book tool reads remembered tastes from `turn.context`."""
 
     def prompt(
         self, turn: Turn[Book], message: str, history: Sequence[BaseMessage]

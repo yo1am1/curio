@@ -5,17 +5,21 @@ validation of APPROVE effects, the grounding check, the deterministic fallback a
 reply's domain fields. Everything else (budgets, approvals, resume, self-correction, the
 trace) is the engine's.
 
+`BaseToolkit` implements the optional hooks with no-op defaults, so a domain writes only its
+tools, prompt, READ tools, APPROVE effects, grounding check, fallback and reply fields.
+
 Optional hook: a toolkit may define `vet_proposal(turn, action) -> None`, which the engine
 calls before it applies or signs an APPROVE action, to refuse one that does not fit this
 turn (raise ToolError; the message goes back to the model). The evening toolkit uses it so a
 save names only the current plan's parts.
 """
 
+from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel
 
 from curio.engine.schemas import (
@@ -140,3 +144,78 @@ class Toolkit[T](Protocol):
     def suggestions(self, turn: Turn[T]) -> list[str]:
         """Next-step chips for a completed answer."""
         ...
+
+
+class BaseToolkit[T](ABC):
+    """A `Toolkit` with no-op defaults for every optional hook.
+
+    Subclasses set `tools` and `policies` and implement the abstract methods. Override a hook
+    only when the domain needs it: remembered filters (`clean_context`, `refresh`), cards that
+    earlier turns showed (`history`), planning steps (`plan`), what a proposal shows
+    (`proposed`, `approval_text`, `pending_display`), a per-turn veto on proposals
+    (`vet_proposal`) and next-step chips (`suggestions`).
+    """
+
+    tools: Mapping[str, type[BaseModel]]
+    policies: Mapping[str, Policy]
+    invalid_action = "Invalid action. Call one of the tools with valid arguments."
+    repair_instruction = "Verification failed: {issues}. Use only facts the tools returned."
+    grounding_subject = "facts"
+
+    @abstractmethod
+    def key(self, item: T) -> int: ...
+
+    @abstractmethod
+    def prompt(
+        self, turn: Turn[T], message: str, history: Sequence[BaseMessage]
+    ) -> list[BaseMessage]: ...
+
+    @abstractmethod
+    def read(self, turn: Turn[T], action: BaseModel) -> ReadResult: ...
+
+    @abstractmethod
+    def apply(
+        self, action: BaseModel, *, dry_run: bool = False
+    ) -> tuple[AppliedEffect, list[T], str]: ...
+
+    @abstractmethod
+    def check(self, turn: Turn[T], text: str) -> GroundingReport: ...
+
+    @abstractmethod
+    def fallback(self, items: Sequence[T], extras: Mapping[str, Any] | None = None) -> str: ...
+
+    @abstractmethod
+    def reply_fields(self, turn: Turn[T]) -> dict[str, Any]: ...
+
+    def clean_context(self, context: TurnContext) -> TurnContext:
+        """Keep the client-held context as it is."""
+        return context
+
+    def history(self, turns: Sequence[ChatTurn]) -> tuple[list[BaseMessage], list[T]]:
+        """Earlier messages as plain chat messages; no earlier cards are cited."""
+        return [(HumanMessage if t.role == "user" else AIMessage)(t.content) for t in turns], []
+
+    def plan(self, turn: Turn[T], history: Sequence[BaseMessage]) -> Iterator[AgentStep]:
+        """One planning step that only records the request."""
+        yield AgentStep(kind="plan", name="Understand request", summary="Reading the request.")
+
+    def refresh(self, turn: Turn[T], approved: AppliedEffect | None = None) -> None:
+        """No remembered filters to re-apply."""
+        return
+
+    def proposed(self, args: Mapping[str, Any]) -> list[T]:
+        """No items to show for a declined proposal."""
+        return []
+
+    def approval_text(self, action: BaseModel) -> str:
+        return "Shall I go ahead? Approve, edit or decline."
+
+    def pending_display(self, items: list[T]) -> dict[str, Any]:
+        return {}
+
+    def vet_proposal(self, turn: Turn[T], action: BaseModel) -> None:
+        """Accept every proposal; raise ToolError to refuse one in this turn's context."""
+        return
+
+    def suggestions(self, turn: Turn[T]) -> list[str]:
+        return []

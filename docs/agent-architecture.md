@@ -10,11 +10,14 @@ the recommendation system and the earlier assistant that led to this design.
 The loop lives once, in `curio.engine` (`engine/agent.py`, `AgentEngine`). Each domain
 plugs in a `Toolkit` (`engine/toolkit.py`): its tool schemas and policies, planning, how
 READ tools run, how APPROVE effects are validated, the grounding check, the deterministic
-fallback and the reply fields.
+fallback and the reply fields. `BaseToolkit` gives every optional hook (context cleaning,
+history, planning, refresh, proposal display, `vet_proposal`, suggestions) a no-op default, so
+a toolkit subclass writes only what its domain needs; every domain toolkit and the tea example
+subclass it.
 
 The code has three layers, and `tests/test_architecture.py` enforces their boundaries:
 
-- `curio.engine`: the loop, the `Toolkit` protocol, policies and the shared `AskShopper`,
+- `curio.engine`: the loop, the `Toolkit` protocol and `BaseToolkit`, policies and the shared `AskShopper`,
   signed proposals (`ActionSigner`, `narrow_args`), the generic grounding machinery (price and
   ID checks, name matching, `merge_reports`), the chat model factory and the wire models every
   turn shares. It imports no domain and not the app.

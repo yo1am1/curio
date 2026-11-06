@@ -1,22 +1,23 @@
-"""Hello, domain: a tea guide on Curio's agent engine, complete in about 150 lines.
+"""Hello, domain: a tea guide on Curio's agent engine, complete in one file.
 
 A domain brings its items, its tools and a grounding check; the engine runs the turn. Here:
 twelve teas, one READ tool (SearchTeas), one APPROVE tool (SaveTeas: the shopper approves,
 narrows or declines a signed proposal) and a check that every tea name and ID in an answer
-came from a tool. Run it with any LangChain chat model: `tea_agent(model).reply("...", [])`.
+came from a tool. `BaseToolkit` supplies the optional hooks. Run it with any LangChain chat
+model: `tea_agent(model).reply("...", [])`.
 """
 
 import re
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar, Literal
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 
-from curio.engine import ActionSigner, AgentEngine, GroundingReport, Policy, Schemas
+from curio.engine import ActionSigner, AgentEngine, BaseToolkit, GroundingReport, Policy, Schemas
 from curio.engine.grounding import any_of, check_ids, grounding_report
-from curio.engine.schemas import AgentStep, AppliedEffect, AssistantReply, ChatTurn, TurnContext
+from curio.engine.schemas import AgentStep, AppliedEffect, AssistantReply, TurnContext
 from curio.engine.toolkit import ToolError, Turn
 from curio.engine.tools import AskShopper
 
@@ -87,13 +88,11 @@ def _lines(teas: Sequence[Tea]) -> str:
     return "\n".join(f"- [id {t.tea_id}] {t.name}: {t.kind}, {t.notes}" for t in teas)
 
 
-class TeaToolkit:
+class TeaToolkit(BaseToolkit[Tea]):
     tools: ClassVar = {schema.__name__: schema for schema in (SearchTeas, AskShopper, SaveTeas)}
     policies: ClassVar = dict(
         SearchTeas=Policy.READ, AskShopper=Policy.ASK, SaveTeas=Policy.APPROVE
     )
-    invalid_action = "Invalid action. Use SearchTeas with a query or SaveTeas with tea IDs."
-    repair_instruction = "Verification failed: {issues}. Name only teas the tools returned."
     grounding_subject = "tea names and IDs"
 
     def __init__(self, teas: Sequence[Tea] = TEAS) -> None:
@@ -102,19 +101,6 @@ class TeaToolkit:
 
     def key(self, item: Tea) -> int:
         return item.tea_id
-
-    def clean_context(self, context: TeaContext) -> TeaContext:
-        return context
-
-    def history(self, turns: Sequence[ChatTurn]) -> tuple[list[BaseMessage], list[Tea]]:
-        """Earlier messages for the model; this domain cites no cards from them."""
-        return [(HumanMessage if t.role == "user" else AIMessage)(t.content) for t in turns], []
-
-    def plan(self, turn: Turn[Tea], history: Sequence[BaseMessage]) -> Iterator[AgentStep]:
-        yield AgentStep(kind="plan", name="Understand request", summary="Looking for teas.")
-
-    def refresh(self, turn: Turn[Tea], approved: AppliedEffect | None = None) -> None:
-        """Nothing to re-apply: teas have no remembered filters."""
 
     def prompt(self, turn: Turn[Tea], message: str, history: Sequence[BaseMessage]):
         saved = self.proposed({"tea_ids": turn.context.saved})
@@ -140,12 +126,6 @@ class TeaToolkit:
     def proposed(self, args: Mapping[str, Any]) -> list[Tea]:
         return [self._teas[i] for i in args.get("tea_ids", []) if i in self._teas]
 
-    def approval_text(self, action: SaveTeas) -> str:
-        return "Shall I save these teas to your list? Approve, edit or decline."
-
-    def pending_display(self, items: list[Tea]) -> dict[str, Any]:
-        return {}
-
     def check(self, turn: Turn[Tea], text: str) -> GroundingReport:
         """Every tea ID, and every catalog tea name, must be one a tool returned."""
         returned = list(turn.evidence.values())
@@ -161,9 +141,6 @@ class TeaToolkit:
 
     def reply_fields(self, turn: Turn[Tea]) -> dict[str, Any]:
         return {"teas": turn.items}
-
-    def suggestions(self, turn: Turn[Tea]) -> list[str]:
-        return ["Something smoky", "A caffeine-free tea"]
 
 
 def tea_agent(chat_model: BaseChatModel, *, signer: ActionSigner | None = None):
