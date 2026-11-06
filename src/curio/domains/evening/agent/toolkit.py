@@ -293,6 +293,25 @@ class EveningToolkit:
         )
         return effect, [*products, *books, *drinks], f"{verb} {_and(parts)}."
 
+    def vet_proposal(self, turn: Turn[EveningItem], action: BaseModel) -> None:
+        """A save names only parts of the current plan (this turn's, else the client's)."""
+        if not isinstance(action, SaveEvening):
+            return
+        plan: EveningPlan | None = turn.extras.get(EVENING) or turn.extras.get(CURRENT_EVENING)
+        if plan is None:
+            raise ToolError("There is no evening plan to save yet. Use PlanEvening first.")
+        products = {p.product_id for p in plan.outfit.outfit.products} if plan.outfit else set()
+        books = {plan.book.book.book_id} if plan.book else set()
+        drinks = {plan.drink.cocktail.drink_id} if plan.drink else set()
+        stray = [f"product #{i}" for i in action.product_ids if i not in products]
+        stray += [f"book #{i}" for i in action.book_ids if i not in books]
+        stray += [f"drink #{i}" for i in action.drink_ids if i not in drinks]
+        if stray:
+            raise ToolError(
+                f"Only the current evening plan's parts can be saved; {_and(stray)} "
+                f"{'is' if len(stray) == 1 else 'are'} not in it. Pass the plan's IDs."
+            )
+
     def proposed(self, args: Mapping[str, Any]) -> list[EveningItem]:
         products = self._products.get_many(args.get("product_ids", [])) if self._products else []
         books = self._books.get_many(args.get("book_ids", []))

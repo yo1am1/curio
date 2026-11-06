@@ -319,7 +319,8 @@ def test_save_evening_is_proposed_narrowed_and_applied_to_each_list(agent):
 
 
 def test_a_widened_or_forged_proposal_is_refused(agent):
-    reply = agent(action("SaveEvening", {"book_ids": [4]})).reply("Save the book", [])
+    context = TurnContext(evening=cosy_plan().state)
+    reply = agent(action("SaveEvening", {"book_ids": [4]})).reply("Save the book", [], context)
     pending = reply.pending_action
     widened = ActionDecision(action=pending, approved=True, edited_args={"book_ids": [4, 1]})
     with pytest.raises(InvalidActionError, match="subset"):
@@ -330,7 +331,9 @@ def test_a_widened_or_forged_proposal_is_refused(agent):
 
 
 def test_a_declined_save_changes_nothing(agent):
-    reply = agent(action("SaveEvening", {"book_ids": [4], "drink_ids": [9]})).reply("save", [])
+    context = TurnContext(evening=cosy_plan().state)
+    save = action("SaveEvening", {"book_ids": [4], "drink_ids": [9]})
+    reply = agent(save).reply("save", [], context)
     done = agent("No problem.").resume(
         ActionDecision(action=reply.pending_action, approved=False), []
     )
@@ -341,9 +344,35 @@ def test_a_declined_save_changes_nothing(agent):
 def test_saving_unknown_ids_is_a_tool_error(agent):
     assistant = agent(action("SaveEvening", {"book_ids": [999]}), "Nothing to save.")
     seen = record(assistant)
-    reply = assistant.reply("save", [])
-    assert tool_results(seen) == ["None of those pieces, books or drinks are in the catalogs."]
+    reply = assistant.reply("save", [], TurnContext(evening=cosy_plan().state))
+    assert tool_results(seen) == [
+        "Only the current evening plan's parts can be saved; book #999 is not in it. Pass the "
+        "plan's IDs."
+    ]
     assert reply.status == "complete"
+
+
+def test_a_save_may_name_only_the_current_plans_parts(agent):
+    plan = cosy_plan()
+    context = TurnContext(evening=plan.state)
+    # Real catalog items, but not this plan's: another book and another drink.
+    stray = {"book_ids": [4, 1], "drink_ids": [2]}
+    assistant = agent(action("SaveEvening", stray), "Only the plan can be saved.")
+    seen = record(assistant)
+    reply = assistant.reply("Save it and The Big Sleep", [], context)
+    assert reply.status == "complete" and reply.pending_action is None
+    assert tool_results(seen) == [
+        "Only the current evening plan's parts can be saved; book #1 and drink #2 are not in "
+        "it. Pass the plan's IDs."
+    ]
+    # Without any plan there is nothing to save.
+    assistant = agent(action("SaveEvening", {"book_ids": [4]}), "Plan first.")
+    seen = record(assistant)
+    assistant.reply("save", [])
+    assert tool_results(seen) == ["There is no evening plan to save yet. Use PlanEvening first."]
+    # The plan's own parts are proposed as before.
+    ids = {"book_ids": [plan.book.book.book_id], "drink_ids": [plan.drink.cocktail.drink_id]}
+    assert agent(action("SaveEvening", ids)).reply("save", [], context).pending_action
 
 
 # --- Robustness: a bad value is a tool message, never a crashed turn -------------------------

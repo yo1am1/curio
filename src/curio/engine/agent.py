@@ -308,8 +308,13 @@ class AgentEngine[T]:
         messages: list[BaseMessage],
         started: float,
     ) -> Iterator[AgentEvent]:
-        """An approval-gated state change: apply it if auto-approved, else ask the shopper."""
+        """An approval-gated state change: apply it if auto-approved, else ask the shopper.
+
+        A toolkit may define `vet_proposal(turn, action)` to refuse a proposal in this turn's
+        context (raising ToolError) before anything is applied or signed."""
         try:
+            if (vet := getattr(self._toolkit, "vet_proposal", None)) is not None:
+                vet(turn, action)
             if name in turn.context.auto_approve:
                 effect, items, outcome = self._toolkit.apply(action)
                 self._applied(turn, effect)

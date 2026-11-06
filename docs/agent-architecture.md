@@ -69,7 +69,10 @@ three domains' checks merged, plus three of its own: catalog drink names in any 
 unmarked ("pour a mojito"; names that are also ordinary words, such as "Manhattan" or
 "Thriller", only in a drink context; names inside the plan's products, books, authors or own
 text are allowed), "<title> by <author>" against that book's authors, and prices in another
-currency ($, £), which never match the euro catalog.
+currency ($, £), which never match the euro catalog. A save (SaveEvening) may name only the current
+plan's parts: the toolkit's `vet_proposal` hook, which the engine calls before it applies or
+signs any APPROVE action, refuses other IDs with a tool message. The hook is generic and
+optional, so the engine stays domain-free.
 
 ## One turn
 

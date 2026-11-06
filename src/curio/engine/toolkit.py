@@ -4,6 +4,11 @@ A toolkit names its tools and their policies, and supplies planning, the READ to
 validation of APPROVE effects, the grounding check, the deterministic fallback and the
 reply's domain fields. Everything else (budgets, approvals, resume, self-correction, the
 trace) is the engine's.
+
+Optional hook: a toolkit may define `vet_proposal(turn, action) -> None`, which the engine
+calls before it applies or signs an APPROVE action, to refuse one that does not fit this
+turn (raise ToolError; the message goes back to the model). The evening toolkit uses it so a
+save names only the current plan's parts.
 """
 
 from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Sequence

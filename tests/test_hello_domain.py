@@ -79,3 +79,19 @@ def test_an_answer_naming_a_tea_no_tool_returned_falls_back_to_catalog_facts():
     assert steps(reply)[-2:] == [("Grounding check", "error"), ("Self-correction", "blocked")]
     assert "Silver Needle" not in reply.text
     assert reply.text.startswith("Teas I could confirm:\n- [id 4] Lapsang Souchong")
+
+
+def test_a_toolkit_may_vet_a_proposal_before_it_is_signed(monkeypatch):
+    """The engine's optional `vet_proposal` hook refuses a proposal with a tool message."""
+    from curio.engine import ToolError
+    from examples.hello_domain.teas import TeaToolkit
+
+    def vet(self, turn, action):
+        if 9 in action.tea_ids:
+            raise ToolError("Tea 9 is not on offer today.")
+
+    monkeypatch.setattr(TeaToolkit, "vet_proposal", vet, raising=False)
+    agent = tea_agent(model(("SaveTeas", {"tea_ids": [4, 9]}), "Only Lapsang then."))
+    reply = agent.reply("Save both smoky teas", [])
+    assert reply.status == "complete" and reply.pending_action is None
+    assert ("SaveTeas", "error") in steps(reply)
