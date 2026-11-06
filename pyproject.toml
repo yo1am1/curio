@@ -1,6 +1,6 @@
 [project]
 name = "curio-recommendations"
-version = "1.2.0"
+version = "1.2.1"
 description = "Curio: a source-grounded recommendation agent for fashion (H&M purchases, photo search, product connections), cocktails (offline recipe search, similar drinks, pantry matching) and books (goodbooks-10k search, readers-also-liked, mood browse)."
 keywords = ["recommendations", "agent", "llm", "fashion", "cocktails", "books", "clip", "qdrant", "fastapi", "streamlit"]
 readme = "README.md"

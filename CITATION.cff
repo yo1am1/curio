@@ -1,4 +1,4 @@
-cff-version: 1.2.0
+cff-version: 1.2.1
 message: "If you use or build on Curio, please credit it as below."
 title: "Curio: agentic recommendations for fashion, cocktails and books"
 type: software
@@ -10,7 +10,7 @@ repository-code: "https://github.com/yo1am1/curio"
 url: "https://github.com/yo1am1/curio"
 license: Apache-2.0
 version: 1.2.0
-date-released: "2026-11-05"
+date-released: "2026-11-06"
 keywords:
   - recommendations
   - agent
