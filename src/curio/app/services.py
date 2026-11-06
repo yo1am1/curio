@@ -17,7 +17,7 @@ PairCocktail tool.
 A composed domain has no data of its own: its spec has `compose` instead of `load`, and it is
 built from the loaded domains after linking. "Plan my evening" (`evening`) is served whenever
 books and cocktails are (with fashion its plans have an outfit too); ENABLED_DOMAINS limits
-the data domains it builds on, not the composed domain itself.
+the data domains it builds on, and naming `evening` in it enables those domains too.
 """
 
 import dataclasses
@@ -186,6 +186,9 @@ class DomainSpec[R: DomainRuntime]:
     compose: Callable[[Mapping[str, "DomainRuntime"], AgentKit | None], R | None] | None = None
     # For a composed domain: what is missing, given what the server serves.
     missing: Callable[["Services"], str] | None = None
+    # For a composed domain: the data domains it builds on, which ENABLED_DOMAINS naming it
+    # enables too (each still loads only when its data is prepared).
+    builds_on: tuple[str, ...] = ()
 
     def of(self, services: "Services") -> R | None:
         """This domain's runtime in `services`, or None when it is not served."""
@@ -439,6 +442,7 @@ EVENING: DomainSpec[EveningServices] = DomainSpec(
     runtime_type=EveningServices,
     compose=compose_evening,
     missing=evening_missing,
+    builds_on=("fashion", "cocktails", "books"),
 )
 # The registry, in display order: the UI defaults to the first domain that is served.
 DOMAINS: tuple[DomainSpec, ...] = (FASHION, COCKTAILS, BOOKS, EVENING)
@@ -507,9 +511,20 @@ def _selected_domains(settings: Settings) -> list[DomainSpec]:
         raise ValueError(
             f"ENABLED_DOMAINS names unknown domains {unknown}; known: {', '.join(sorted(known))}."
         )
-    # Composed domains follow the domains they build on, so they are never "skipped".
+    # Composed domains follow the domains they build on, so they are never "skipped"; naming
+    # one enables what it builds on ("evening" loads books, cocktails and, when prepared,
+    # fashion).
+    enabled = set(settings.enabled_domains)
+    for spec in DOMAINS:
+        if spec.id in settings.enabled_domains and (added := set(spec.builds_on) - enabled):
+            logger.info(
+                "ENABLED_DOMAINS names %s, so it also enables %s (each when prepared).",
+                spec.id,
+                ", ".join(sorted(added)),
+            )
+            enabled |= added
     data = [spec for spec in DOMAINS if spec.load is not None]
-    skipped = [spec.id for spec in data if spec.id not in settings.enabled_domains]
+    skipped = [spec.id for spec in data if spec.id not in enabled]
     if skipped:
         logger.info("ENABLED_DOMAINS skips %s.", ", ".join(skipped))
-    return [spec for spec in data if spec.id in settings.enabled_domains]
+    return [spec for spec in data if spec.id in enabled]

@@ -1,5 +1,6 @@
 """Plan my evening served: the registry entry, POST /evening/plan, /evening/swap and chat."""
 
+import logging
 from collections.abc import Iterator
 from unittest.mock import Mock
 
@@ -98,6 +99,18 @@ def test_books_and_cocktails_compose_the_evening_even_when_enabled_domains_omit_
             "item_count": 2,
             "hint": OUTFIT_NEEDS_FASHION,
         }
+
+
+def test_enabled_domains_evening_enables_what_it_builds_on(tmp_path, caplog):
+    """ENABLED_DOMAINS=evening loads books and cocktails (and fashion when prepared)."""
+    caplog.set_level(logging.INFO)
+    prepare(tmp_path)
+    services = build_services(settings_for(tmp_path, enabled_domains="evening"))
+    assert list(services.domains) == ["cocktails", "books", "evening"]
+    assert services.evening.planner.parts == ["book", "drink"]
+    assert "ENABLED_DOMAINS names evening, so it also enables books, cocktails, fashion" in (
+        caplog.text
+    )
 
 
 def test_without_an_llm_the_hint_names_chat_and_the_missing_outfit(tmp_path):

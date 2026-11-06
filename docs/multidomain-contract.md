@@ -532,7 +532,9 @@ deterministic.
   `EveningServices(planner, assistant)` whenever books and cocktails are served and their
   pairer built; `item_count()` is the number of parts it plans, and its `notice` (the
   outfit's `OUTFIT_NEEDS_FASHION` without fashion) is appended to its `/domains` hint.
-  `ENABLED_DOMAINS` accepts `evening` but limits only data domains.
+  `ENABLED_DOMAINS` accepts `evening` and limits only data domains; naming `evening`
+  enables the domains it builds on (`DomainSpec.builds_on`: books, cocktails and, when
+  prepared, fashion).
 - `POST /evening/plan` body `EveningRequest` -> `EveningPlan`; `POST /evening/swap` body
   `EveningSwap` -> `EveningPlan` (422 for an `EveningError` or an invalid body). Both 503 with
   `EVENING_MISSING` naming the missing books or cocktails.

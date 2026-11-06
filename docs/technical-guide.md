@@ -511,7 +511,9 @@ catalog and the cocktail recipes: The book catalog is not prepared: …"), which
 the 503 of `/evening/*` and evening chat report; a served evening without fashion reports
 `item_count` 2 (the parts it plans) and the hint "The outfit needs the fashion catalogue…".
 `ENABLED_DOMAINS` limits only the data domains: the quick start (`cocktails,books`) serves
-the evening too, without the outfit.
+the evening too, without the outfit. Naming a composed domain enables what it builds on
+(`DomainSpec.builds_on`): `ENABLED_DOMAINS=evening` loads books, cocktails and fashion, each
+only when its data is prepared, and the log says so.
 
 Cross-domain features link loaded domains after loading: `link_domains` builds the
 `BookCocktailPairer` when books and cocktails are both served, stores it on `BookServices`
