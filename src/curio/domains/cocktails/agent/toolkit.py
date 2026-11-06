@@ -52,6 +52,7 @@ from curio.domains.cocktails.models import (
 from curio.domains.cocktails.recommend import (
     PANTRY_ALIASES,
     CocktailRecommender,
+    asks_for_shots,
     terms,
     tokens,
 )
@@ -237,6 +238,7 @@ class CocktailToolkit(BaseToolkit[Cocktail]):
             alcohol=alcohol,
             max_missing=action.max_missing,
             top_k=MAX_CANDIDATES,
+            shots=asks_for_shots(turn.message),
         )
         matches = [m for m in matches if not self._avoided(m.cocktail, tastes)][: self._top_k]
         turn.show((m.cocktail for m in matches), {m.cocktail.drink_id: _have(m) for m in matches})

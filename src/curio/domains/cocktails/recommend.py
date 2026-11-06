@@ -116,6 +116,12 @@ ALCOHOL_FREE_PAIRS = frozenset(
 )
 # Assumed to be in every kitchen, so they never count as missing.
 PANTRY_STAPLES = frozenset({"ice", "water"})
+# Shot-style drinks: the "Shot" category, and drinking-game shots, slammers and drinks set
+# alight by name. Search leaves them out unless the request asks for shots (or names the
+# drink); "What can I make?" leaves them out unless asked with `shots=True`; pairings never.
+SHOT_CATEGORY = "shot"
+SHOT_NAME_WORDS = frozenset({"shot", "shots", "slammer", "flaming"})
+SHOT_REQUEST_WORDS = frozenset({"shot", "shots", "shooter", "shooters", "slammer", "slammers"})
 # Drink names that are crude, sexual or a slur: Curio is a public demo, so search, "similar"
 # and "What can I make?" never offer them unless the query names the drink; pairings never.
 CRUDE_NAMES = frozenset(
@@ -224,10 +230,14 @@ class CocktailRecommender:
         required = _filters(query.ingredients)
         excluded = _filters(query.exclude_ingredients)
         named = query.query.casefold()
+        shots = asks_for_shots(query.query) or (query.category or "").strip().casefold() == (
+            SHOT_CATEGORY
+        )
         candidates = [
             row
             for row, cocktail in enumerate(self._cocktails)
             if (not is_crude(cocktail) or cocktail.name.casefold() in named)
+            and (shots or not is_shot(cocktail) or cocktail.name.casefold() in named)
             and _alcohol_ok(cocktail, query.alcohol)
             and _category_ok(cocktail, query.category)
             and self._ingredients_ok(row, required, excluded)
@@ -298,6 +308,7 @@ class CocktailRecommender:
         alcohol: AlcoholFilter = "any",
         max_missing: int = 2,
         top_k: int = 10,
+        shots: bool = False,
     ) -> list[PantryMatch]:
         covered = pantry_coverage(ingredients)
         if not covered or top_k < 1:
@@ -311,6 +322,8 @@ class CocktailRecommender:
         spirits = []
         for row, cocktail in enumerate(self._cocktails):
             if not _alcohol_ok(cocktail, alcohol) or is_crude(cocktail):
+                continue
+            if is_shot(cocktail) and not shots:
                 continue
             recipe = self._recipes[row]
             have = [i.name for i in recipe if has(i) or i.key in PANTRY_STAPLES]
@@ -482,6 +495,18 @@ class CocktailRecommender:
 def is_crude(cocktail: Cocktail) -> bool:
     """Whether a drink's name is one Curio never offers unprompted (`CRUDE_NAMES`)."""
     return cocktail.name.casefold() in CRUDE_NAMES
+
+
+def is_shot(cocktail: Cocktail) -> bool:
+    """Whether a drink is shot-style: the "Shot" category, or a shot, slammer or flaming drink."""
+    if cocktail.category.casefold() == SHOT_CATEGORY:
+        return True
+    return bool(SHOT_NAME_WORDS & set(_TOKEN.findall(cocktail.name.casefold())))
+
+
+def asks_for_shots(text: str) -> bool:
+    """Whether a request asks for shots ("tequila shots", "a shooter")."""
+    return bool(SHOT_REQUEST_WORDS & set(_TOKEN.findall(text.casefold())))
 
 
 def pantry_coverage(items: Iterable[str]) -> set[str]:
