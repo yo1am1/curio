@@ -3,7 +3,8 @@ name: Release
 # Runs after CI passes on main. When pyproject.toml carries a version without a release yet, it
 # tags that exact commit, publishes the GitHub release (notes = the matching CHANGELOG.md
 # section), then deploys the Docker image to ghcr.io through the `release` environment.
-# Re-runs are safe: a version that is already released is skipped.
+# Both steps are idempotent: an existing release is kept, and the image is built only while
+# ghcr.io lacks that version's tag, so any later run repairs a failed deployment.
 on:
   workflow_run:
     workflows: [CI]
@@ -29,7 +30,7 @@ jobs:
       version: ${{ steps.release.outputs.version }}
       sha: ${{ steps.release.outputs.sha }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Create the release if this version is new
@@ -58,7 +59,6 @@ jobs:
 
   image:
     needs: release
-    if: needs.release.outputs.created == 'true'
     runs-on: ubuntu-latest
     environment:
       name: release
@@ -70,12 +70,26 @@ jobs:
       IMAGE: ghcr.io/${{ github.repository_owner }}/curio
       VERSION: ${{ needs.release.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - name: Log in to ghcr.io
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Skip if this version is already published
+        id: published
+        run: |
+          if docker manifest inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+            echo "$IMAGE:$VERSION is already published"
+            echo "done=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "done=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.published.outputs.done == 'false'
         with:
           ref: ${{ needs.release.outputs.sha }}
       - name: Free disk space for the PyTorch layer
+        if: steps.published.outputs.done == 'false'
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - name: Build
+        if: steps.published.outputs.done == 'false'
         run: |
           docker build \
             --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
@@ -85,10 +99,11 @@ jobs:
             --label org.opencontainers.image.description="Curio: one tool-using AI agent, three recommendation domains" \
             -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
       - name: Smoke test
+        if: steps.published.outputs.done == 'false'
         run: |
           docker run --rm "$IMAGE:$VERSION" python -c "import clothes_recommender.api, clothes_recommender.pairings; print('ok')"
       - name: Push to ghcr.io
+        if: steps.published.outputs.done == 'false'
         run: |
-          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker push "$IMAGE:$VERSION"
           docker push "$IMAGE:latest"

@@ -268,9 +268,12 @@ def test_cocktails_page_works_without_fashion(api):
     calls, state = api
     state["health"] = COCKTAILS_ONLY
     app = cocktail_app("cocktails_page()").run()
-    app.text_input(key="cocktail_query").input("mint").run()
+    # The search box is in a form: like a shopper, submit it (Streamlit 1.67's AppTest no longer
+    # applies a form's values without the submit, as the browser never did).
+    app.text_input(key="cocktail_query").input("mint")
+    app.button(key="cocktail_search_submit").click().run()
     assert not app.exception
-    assert "/cocktails/search" in paths(calls)
+    assert bodies(calls, "/cocktails/search")[-1]["query"] == "mint"
     assert not any(path.startswith(FASHION_PATHS) for path in paths(calls))
 
 

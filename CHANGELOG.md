@@ -6,6 +6,12 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Release: the image job publishes whenever ghcr.io lacks the current version's image, not
+  only right after the release is created, so a failed push (1.3.0's first push was denied
+  while ghcr.io linked the new package) is repaired by the next run.
+
 ## [1.3.0] - 2026-11-06
 
 ### Added
