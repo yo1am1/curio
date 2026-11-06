@@ -18,6 +18,8 @@ from curio.domains.cocktails.agent.toolkit import CocktailToolkit
 from curio.domains.cocktails.catalog import CocktailCatalog
 from curio.domains.cocktails.models import Cocktail
 from curio.domains.cocktails.recommend import CocktailRecommender
+from curio.domains.evening.agent.toolkit import EveningItem, EveningToolkit
+from curio.domains.evening.planner import EveningPlanner
 from curio.domains.fashion.agent.intent import IntentExtractor
 from curio.domains.fashion.agent.toolkit import FashionToolkit
 from curio.domains.fashion.catalog import ProductCatalog
@@ -29,7 +31,7 @@ from curio.domains.pairings.agent.toolkit import CocktailPairing
 from curio.domains.pairings.pairer import BookCocktailPairer
 from curio.engine import ActionSigner, AgentEngine
 
-__all__ = ["BookAssistant", "CocktailAssistant", "ShoppingAssistant"]
+__all__ = ["BookAssistant", "CocktailAssistant", "EveningAssistant", "ShoppingAssistant"]
 
 
 class ShoppingAssistant(AgentEngine[Product]):
@@ -94,3 +96,21 @@ class BookAssistant(AgentEngine[Book]):
     def attach_pairing(self, pairer: BookCocktailPairer, cocktails: CocktailCatalog) -> None:
         """Enable PairCocktail (the server loaded cocktails beside the books)."""
         self.toolkit.attach_pairing(CocktailPairing(pairer, cocktails, self._catalog))
+
+
+class EveningAssistant(AgentEngine[EveningItem]):
+    """Plan my evening: an outfit, a book and a drink paired with it, on the same engine."""
+
+    def __init__(
+        self,
+        chat_model: BaseChatModel,
+        planner: EveningPlanner,
+        *,
+        books: BookCatalog,
+        cocktails: CocktailCatalog,
+        products: ProductCatalog | None = None,
+        signer: ActionSigner | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.toolkit = EveningToolkit(planner, books=books, cocktails=cocktails, products=products)
+        super().__init__(chat_model, self.toolkit, signer=signer, clock=clock, schemas=WIRE)

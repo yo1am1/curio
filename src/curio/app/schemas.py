@@ -17,6 +17,8 @@ from curio.domains.cocktails.agent.schemas import (
     CocktailEffect,
 )
 from curio.domains.cocktails.models import Cocktail
+from curio.domains.evening.agent.schemas import EveningContext, EveningEffect
+from curio.domains.evening.models import EveningPlan
 from curio.domains.fashion.agent.intent import SearchIntent
 from curio.domains.fashion.agent.schemas import (
     FashionChatTurn,
@@ -52,6 +54,7 @@ __all__ = [
     "Clarification",
     "CocktailEffect",
     "Domain",
+    "EveningEffect",
     "FashionEffect",
     "GroundingReport",
     "PendingAction",
@@ -62,7 +65,7 @@ __all__ = [
     "TurnContext",
 ]
 
-Domain = Literal["fashion", "cocktails", "books"]
+Domain = Literal["fashion", "cocktails", "books", "evening"]
 ApprovalTool = Literal[
     "SaveToShortlist",
     "RememberPreferences",
@@ -70,9 +73,12 @@ ApprovalTool = Literal[
     "RememberTastes",
     "SaveBooks",
     "RememberReadingTastes",
+    "SaveEvening",
 ]
 # Each effect kind serializes with its own domain's fields only.
-AppliedEffect = Annotated[FashionEffect | CocktailEffect | BookEffect, Field(discriminator="kind")]
+AppliedEffect = Annotated[
+    FashionEffect | CocktailEffect | BookEffect | EveningEffect, Field(discriminator="kind")
+]
 
 
 # Bases are listed last-first: pydantic orders fields from the last base to the first.
@@ -80,11 +86,12 @@ class ChatTurn(BookChatTurn, CocktailChatTurn, FashionChatTurn):
     """One earlier message, with the IDs of the cards an assistant turn showed."""
 
 
-class TurnContext(BookContext, CocktailContext, FashionContext):
-    """Every domain's client-held session state; each assistant reads its own fields."""
+class TurnContext(EveningContext, BookContext, CocktailContext, FashionContext):
+    """Every domain's client-held session state; each assistant reads its own fields (the
+    evening assistant reads every domain's tastes and lists, plus the current plan)."""
 
     # Human-in-the-loop policy: approval tools listed here run without asking.
-    auto_approve: list[ApprovalTool] = Field(default_factory=list, max_length=6)
+    auto_approve: list[ApprovalTool] = Field(default_factory=list, max_length=7)
 
 
 class PendingAction(engine.PendingAction):
@@ -121,6 +128,7 @@ _REPLY_ORDER = (
     "suggestions",
     "outfit",
     "pairing",
+    "evening",
 )
 
 
@@ -137,11 +145,17 @@ class AssistantReply(engine.AssistantReply):
     # A book turn's cocktail pairing (PairCocktail): the profile, drinks and reasons. Its
     # drinks are also in `cocktails`.
     pairing: BookPairing | None = None
+    # An evening turn's plan (PlanEvening, SwapEveningPart): its parts, reasons and the
+    # client-held `state`. Its pieces, book and drink are also in products, books, cocktails.
+    # Left out of other domains' replies, whose format predates it.
+    evening: EveningPlan | None = None
 
     # No return annotation: pydantic then keeps the field-by-field JSON schema for responses.
     @model_serializer(mode="wrap")
     def _wire_order(self, handler: SerializerFunctionWrapHandler):
         data: dict[str, Any] = handler(self)
+        if data.get("evening") is None and self.domain != "evening":
+            data.pop("evening", None)
         return {name: data[name] for name in _REPLY_ORDER if name in data} | data
 
 
