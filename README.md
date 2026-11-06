@@ -16,7 +16,7 @@ against the data.
 
 [Quick start](#quick-start) · [Engineering highlights](#engineering-highlights) ·
 [Ask Curio](#ask-curio) · [Fashion](#fashion) · [Cocktails](#cocktails) · [Books](#books) ·
-[Under the hood](#under-the-hood) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+[Under the hood](#under-the-hood) · [Changelog](CHANGELOG.md)
 
 </div>
 
@@ -316,19 +316,17 @@ by that licence:
   them. Check TheCocktailDB's terms before any commercial use. Drink photos are loaded
   directly from thecocktaildb.com, and the cocktail pages credit "Recipe data: TheCocktailDB".
 
-## Contributing and releases
+## How it's built and released
 
-Changes reach `main` only through pull requests with green CI and a
-[Conventional Commit](https://www.conventionalcommits.org/) title, merged by squash. Every
-version on `main` is released automatically once CI passes: a tag, a GitHub release with the
-changelog notes, and a container image:
+CI runs lint, format, the offline tests and a quick-start boot on every pull request and
+every push to `main`. When CI passes on `main` with a new version, a tag, a GitHub release
+with the changelog notes and a container image are published automatically:
 
 ```bash
 docker pull ghcr.io/yo1am1/curio:latest
 ```
 
-[How to contribute](CONTRIBUTING.md) · [Security policy](SECURITY.md) ·
-[Repository rulesets](.github/rulesets/README.md)
+[Security policy](SECURITY.md)
 
 ## Contributors
 

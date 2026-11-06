@@ -924,6 +924,18 @@ allocation, infeasible budgets, co-purchase and visual preference, swaps), agent
 a scripted model (`tests/agents/test_outfit_agent.py`), API tests in `tests/test_api.py` and
 UI tests in `tests/test_ui_agent.py`.
 
+### Releases
+
+Releases are cut from `main` by changing the version, never by pushing tags by hand. Set
+`version` in `pyproject.toml` and `CITATION.cff`, run `uv lock`, and rename
+`## [Unreleased]` in the changelog to `## [X.Y.Z] - YYYY-MM-DD` (plus the compare links at
+the bottom). When CI passes on that `main` commit, the Release workflow
+(`.github/workflows/release.yml`) tags it `vX.Y.Z`, publishes a GitHub release whose notes are
+that changelog section, and pushes `ghcr.io/yo1am1/curio:X.Y.Z` and `:latest`. A version
+that already has a release is skipped, so re-runs are safe. Dependabot
+(`.github/dependabot.yml`) proposes grouped weekly updates for `uv.lock`, GitHub Actions and
+the Docker base image.
+
 ### Release scope and compatibility
 
 Version 1.0.0 covers fashion and cocktails; see the [changelog](../CHANGELOG.md). The

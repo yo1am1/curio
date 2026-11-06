@@ -64,6 +64,13 @@ All notable changes to Curio are recorded here. The format follows
   the OpenAPI schema now describes `applied` effects as one schema per domain.
 - Tests mirror the layout: `tests/agents`, `tests/app` and `tests/domains/<domain>`.
 
+### Removed
+
+- The contribution system, since Curio is a solo project: `CONTRIBUTING.md`, the issue forms,
+  the pull request template, `CODEOWNERS`, the `PR title` workflow and the importable
+  rulesets in `.github/rulesets/`. CI, the Release workflow (with its ghcr.io image),
+  Dependabot and `SECURITY.md` stay; the release steps moved to the technical guide.
+
 ### Fixed
 
 - Release: the image job publishes whenever ghcr.io lacks the current version's image, not
