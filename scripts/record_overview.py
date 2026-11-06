@@ -46,7 +46,7 @@ CAPTION = """text => {
         el = document.createElement('div');
         el.id = 'curio-tour-caption';
         el.style.cssText = `position:fixed;left:50%;bottom:22px;transform:translateX(-50%);
-            z-index:100000;padding:10px 18px;border-radius:999px;background:rgba(32,28,26,.88);
+            z-index:2147483647;padding:10px 18px;border-radius:999px;background:rgba(32,28,26,.88);
             color:#fff;font:600 17px/1.3 system-ui,sans-serif;letter-spacing:.01em;
             box-shadow:0 6px 24px rgba(0,0,0,.25);pointer-events:none;white-space:nowrap`;
         document.body.appendChild(el);
@@ -92,7 +92,7 @@ def scroll_chat_to_last(p) -> None:
 
 
 def tour(p) -> None:
-    # 1. Fashion agent: plan, tools, verified answer (main() has loaded the home page).
+    # 1. The agent: plan, tools, verified answer (main() has loaded the home page).
     caption(p, "Ask in plain words: the agent plans, calls catalog tools and verifies")
     p.wait_for_timeout(1200)
     ask(p, "Black trousers under €30")
@@ -100,20 +100,28 @@ def tour(p) -> None:
     p.get_by_text(re.compile(r"How Curio worked")).last.click()
     settle(p)
     scroll_chat_to_last(p)
-    p.wait_for_timeout(2600)
+    p.wait_for_timeout(3400)
 
-    # 2. Outfit builder under one budget.
-    caption(p, "A whole outfit under one budget, with a reason for every piece")
-    ask(p, "Build me a summer outfit for a wedding under €80")
-    p.locator('[class*="st-key-outfit_home_"]').last.evaluate(
+    # 2. Plan my evening: three domains composed into one plan.
+    p.goto(f"{UI}/evening")
+    settle(p)
+    caption(p, "Plan my evening: one occasion, three domains composed")
+    p.wait_for_timeout(900)
+    p.locator(".st-key-evening_occasion_chip button", has_text="Rainy Sunday in").click()
+    settle(p)
+    p.locator(".st-key-evening_plan_button button").click()
+    settle(p)
+    p.wait_for_timeout(1200)
+    caption(p, "An outfit, a book and a drink paired with that book, each with its reason")
+    p.locator(".st-key-evening_theme_page").evaluate(
         "el => el.scrollIntoView({block: 'start', behavior: 'smooth'})"
     )
-    p.wait_for_timeout(3200)
+    p.wait_for_timeout(4800)
 
-    # 3. Books, then a cocktail to read with.
+    # 3. Book → drink pairing.
     p.goto(f"{UI}/books")
     settle(p)
-    caption(p, "Books: 10,000 titles, collaborative filtering on 6M ratings")
+    caption(p, "Books: collaborative filtering on 6M ratings")
     p.get_by_label("Describe a book").press_sequentially("The Great Gatsby", delay=35)
     p.get_by_role("button", name="Find books").click()
     settle(p)
@@ -123,31 +131,29 @@ def tour(p) -> None:
     ).click()
     settle(p)
     p.wait_for_timeout(900)
-    caption(p, "Cross-domain: pour a drink to read with, and say why")
+    caption(p, "Book → drink: a pairing from the recipe catalog, with the evidence")
     dialog = p.get_by_role("dialog")
     dialog.get_by_role("button", name="Pair a drink").click()
     settle(p)
     dialog.locator(".st-key-book_pairing").evaluate(
         "el => el.scrollIntoView({block: 'end', behavior: 'smooth'})"
     )
-    p.wait_for_timeout(3600)
+    p.wait_for_timeout(4800)
 
-    # 4. Cocktails: what can I make?
-    p.goto(f"{UI}/cocktails")
+    # 4. Fashion photo search, briefly.
+    p.goto(f"{UI}/discover")
     settle(p)
-    caption(p, "Cocktails: what can I make with what I have?")
-    p.get_by_text("What can I make?", exact=True).first.click()
+    caption(p, "Fashion: search 14,280 product photos with CLIP")
+    p.get_by_text("Photo", exact=True).click()
     settle(p)
-    picker = p.get_by_label("Ingredients you have")
-    for ingredient in ("Gin", "Tonic water", "Lime"):
-        picker.click()
-        p.keyboard.type(ingredient, delay=35)
-        p.get_by_role("option", name=re.compile(f"^{ingredient}$", re.I)).first.click()
-        settle(p)
-    p.keyboard.press("Escape")
+    p.get_by_text("Or pick an example photo").click()
     settle(p)
-    p.mouse.wheel(0, 380)
-    p.wait_for_timeout(3000)
+    p.locator('[class*="st-key-query_photo_"] button').nth(2).click()
+    settle(p)
+    p.locator(".st-key-photo_search_results").evaluate(
+        "el => el.scrollIntoView({block: 'start', behavior: 'smooth'})"
+    )
+    p.wait_for_timeout(4000)
 
 
 def to_webp(frames: list[tuple[Path, float]], out: Path, workdir: Path) -> None:
