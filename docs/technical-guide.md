@@ -781,6 +781,9 @@ and checks layout invariants on the way. The curated README images
 running stack through the same flows; its docstring lists the commands. The current images
 use the H&M sample prepared from the Hugging Face mirror (14,280 of 14,300 products photographed) and
 the real recipe catalog; chat replies come from the scripted stub, as the README says.
+The overview GIF (`docs/screenshots/curio-overview.gif`) comes from `scripts.record_overview`
+against the same stack: it warms the models, records a captioned tour with Chrome's
+screencast and builds a palette-optimised GIF with ffmpeg (about 40 s and 4 MB).
 
 ### End-to-end tests
 

@@ -1,26 +1,35 @@
-# Curio: agentic recommendations for fashion, cocktails and books
+<div align="center">
+
+# Curio
+
+**One tool-using AI agent, three recommendation domains: fashion, cocktails and books.**<br>
+It plans, calls catalog tools, asks before changing anything, and checks every answer
+against the data.
 
 [![CI](https://github.com/yo1am1/curio/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/yo1am1/curio/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/yo1am1/curio?color=a0412d)](https://github.com/yo1am1/curio/releases/latest)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+![Python 3.13](https://img.shields.io/badge/python-3.13-3776ab)
+![FastAPI](https://img.shields.io/badge/FastAPI-Streamlit-009688)
 
-Curio recommends things through browsing pages and a tool-using assistant. It has three
-domains, switched in the header:
+![A 40-second tour: the agent answering with its steps, an outfit under a budget, a cocktail paired with The Great Gatsby and "What can I make?"](docs/screenshots/curio-overview.gif)
 
-- **Fashion**: personalized recommendations, photo search and product connections built
-  from historical H&M purchases and product photos.
-- **Cocktails**: search, similar drinks and "What can I make?" over 425 recipes from
-  TheCocktailDB, served offline from a prepared file.
-- **Books**: search, "readers who liked this also liked", "Because you
-  liked…" and mood browsing over the 10,000 most-rated Goodreads books of goodbooks-10k,
-  learned from about 6 million real ratings.
+[Quick start](#quick-start) · [Engineering highlights](#engineering-highlights) ·
+[Ask Curio](#ask-curio) · [Fashion](#fashion) · [Cocktails](#cocktails) · [Books](#books) ·
+[Under the hood](#under-the-hood) · [Changelog](CHANGELOG.md)
 
-All three domains share one agent: it plans, calls policy-gated catalog tools, asks before
-changing your shortlist or memory, and checks its answer against what the tools returned.
-Books and cocktails also meet: Curio pours a drink to read with, for one book or your whole
-reading list, and says why.
+</div>
 
-![Personalized fashion picks with the evidence behind each one](docs/screenshots/curio-fashion.jpg)
+| Domain | What it does | Data |
+|---|---|---|
+| **Fashion** | Personalized picks with evidence, photo search, product connections, outfits under a budget | 14,300 H&M products, 5,000 real shoppers, CLIP photo index |
+| **Cocktails** | Recipe search, similar drinks, "What can I make?" from your pantry | 425 TheCocktailDB recipes, offline |
+| **Books** | "Readers who liked this also liked", "Because you liked…", mood browsing | 10,000 goodbooks-10k titles, ~6M ratings |
 
-Try it in one command, no large download: `docker compose --profile demo up --build`
+All three share one agent engine, and books and cocktails meet: Curio pours a drink to read
+with, for one book or your whole reading list, and says why.
+
+Try it in one command, with no large download: `docker compose --profile demo up --build`
 ([quick start](#quick-start)).
 
 ## Engineering highlights
@@ -52,8 +61,8 @@ Try it in one command, no large download: `docker compose --profile demo up --bu
   coherence.
 - **Reproducible data.** Every dataset is downloaded from a pinned commit and checked by
   SHA-256. The server runs any subset of prepared domains and explains what is missing.
-- **Tested like a product.** About 1,000 offline tests plus a browser end-to-end suite of
-  more than 50 tests. It runs real uvicorn and Streamlit in Chromium on real data, with a
+- **Tested like a product.** About 1,160 offline tests plus a browser end-to-end suite of
+  66 tests. It runs real uvicorn and Streamlit in Chromium on real data, with a
   scripted OpenAI-compatible LLM. CI also boots the quick-start stack.
 
 ## Ask Curio
@@ -107,6 +116,8 @@ In these chat screenshots the replies come from the scripted test model in
 step trace, price checks and approvals are the real system.
 
 ## Fashion
+
+![Personalized fashion picks with the evidence behind each one](docs/screenshots/curio-fashion.jpg)
 
 ### Search by description or photo
 

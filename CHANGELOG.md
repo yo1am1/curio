@@ -6,6 +6,12 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- README overview GIF (`docs/screenshots/curio-overview.gif`), recorded by the new
+  `scripts.record_overview`, plus a centred header with release, licence and Python
+  badges, a contents line and a domain table.
+
 ## [1.2.0] - 2026-11-05
 
 ### Added
