@@ -198,6 +198,33 @@ def quickstart_ui_url(quickstart_api_url: str, artifacts: Path) -> Iterator[str]
 
 
 @pytest.fixture(scope="session")
+def demo_api_url(artifacts: Path, tmp_path_factory) -> Iterator[str]:
+    """The quick-start demo with books (DEMO_BOOKS=1): recipes and books, no H&M data, no
+    image index and no LLM. It opens no Qdrant index, so it runs beside the full-data API."""
+    files = ("cocktails.parquet", "books.parquet", "book_neighbours.parquet")
+    if missing := [name for name in files if not (DATA_DIR / name).exists()]:
+        pytest.skip(f"E2E data not prepared: {', '.join(missing)}")
+    data = tmp_path_factory.mktemp("demo-data")
+    for name in files:
+        shutil.copy(DATA_DIR / name, data / name)
+    env = {
+        "DATA_DIR": str(data),
+        "QDRANT_PATH": str(data / ".qdrant"),
+        "QDRANT_URL": "",
+        "ENABLED_DOMAINS": "cocktails,books",
+        "LLM_MODEL": "",
+    }
+    with _api(env, artifacts / "demo-api.log", cwd=data) as url:
+        yield url
+
+
+@pytest.fixture(scope="session")
+def demo_ui_url(demo_api_url: str, artifacts: Path) -> Iterator[str]:
+    with _streamlit(demo_api_url, artifacts / "demo-ui.log") as url:
+        yield url
+
+
+@pytest.fixture(scope="session")
 def browser():
     sync_api = pytest.importorskip("playwright.sync_api")
     executable = os.environ.get("E2E_CHROMIUM") or (
@@ -265,6 +292,15 @@ def ui(browser, ui_url: str, artifacts: Path) -> Iterator[Driver]:
 def quickstart_ui(browser, quickstart_ui_url: str, artifacts: Path) -> Iterator[Driver]:
     context = browser.new_context(viewport={"width": 1440, "height": 1100})
     driver = Driver(context.new_page(), quickstart_ui_url, artifacts)
+    yield driver
+    context.close()
+    assert not driver.errors, f"Browser errors: {driver.errors}"
+
+
+@pytest.fixture
+def demo_ui(browser, demo_ui_url: str, artifacts: Path) -> Iterator[Driver]:
+    context = browser.new_context(viewport={"width": 1440, "height": 1100})
+    driver = Driver(context.new_page(), demo_ui_url, artifacts)
     yield driver
     context.close()
     assert not driver.errors, f"Browser errors: {driver.errors}"
