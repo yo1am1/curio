@@ -25,7 +25,7 @@ from curio.app.ui.common import (
 )
 from curio.app.ui.effects import apply_effects
 from curio.app.ui.evening import EVENING_STATE, evening_cards
-from curio.app.ui.fashion import OUTFIT_STATE, outfit_card, show_chat_products
+from curio.app.ui.fashion import OUTFIT_STATE, outfit_card, product_name, show_chat_products
 
 STEP_LABELS = {
     "Understand request": "Plan",
@@ -204,7 +204,7 @@ def approval_options(action: dict) -> list[tuple[str, object, str]]:
             if field == "product_ids":
                 if value not in products:
                     continue
-                label = f"{products[value]['name']} · €{products[value]['price']:.2f}"
+                label = f"{product_name(products[value])} · €{products[value]['price']:.2f}"
             elif field == "drink_ids":
                 if value not in cocktails:
                     continue

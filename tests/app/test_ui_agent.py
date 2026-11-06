@@ -368,3 +368,31 @@ def test_budget_line_reads_left_over_or_total():
     assert ui.budget_line(69.99, 80) == "€69.99 of €80.00 · €10.01 left"
     assert ui.budget_line(80.5, 80) == "€80.50 of €80.00 · €0.50 over"
     assert ui.budget_line(12.5, None) == "Total €12.50"
+
+
+def test_approval_rows_show_the_cleaned_product_name(api):
+    _, responders = api
+    raw = COAT | {"name": "Wool coat Trs Pid", "display_name": "Wool coat"}
+    action = {
+        "id": "a1",
+        "tool": "SaveToShortlist",
+        "args": {"product_ids": [1]},
+        "request": "save it",
+        "issued_at": 1,
+        "signature": "sig",
+        "summary": "Proposed: Would save 1 to the shortlist: Wool coat.",
+        "products": [raw],
+    }
+    proposal = reply(
+        text="Shall I save it?",
+        products=[raw],
+        status="needs_approval",
+        grounding=None,
+        suggestions=[],
+        pending_action=action,
+    )
+    responders["chat"] = stream(proposal)
+    app = home().run()
+    app.chat_input[0].set_value("save it").run()
+    assert not app.exception
+    assert app.checkbox(key="approve_home_1_product_ids_1").label == "Wool coat · €45.00"
