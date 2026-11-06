@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="700" viewBox="0 0 1200 700" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="980" viewBox="0 0 1200 980" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title>Curio architecture</title>
-  <desc>Streamlit UI and API clients call a FastAPI service. A shared agent engine plans, calls policy-gated tools from per-domain toolkits, asks for human approval before state changes, and verifies answers against tool evidence. Each domain toolkit is backed by its own recommenders and data. A cross-domain pairing links Books to Cocktails: it pours drinks for a book or a reading list.</desc>
+  <desc>Three layers. curio.app (the Streamlit UI, the FastAPI service and the domain registry) calls curio.engine, a domain-free agent engine that plans, calls policy-gated tools, asks for signed approval before state changes and verifies answers against tool evidence, with any LangChain chat model on the side. The engine runs one toolkit per domain: fashion, cocktails and books, each with its own recommenders and data. Two composed domains build on them: pairings (a book to a drink, from books and cocktails) and evening (Plan my evening: an outfit, a book and a paired drink). An architecture test keeps the engine free of domain imports.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#8a7f72"/>
@@ -13,6 +13,7 @@
       .h2 { font-size: 14px; font-weight: 700; fill: #2b2a27; }
       .t { font-size: 12.5px; fill: #4a4741; }
       .s { font-size: 11.5px; fill: #6f6a61; }
+      .code { font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 11.5px; fill: #9c4935; }
       .tag { font-size: 11px; font-weight: 600; fill: #9c4935; letter-spacing: .08em; }
       .pill { fill: #9c4935; }
       .pilltext { font-size: 11.5px; font-weight: 600; fill: #ffffff; }
@@ -20,108 +21,135 @@
     </style>
   </defs>
 
-  <rect x="0" y="0" width="1200" height="700" rx="18" fill="#faf8f4"/>
+  <rect x="0" y="0" width="1200" height="980" rx="18" fill="#faf8f4"/>
   <text x="40" y="48" font-family="Georgia, serif" font-size="30" fill="#2b2a27">Curio</text>
   <text x="122" y="47" class="tag">ARCHITECTURE</text>
-  <text x="40" y="74" class="s">One agent engine, many recommendation domains. Each answer is planned, acted on through gated tools, approved by a human when it changes state, and verified.</text>
+  <text x="40" y="74" class="s">One domain-free agent engine, three deliberately different domains and two composed from them. Every answer is planned, acted on through gated tools, approved before it changes state, and verified.</text>
 
-  <!-- Clients -->
-  <rect x="40" y="104" width="230" height="250" rx="12" class="card"/>
-  <text x="58" y="132" class="tag">CLIENTS</text>
-  <text x="58" y="158" class="h2">Streamlit UI</text>
-  <text x="58" y="180" class="t">Domain switch</text>
-  <text x="58" y="199" class="t">Live step trace</text>
-  <text x="58" y="218" class="t">Approval cards (approve,</text>
-  <text x="58" y="235" class="t">narrow, decline)</text>
-  <text x="58" y="254" class="t">Shortlist, memory, compare</text>
-  <text x="58" y="290" class="h2">Any HTTP client</text>
-  <text x="58" y="312" class="t">REST + NDJSON streaming</text>
-  <text x="58" y="331" class="t">OpenAPI at /docs</text>
+  <!-- Layer 1: curio.app -->
+  <rect x="40" y="100" width="1120" height="150" rx="12" class="card"/>
+  <text x="58" y="128" class="tag">APP</text>
+  <text x="92" y="128" class="code">curio.app</text>
+  <text x="58" y="156" class="h2">Streamlit UI</text>
+  <text x="58" y="178" class="t">Domain switch, live step trace</text>
+  <text x="58" y="197" class="t">Approval cards: approve, narrow, decline</text>
+  <text x="58" y="216" class="t">Plan my evening, outfit and pairing cards</text>
+  <text x="58" y="235" class="s">Holds the shortlist, memory and outfit</text>
 
-  <!-- API -->
-  <rect x="300" y="104" width="216" height="250" rx="12" class="card"/>
-  <text x="316" y="132" class="tag">FASTAPI</text>
-  <text x="316" y="160" class="t">/chat, /chat/stream</text>
-  <text x="316" y="180" class="t">/chat/feedback</text>
-  <text x="316" y="200" class="t">/search/text, /search/image</text>
-  <text x="316" y="220" class="t">/users/{id}/recommendations</text>
-  <text x="316" y="240" class="t">/products/{id}/related</text>
-  <text x="316" y="260" class="t">/cocktails/*, /books/*</text>
-  <text x="316" y="280" class="t">/domains, /health</text>
-  <text x="316" y="314" class="s">Stateless: shortlist and</text>
-  <text x="316" y="331" class="s">memory live on the client</text>
+  <text x="430" y="156" class="h2">FastAPI</text>
+  <text x="430" y="178" class="t">/chat, /chat/stream (NDJSON steps)</text>
+  <text x="430" y="197" class="t">/search, /users/{id}/recommendations, /outfits</text>
+  <text x="430" y="216" class="t">/cocktails, /books, /pairings, /evening</text>
+  <text x="430" y="235" class="s">Stateless; OpenAPI at /docs</text>
 
-  <!-- Engine -->
-  <rect x="540" y="104" width="380" height="250" rx="12" class="accent"/>
-  <text x="558" y="132" class="tag">SHARED AGENT ENGINE</text>
-  <rect x="558" y="146" width="104" height="30" rx="15" class="pill"/>
-  <text x="610" y="166" text-anchor="middle" class="pilltext">1 · Plan</text>
-  <rect x="678" y="146" width="104" height="30" rx="15" class="pill"/>
-  <text x="730" y="166" text-anchor="middle" class="pilltext">2 · Act</text>
-  <rect x="798" y="146" width="104" height="30" rx="15" class="pill"/>
-  <text x="850" y="166" text-anchor="middle" class="pilltext">3 · Verify</text>
-  <text x="558" y="202" class="h2">Policy-gated tools</text>
-  <text x="558" y="222" class="t">READ runs directly · ASK pauses with quick replies</text>
-  <text x="558" y="240" class="t">APPROVE only proposes: HMAC-signed, expiring,</text>
-  <text x="558" y="258" class="t">narrow-only, bound to tool and domain</text>
-  <text x="558" y="288" class="h2">Grounding guardrail</text>
-  <text x="558" y="308" class="t">Prices, IDs, names and amounts checked against tool</text>
-  <text x="558" y="326" class="t">evidence; one self-correction, then catalog facts</text>
-  <text x="558" y="344" class="s">Budgets: 5 tool calls, 90 s per turn · every step streamed</text>
+  <text x="820" y="156" class="h2">Domain registry</text>
+  <text x="820" y="178" class="t">Serves whichever domains are prepared</text>
+  <text x="820" y="197" class="t">Composed domains need their parts</text>
+  <text x="820" y="216" class="t">/domains says what is missing</text>
+  <text x="820" y="235" class="s">Binds each toolkit to the engine</text>
+
+  <path d="M480 250 V284" class="line" marker-end="url(#arrow)"/>
+
+  <!-- Layer 2: curio.engine -->
+  <rect x="40" y="288" width="880" height="200" rx="12" class="accent"/>
+  <text x="58" y="316" class="tag">ENGINE</text>
+  <text x="114" y="316" class="code">curio.engine · imports no domain</text>
+  <rect x="58" y="330" width="110" height="30" rx="15" class="pill"/>
+  <text x="113" y="350" text-anchor="middle" class="pilltext">1 · Plan</text>
+  <rect x="182" y="330" width="110" height="30" rx="15" class="pill"/>
+  <text x="237" y="350" text-anchor="middle" class="pilltext">2 · Act</text>
+  <rect x="306" y="330" width="110" height="30" rx="15" class="pill"/>
+  <text x="361" y="350" text-anchor="middle" class="pilltext">3 · Verify</text>
+  <text x="440" y="342" class="t">AgentEngine runs any domain's Toolkit:</text>
+  <text x="440" y="360" class="t">its tools, policies, grounding check and fallback</text>
+
+  <text x="58" y="392" class="h2">Policy-gated tools</text>
+  <text x="58" y="412" class="t">READ runs directly · ASK pauses with quick replies</text>
+  <text x="58" y="430" class="t">APPROVE only proposes: HMAC-signed, expiring,</text>
+  <text x="58" y="448" class="t">bound to tool and domain, can only be narrowed</text>
+
+  <text x="490" y="392" class="h2">Grounding</text>
+  <text x="490" y="412" class="t">Prices, IDs, names, ratings and amounts checked</text>
+  <text x="490" y="430" class="t">against tool evidence; one self-correction,</text>
+  <text x="490" y="448" class="t">then a deterministic fallback from catalog facts</text>
+
+  <text x="58" y="474" class="s">Budgets: 5 tool calls and 90 s per turn · every step streamed · shared wire models and chat model factory</text>
 
   <!-- LLM -->
-  <rect x="960" y="104" width="200" height="110" rx="12" class="card"/>
-  <text x="978" y="132" class="tag">LLM</text>
-  <text x="978" y="158" class="h2">Any LangChain provider</text>
-  <text x="978" y="180" class="t">OpenAI-compatible gateways</text>
-  <text x="978" y="198" class="t">Anthropic, Ollama</text>
-  <rect x="960" y="234" width="200" height="120" rx="12" class="muted"/>
-  <text x="978" y="262" class="tag">QUALITY LOOP</text>
-  <text x="978" y="286" class="t">Answer feedback</text>
-  <text x="978" y="305" class="t">Offline evaluation, MAP@12</text>
-  <text x="978" y="324" class="t">Real-data browser E2E</text>
-  <text x="978" y="343" class="s">CI on every push</text>
+  <rect x="960" y="288" width="200" height="200" rx="12" class="card"/>
+  <text x="978" y="316" class="tag">LLM</text>
+  <text x="978" y="344" class="h2">Any LangChain</text>
+  <text x="978" y="362" class="h2">chat model</text>
+  <text x="978" y="386" class="t">OpenAI-compatible APIs</text>
+  <text x="978" y="405" class="t">Anthropic, Ollama</text>
+  <text x="978" y="440" class="s">Tests use a scripted</text>
+  <text x="978" y="457" class="s">OpenAI-compatible stub</text>
+  <path d="M920 345 H956" class="line" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
 
-  <!-- Arrows top row -->
-  <path d="M270 229 H296" class="line" marker-end="url(#arrow)"/>
-  <path d="M516 229 H536" class="line" marker-end="url(#arrow)"/>
-  <path d="M920 160 H956" class="line" marker-end="url(#arrow)" marker-start="url(#arrow)"/>
-  <path d="M730 354 V392" class="line" marker-end="url(#arrow)"/>
+  <!-- Engine to toolkits -->
+  <path d="M220 488 V546" class="line" marker-end="url(#arrow)"/>
+  <path d="M600 488 V546" class="line" marker-end="url(#arrow)"/>
+  <path d="M880 488 V546" class="line" marker-end="url(#arrow)"/>
+  <text x="232" y="522" class="s">Toolkit protocol</text>
 
-  <!-- Domain toolkits -->
-  <text x="40" y="414" class="tag">DOMAIN TOOLKITS AND RECOMMENDERS</text>
-  <rect x="40" y="428" width="360" height="200" rx="12" class="card"/>
-  <text x="58" y="456" class="h">Fashion</text>
-  <text x="58" y="478" class="s">14,300 H&amp;M products · 5,000 customers</text>
-  <text x="58" y="504" class="t">Tools: search, inspect, related pieces,</text>
-  <text x="58" y="522" class="t">personal picks, outfit builder, shortlist, memory</text>
-  <text x="58" y="550" class="t">CLIP text + photo search in Qdrant</text>
-  <text x="58" y="568" class="t">Collaborative, co-purchase graph, buy-again</text>
-  <text x="58" y="586" class="t">Learned ranker with past-only features</text>
-  <text x="58" y="610" class="s">Evaluated on a chronological holdout</text>
+  <!-- Layer 3: domain toolkits -->
+  <text x="640" y="522" class="tag">DOMAINS</text>
+  <text x="706" y="522" class="code">curio.domains</text>
+  <rect x="40" y="550" width="360" height="190" rx="12" class="card"/>
+  <text x="58" y="578" class="h">Fashion</text>
+  <text x="58" y="600" class="s">14,300 H&amp;M products · 5,000 shoppers</text>
+  <text x="58" y="626" class="t">Visual retrieval: CLIP text and photo</text>
+  <text x="58" y="644" class="t">search in Qdrant</text>
+  <text x="58" y="662" class="t">Purchase history, co-purchase graph</text>
+  <text x="58" y="680" class="t">Learned ranker on a chronological holdout</text>
+  <text x="58" y="698" class="t">Outfit builder under one budget</text>
+  <text x="58" y="724" class="s">Grounds prices and product IDs</text>
 
-  <rect x="420" y="428" width="360" height="200" rx="12" class="card"/>
-  <text x="438" y="456" class="h">Cocktails</text>
-  <text x="438" y="478" class="s">425 TheCocktailDB recipes · offline</text>
-  <text x="438" y="504" class="t">Tools: search, inspect, similar drinks,</text>
-  <text x="438" y="522" class="t">"What can I make?", save, remember tastes</text>
-  <text x="438" y="550" class="t">TF-IDF search with flavour words</text>
-  <text x="438" y="568" class="t">Ingredient-family similarity</text>
-  <text x="438" y="586" class="t">Pantry coverage with missing items</text>
-  <text x="438" y="610" class="s">Alcohol-free and avoided-ingredient filters</text>
+  <rect x="420" y="550" width="360" height="190" rx="12" class="card"/>
+  <text x="438" y="578" class="h">Cocktails</text>
+  <text x="438" y="600" class="s">425 TheCocktailDB recipes · offline</text>
+  <text x="438" y="626" class="t">Hard constraints: pantry coverage with</text>
+  <text x="438" y="644" class="t">up to three missing ingredients,</text>
+  <text x="438" y="662" class="t">alcohol-free and avoided ingredients</text>
+  <text x="438" y="680" class="t">TF-IDF search with flavour words</text>
+  <text x="438" y="698" class="t">Ingredient-family similarity</text>
+  <text x="438" y="724" class="s">Grounds drink names, IDs and amounts</text>
 
-  <rect x="800" y="428" width="360" height="200" rx="12" class="card"/>
-  <text x="818" y="456" class="h">Books</text>
-  <text x="818" y="478" class="s">goodbooks-10k · 10,000 books with reader ratings</text>
-  <text x="818" y="504" class="t">Tools: search, inspect, readers also liked,</text>
-  <text x="818" y="522" class="t">more by author, pair a drink, reading list, tastes</text>
-  <text x="818" y="550" class="t">TF-IDF over titles, authors and tags</text>
-  <text x="818" y="568" class="t">Item-item collaborative filtering</text>
-  <text x="818" y="586" class="t">from reader ratings</text>
-  <text x="818" y="610" class="s">New domain = one toolkit, no engine changes</text>
+  <rect x="800" y="550" width="360" height="190" rx="12" class="card"/>
+  <text x="818" y="578" class="h">Books</text>
+  <text x="818" y="600" class="s">goodbooks-10k · 10,000 books · ~6M ratings</text>
+  <text x="818" y="626" class="t">Item-item collaborative filtering</text>
+  <text x="818" y="644" class="t">precomputed from reader ratings</text>
+  <text x="818" y="662" class="t">TF-IDF over titles, authors and shelves</text>
+  <text x="818" y="680" class="t">Author and series diversity caps</text>
+  <text x="818" y="698" class="t">Moods from readers' shelves</text>
+  <text x="818" y="724" class="s">Grounds titles, IDs and ratings</text>
 
-  <!-- Cross-domain link: Books → Cocktails pairing -->
-  <path d="M980 628 V658 H600 V628" class="line" marker-end="url(#arrow)"/>
-  <rect x="675" y="645" width="230" height="26" rx="13" class="pill"/>
-  <text x="790" y="662" text-anchor="middle" class="pilltext">Pairing · book → cocktail, explained</text>
+  <!-- Toolkits to composed domains -->
+  <path d="M220 740 V800" class="line" marker-end="url(#arrow)"/>
+  <path d="M520 740 V800" class="line" marker-end="url(#arrow)"/>
+  <path d="M700 740 V800" class="line" marker-end="url(#arrow)"/>
+  <path d="M980 740 V800" class="line" marker-end="url(#arrow)"/>
+  <text x="232" y="768" class="tag">COMPOSED DOMAINS</text>
+  <text x="232" y="786" class="s">built on the domains above</text>
+
+  <!-- Layer 4: composed domains -->
+  <rect x="40" y="804" width="540" height="120" rx="12" class="accent"/>
+  <text x="58" y="832" class="h">Evening</text>
+  <text x="136" y="832" class="code">domains.evening</text>
+  <text x="58" y="856" class="t">"Plan my evening": one theme from the occasion, then an outfit</text>
+  <text x="58" y="874" class="t">(fashion), a book (books) and a drink paired with that book</text>
+  <text x="58" y="892" class="t">(pairings), each with its reason. One approval saves all three.</text>
+  <text x="58" y="912" class="s">Without fashion data it plans the book and the drink</text>
+
+  <rect x="620" y="804" width="540" height="120" rx="12" class="card"/>
+  <text x="638" y="832" class="h">Pairings</text>
+  <text x="722" y="832" class="code">domains.pairings</text>
+  <text x="638" y="856" class="t">Book → drink: genres, shelves and setting words become a</text>
+  <text x="638" y="874" class="t">flavour profile scored against the 425 recipes, with the</text>
+  <text x="638" y="892" class="t">evidence from both catalogs. Children's books: alcohol-free.</text>
+  <text x="638" y="912" class="s">Deterministic and offline: no model call</text>
+  <path d="M620 864 H584" class="line" marker-end="url(#arrow)"/>
+
+  <text x="40" y="956" class="s">tests/test_architecture.py parses every import: the engine imports no domain, and a domain imports only the engine and itself, except the two composed domains.</text>
 </svg>
