@@ -3918,11 +3918,28 @@ def switch_domain() -> None:
     st.session_state["domain_switched"] = True
 
 
+# The domain a new visit opens on when the server serves it: Curio leads with the engine's
+# composition showcase, Plan my evening.
+DEFAULT_DOMAIN = EVENING
+# Where each domain lands when chosen (or on a first visit): its own page, not the chat.
+LANDING_PAGES = {EVENING: "evening"}
+LANDED = "landed"  # set once a visit has landed, so later visits to Ask Curio stay there
+
+
 def active_domain(available: Sequence[str]) -> str:
-    """The selected domain, or the first served one when the selection is not served."""
+    """The selected domain; a new visit starts on Evening when it is served, and a selection
+    the server does not serve falls back to the first served domain."""
+    if "domain" not in st.session_state and DEFAULT_DOMAIN in available:
+        st.session_state["domain"] = DEFAULT_DOMAIN
     if current_domain() not in available:
         st.session_state["domain"] = available[0]
     return current_domain()
+
+
+def landing_page(domain: str, pages: Sequence) -> object:
+    """The page a domain opens on: its landing page when it has one, else Ask Curio."""
+    path = LANDING_PAGES.get(domain)
+    return next((p for p in pages if path and p.url_path == path), pages[0])
 
 
 def domain_switch(available: Sequence[str], served: dict[str, dict]) -> None:
@@ -3986,7 +4003,9 @@ def catalog_note(health: dict) -> str:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Curio · Agentic recommendations", page_icon="C", layout="wide")
+    st.set_page_config(
+        page_title="Curio · Trustworthy recommendation agents", page_icon="C", layout="wide"
+    )
     st.html("<style>" + Path(__file__).with_name("ui.css").read_text() + "</style>")
     health = call_api("GET", "/health")
     header = st.container(
@@ -3995,7 +4014,9 @@ def main() -> None:
         vertical_alignment="center",
         horizontal_alignment="distribute",
     )
-    header.html('<div class="curio-brand">Curio<span>AGENTIC RECOMMENDATIONS</span></div>')
+    header.html(
+        '<div class="curio-brand">Curio<span>TRUSTWORTHY RECOMMENDATION AGENTS</span></div>'
+    )
     if health is None:
         st.info("Curio cannot connect right now. Please try again shortly.")
         if st.button("Retry connection"):
@@ -4013,11 +4034,16 @@ def main() -> None:
     page = st.navigation(pages, position="top")
     owner = PAGE_DOMAINS.get(page.url_path)
     switched = st.session_state.pop("domain_switched", False)
+    first_visit = not st.session_state.get(LANDED)
+    st.session_state[LANDED] = True
     if owner is not None and owner != domain:
-        if switched:  # the shopper changed domain on another domain's page: go home
-            st.switch_page(pages[0])
+        if switched:  # the shopper changed domain on another domain's page: its landing
+            st.switch_page(landing_page(domain, pages))
         st.session_state["domain"] = owner  # a deep link selects its page's domain
         st.rerun()
+    landing = landing_page(domain, pages)
+    if page.title == "Ask Curio" and landing is not pages[0] and (switched or first_visit):
+        st.switch_page(landing)  # Evening opens on Plan my evening, not on its chat
     with header:
         domain_switch(available, served)
     page.run()

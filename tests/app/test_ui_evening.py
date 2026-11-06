@@ -125,11 +125,29 @@ def test_evening_is_a_fourth_domain_with_its_own_icon_and_landing(api):
     assert ui.DOMAIN_VIEWS["evening"].label == ":material/bedtime: Evening"
     labels = {view.label.split(" ", 1)[0] for view in ui.DOMAIN_VIEWS.values()}
     assert len(labels) == len(ui.DOMAIN_VIEWS)  # every domain has a distinct icon
-    switch.set_value("evening").run()
+    # A new visit opens on Evening, on the Plan my evening page rather than its chat.
+    assert switch.value == "evening"
+    assert app.title[0].value == "Plan my evening"
+    switch.set_value("cocktails").run()
+    assert app.title[0].value == "Mix something new tonight."
+    app.segmented_control(key="domain_switch").set_value("evening").run()
     assert not app.exception
-    assert app.title[0].value == "Plan my evening."
-    assert app.toggle(key="session_ask_shortlist").label == "Ask before saving an evening"
+    # Choosing Evening lands on its Plan page too.
+    assert app.title[0].value == "Plan my evening"
+    assert ui.EVENING_COPY.ask_shortlist == "Ask before saving an evening"
     assert app.caption[-1].value == ui.EVENING_CREDIT
+
+
+def test_the_brand_names_the_engine_and_without_evening_the_first_domain_opens(api):
+    _, state = api
+    app = AppTest.from_function(run_main, default_timeout=10).run()
+    brand = [h.proto.body for h in app.get("html") if "curio-brand" in h.proto.body]
+    assert brand and "TRUSTWORTHY RECOMMENDATION AGENTS" in brand[0]
+    assert "AGENTIC" not in brand[0]
+    state["health"] = health(EVENING_INFO | {"enabled": False, "hint": "Prepare books."})
+    app = AppTest.from_function(run_main, default_timeout=10).run()
+    assert app.segmented_control(key="domain_switch").value == "cocktails"
+    assert app.title[0].value == "Mix something new tonight."
 
 
 def test_evening_not_served_is_marked_unavailable_with_the_missing_part(api):

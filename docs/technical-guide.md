@@ -482,8 +482,9 @@ From that registry, without per-domain code:
 The UI mirrors this with `DOMAIN_VIEWS` in `app/ui.py`: one `DomainView` per domain (switch
 label, copy, session-state keys, grounding badges, approval tools, pages, session panel,
 chat-request fields, footer). It reads availability from `/health`, registers only the
-pages of served domains, opens on the first served domain, and shows a setup page when the
-API serves none. A domain the server does not serve appears beside the switch as "… is not
+pages of served domains, opens on Evening's Plan my evening page when the API serves the
+evening (choosing Evening in the switch lands there too, not on its chat), else on the first
+served domain, and shows a setup page when the API serves none. A domain the server does not serve appears beside the switch as "… is not
 available", with the server's hint.
 
 `ENABLED_DOMAINS` (comma-separated ids, e.g. `cocktails`) limits loading to those domains
