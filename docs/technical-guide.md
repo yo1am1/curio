@@ -211,7 +211,9 @@ photo search that fails only drops the outfit. A plan is never an error.
 Swaps are stateless like outfits. The client holds `EveningState` (occasion, theme, budget,
 audience, alcohol-free, the outfit's `OutfitState`, the book and drink IDs and the parts
 swapped out) and sends it back; `EveningPlanner.restore` re-reads every product and book and
-re-pairs the drink, keeping the client's drink only when the pairer still pairs it with the
+re-pairs the drink (the outfit's state also carries its empty slots, their order and the
+minimum, display-only, so a partial outfit stays partial after any swap, and the evening's
+`status` is "partial" whenever its outfit is), keeping the client's drink only when the pairer still pairs it with the
 book under the current rules (a forged or no-longer-allowed drink is replaced). "Another book"
 skips the old one and re-pairs a drink for the new one; "another drink" skips the drink;
 "alcohol-free" re-pairs with alcohol-free recipes; an outfit piece is swapped by

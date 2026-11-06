@@ -106,7 +106,9 @@ def render_outfit(outfit: Outfit) -> str:
     lines = [header]
     for slot in outfit.slots:
         if slot.product is None:
-            lines.append(f"- {slot.label}: not filled. {slot.issue}")
+            # A carried issue came back from the client: display-only, never for the model.
+            issue = "" if slot.carried else f" {slot.issue}"
+            lines.append(f"- {slot.label}: not filled.{issue}")
             continue
         # A carried reason came from the client (display-only), so the model never sees it.
         reason = [] if slot.carried or not slot.reason else [slot.reason]

@@ -600,7 +600,8 @@ class EveningPlanner:
         )
         parts = [outfit_part, book_part, drink_part]
         filled = sum(part is not None for part in parts)
-        status = "complete" if filled == 3 else ("partial" if filled else "empty")
+        whole = filled == 3 and outfit is not None and outfit.status == "complete"
+        status = "complete" if whole else ("partial" if filled else "empty")
         return EveningPlan(
             occasion=state.occasion,
             theme=ThemeInfo(

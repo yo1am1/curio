@@ -188,6 +188,15 @@ class OutfitPiece(BaseModel):
     reason: DisplayText = ""
 
 
+class EmptySlot(BaseModel):
+    """A slot the outfit could not fill, as the server reported it. Client-supplied on the
+    way back, so the issue and the cheapest price are only ever shown again."""
+
+    slot: SlotName
+    issue: DisplayText = ""
+    cheapest: float | None = Field(default=None, gt=0, le=10_000)
+
+
 class OutfitState(BaseModel):
     """What the client sends back to swap or save pieces of the current outfit.
 
@@ -203,6 +212,11 @@ class OutfitState(BaseModel):
     skipped: list[PositiveInt] = Field(default_factory=list, max_length=MAX_SKIPPED)
     # The outfit's notes, display-only like the pieces' reasons.
     notes: list[DisplayText] = Field(default_factory=list, max_length=MAX_NOTES)
+    # Slots the outfit could not fill and their order, so a restored outfit stays partial;
+    # the cheapest complete outfit when the budget could not cover one. Display-only.
+    empty: list[EmptySlot] = Field(default_factory=list, max_length=MAX_SLOTS)
+    slot_order: list[SlotName] = Field(default_factory=list, max_length=MAX_SLOTS)
+    minimum: float | None = Field(default=None, gt=0, le=50_000)
 
 
 class OutfitSlot(BaseModel):
@@ -231,6 +245,8 @@ class Outfit(BaseModel):
     notes_carried: bool = False
     # The cheapest complete outfit, reported when the budget cannot cover one.
     minimum: float | None = None
+    # The minimum came back from the client: shown, never an amount an answer may state.
+    minimum_carried: bool = False
     state: OutfitState
 
     @property
@@ -251,11 +267,11 @@ class Outfit(BaseModel):
         values = [self.total]
         if self.budget is not None:
             values += [self.budget, abs(self.budget - self.total)]
-        if self.minimum is not None:
+        if self.minimum is not None and not self.minimum_carried:
             values.append(self.minimum)
             if self.budget is not None:
                 values.append(abs(self.minimum - self.budget))
-        values += [slot.cheapest for slot in self.slots if slot.cheapest is not None]
+        values += [s.cheapest for s in self.slots if s.cheapest is not None and not s.carried]
         return [round(value, 2) for value in values]
 
 
@@ -964,27 +980,47 @@ class OutfitPlanner:
     # --- Swap ----------------------------------------------------------------------------------
 
     def restore(self, state: OutfitState) -> Outfit | None:
-        """The outfit a client holds, re-read from the catalog; None if no piece is known."""
-        slots = []
+        """The outfit a client holds, re-read from the catalog; None if no piece is known.
+        Its empty slots, their order and the minimum come back too (display-only), so a
+        partial outfit stays partial."""
+        filled: dict[SlotName, OutfitSlot] = {}
         for piece in dict((p.slot, p) for p in state.pieces).values():
             product = self._catalog.get(piece.product_id)
             if product is not None:
-                label = SLOT_LABELS[piece.slot]
-                slots.append(
-                    OutfitSlot(
-                        slot=piece.slot,
-                        label=label,
-                        product=product,
-                        reason=piece.reason,
-                        carried=bool(piece.reason),
-                    )
+                filled[piece.slot] = OutfitSlot(
+                    slot=piece.slot,
+                    label=SLOT_LABELS[piece.slot],
+                    product=product,
+                    reason=piece.reason,
+                    carried=bool(piece.reason),
                 )
-        if not slots:
+        if not filled:
             return None
+        empty = {
+            e.slot: OutfitSlot(
+                slot=e.slot,
+                label=SLOT_LABELS[e.slot],
+                issue=e.issue,
+                cheapest=e.cheapest,
+                carried=True,
+            )
+            for e in state.empty
+            if e.slot not in filled
+        }
+        order = [*state.slot_order, *filled, *empty]
+        slots = [
+            filled.get(slot) or empty[slot]
+            for slot in dict.fromkeys(order)
+            if slot in filled or slot in empty
+        ]
         request = OutfitRequest(state.occasion, state.budget, state.audience)
-        return self._outfit(
-            request, state.audience, slots, list(state.notes), None, skipped=state.skipped
-        ).model_copy(update={"notes_carried": bool(state.notes)})
+        minimum = None if state.minimum is None else _cents(state.minimum)
+        outfit = self._outfit(
+            request, state.audience, slots, list(state.notes), minimum, skipped=state.skipped
+        )
+        return outfit.model_copy(
+            update={"notes_carried": bool(state.notes), "minimum_carried": minimum is not None}
+        )
 
     def swap(
         self,
@@ -1029,13 +1065,22 @@ class OutfitPlanner:
                 item = item.model_copy(update=update)
             slots.append(item)
         request = OutfitRequest(state.occasion, state.budget, state.audience)
-        swapped = self._outfit(request, state.audience, slots, outfit.notes, None, skipped=skipped)
-        swapped = swapped.model_copy(update={"notes_carried": outfit.notes_carried})
+        minimum = None if outfit.minimum is None else _cents(outfit.minimum)
+        swapped = self._outfit(
+            request, state.audience, slots, outfit.notes, minimum, skipped=skipped
+        )
+        swapped = swapped.model_copy(
+            update={
+                "notes_carried": outfit.notes_carried,
+                "minimum_carried": outfit.minimum_carried,
+            }
+        )
         return Swap(swapped, slot, old, pick[0] if pick else None)
 
     @staticmethod
     def _spec_for(state: OutfitState, slot: SlotName) -> SlotSpec:
-        planned = plan_slots(state.occasion, state.audience, [p.slot for p in state.pieces])
+        named = [*state.slot_order, *(p.slot for p in state.pieces), *(e.slot for e in state.empty)]
+        planned = plan_slots(state.occasion, state.audience, list(dict.fromkeys(named)))
         return next(spec for spec in planned if spec.slot == slot)
 
     # --- Helpers -------------------------------------------------------------------------------
@@ -1068,6 +1113,17 @@ class OutfitPlanner:
             ],
             skipped=list(dict.fromkeys(skipped))[-MAX_SKIPPED:],
             notes=[note[:MAX_DISPLAY_TEXT] for note in notes[:MAX_NOTES]],
+            empty=[
+                EmptySlot(
+                    slot=s.slot,
+                    issue=s.issue[:MAX_DISPLAY_TEXT],
+                    cheapest=s.cheapest if s.cheapest and s.cheapest <= 10_000 else None,
+                )
+                for s in slots
+                if s.product is None
+            ],
+            slot_order=[s.slot for s in slots],
+            minimum=None if minimum is None else _euros(minimum),
         )
         return Outfit(
             occasion=request.occasion,

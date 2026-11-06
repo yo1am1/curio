@@ -189,6 +189,23 @@ def test_infeasible_budget_names_the_slot_that_cannot_fit(planner):
     assert {69.97, 70.0, 0.03, 75.96, 5.96, 5.99} <= set(outfit.amounts())
 
 
+def test_a_partial_outfit_stays_partial_across_restore_and_swap(planner):
+    outfit = build(planner, "wedding", 70, "women")
+    restored = planner.restore(outfit.state)
+    assert restored.status == "partial"
+    assert [s.slot for s in restored.slots] == ["dress", "shoes", "bag", "accessory"]
+    accessory = restored.slots[3]
+    assert accessory.product is None and accessory.issue == outfit.slots[3].issue
+    assert accessory.carried and restored.minimum == 75.96 and restored.minimum_carried
+    # Carried values are shown, never amounts an answer may state.
+    assert not {75.96, 5.99} & set(restored.amounts())
+    swap = planner.swap(outfit.state, "shoes")
+    assert swap.outfit.status == "partial" and swap.outfit.minimum == 75.96
+    assert [s.slot for s in swap.outfit.slots] == ["dress", "shoes", "bag", "accessory"]
+    again = planner.restore(swap.outfit.state)
+    assert again.status == "partial" and again.slots[3].product is None
+
+
 def test_a_slot_without_any_match_is_reported(planner):
     outfit = build(planner, "wedding", None, "men", ("top", "bag"))
     assert picked(outfit) == {"top": 8, "bag": None}

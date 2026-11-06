@@ -443,6 +443,13 @@ def test_outfit_is_planned_over_the_index_with_reasons_and_gaps(client) -> None:
         ],
         "skipped": [],
         "notes": outfit["notes"],
+        # The empty slots travel with the state, so a restored outfit stays partial.
+        "empty": [
+            {"slot": "bag", "issue": bag["issue"], "cheapest": None},
+            {"slot": "accessory", "issue": outfit["slots"][3]["issue"], "cheapest": None},
+        ],
+        "slot_order": ["dress", "shoes", "bag", "accessory"],
+        "minimum": None,
     }
 
 

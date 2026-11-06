@@ -433,3 +433,18 @@ def test_an_explicit_alcohol_free_false_overrides_words_but_never_safety(planner
     assert evening.notes[0] == "The drink stays alcohol-free: you mentioned kids."
     assert not plan(planner, "book club, alcohol-free", alcohol_free=False).state.alcohol_free
     assert not alcohol_free_in("expecting guests for a summer party")
+
+
+def test_a_partial_outfit_keeps_the_evening_partial_after_a_book_or_drink_swap(planner):
+    evening = plan(planner, "New Year's Eve party under €40")
+    assert evening.outfit.outfit.status == "partial" and evening.status == "partial"
+    empty = [s.slot for s in evening.outfit.outfit.slots if s.product is None]
+    assert empty
+    for part in ("book", "drink"):
+        swapped = planner.swap(evening.state, part)
+        outfit = swapped.outfit.outfit
+        assert outfit.status == "partial" and swapped.status == "partial", part
+        assert [s.slot for s in outfit.slots if s.product is None] == empty
+        assert outfit.minimum == evening.outfit.outfit.minimum
+    restored = planner.restore(evening.state)
+    assert restored.status == "partial"

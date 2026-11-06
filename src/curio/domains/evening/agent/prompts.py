@@ -74,7 +74,9 @@ def render_plan(plan: EveningPlan) -> str:
         lines.append(header + f" · {plan.outfit.reason}")
         for slot in outfit.slots:
             if slot.product is None:
-                lines.append(f"- {slot.label}: not filled. {slot.issue}")
+                # A carried issue came back from the client: display-only, never for the model.
+                issue = "" if slot.carried else f" {slot.issue}"
+                lines.append(f"- {slot.label}: not filled.{issue}")
                 continue
             reason = "" if slot.carried or not slot.reason else f" | why: {slot.reason}"
             lines.append(f"- {slot.label}: {product_line(slot.product)}{reason}")
