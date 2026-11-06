@@ -116,6 +116,35 @@ ALCOHOL_FREE_PAIRS = frozenset(
 )
 # Assumed to be in every kitchen, so they never count as missing.
 PANTRY_STAPLES = frozenset({"ice", "water"})
+# Drink names that are crude, sexual or a slur: Curio is a public demo, so search, "similar"
+# and "What can I make?" never offer them unless the query names the drink; pairings never.
+CRUDE_NAMES = frozenset(
+    name.casefold()
+    for name in (
+        "After sex",
+        "Brain Fart",
+        "Dirty Nipple",
+        "Fuzzy Asshole",
+        "Hot Creamy Bush",
+        "Orgasm",
+        "Pink Panty Pulldowns",
+        "Popped cherry",
+        "Pornstar Martini",
+        "Quick F**K",
+        "Royal Bitch",
+        "Smut",
+        "Zipperhead",
+    )
+)
+# The words of a base spirit: a pantry drink missing one is further from made than a drink
+# missing only a mixer or a garnish.
+SPIRIT_WORDS = frozenset(
+    {
+        "vodka", "gin", "rum", "tequila", "mezcal", "whiskey", "bourbon", "scotch", "rye",
+        "brandy", "cognac", "pisco", "cachaca", "applejack", "absinthe", "everclear",
+        "calvado", "grappa", "ouzo", "sake", "soju", "aquavit", "kirschwasser",
+    }
+)  # fmt: skip
 NAME_WEIGHT = 2
 MAX_PANTRY_ITEMS = 50
 MAX_REASON_ITEMS = 3
@@ -194,10 +223,12 @@ class CocktailRecommender:
             query = query.model_copy(update={"alcohol": "non_alcoholic"})
         required = _filters(query.ingredients)
         excluded = _filters(query.exclude_ingredients)
+        named = query.query.casefold()
         candidates = [
             row
             for row, cocktail in enumerate(self._cocktails)
-            if _alcohol_ok(cocktail, query.alcohol)
+            if (not is_crude(cocktail) or cocktail.name.casefold() in named)
+            and _alcohol_ok(cocktail, query.alcohol)
             and _category_ok(cocktail, query.category)
             and self._ingredients_ok(row, required, excluded)
         ]
@@ -245,7 +276,9 @@ class CocktailRecommender:
             (
                 other
                 for other in np.flatnonzero(similarity > 1e-12).tolist()
-                if other != row and _alcohol_ok(self._cocktails[other], alcohol)
+                if other != row
+                and _alcohol_ok(self._cocktails[other], alcohol)
+                and not is_crude(self._cocktails[other])
             ),
             key=lambda other: (-round(float(similarity[other]), 9), self._row_id(other)),
         )
@@ -275,8 +308,9 @@ class CocktailRecommender:
             return i.key in covered or i.match_key in covered_terms
 
         matches = []
+        spirits = []
         for row, cocktail in enumerate(self._cocktails):
-            if not _alcohol_ok(cocktail, alcohol):
+            if not _alcohol_ok(cocktail, alcohol) or is_crude(cocktail):
                 continue
             recipe = self._recipes[row]
             have = [i.name for i in recipe if has(i) or i.key in PANTRY_STAPLES]
@@ -292,15 +326,19 @@ class CocktailRecommender:
                     coverage=round(len(have) / len(recipe), 6),
                 )
             )
-        matches.sort(
-            key=lambda m: (
-                len(m.missing),
-                -m.coverage,
-                m.cocktail.name.casefold(),
-                m.cocktail.drink_id,
-            )
+            spirits.append(any(i.words & SPIRIT_WORDS for i in recipe if i.name in missing))
+        # A drink missing its base spirit ranks below drinks missing only mixers or garnish.
+        order = sorted(
+            range(len(matches)),
+            key=lambda i: (
+                spirits[i],
+                len(matches[i].missing),
+                -matches[i].coverage,
+                matches[i].cocktail.name.casefold(),
+                matches[i].cocktail.drink_id,
+            ),
         )
-        return matches[:top_k]
+        return [matches[i] for i in order[:top_k]]
 
     # --- Profile scoring (used by book-cocktail pairing) ---------------------------------
 
@@ -439,6 +477,11 @@ class CocktailRecommender:
 
     def _row_id(self, row: int) -> int:
         return self._cocktails[row].drink_id
+
+
+def is_crude(cocktail: Cocktail) -> bool:
+    """Whether a drink's name is one Curio never offers unprompted (`CRUDE_NAMES`)."""
+    return cocktail.name.casefold() in CRUDE_NAMES
 
 
 def pantry_coverage(items: Iterable[str]) -> set[str]:

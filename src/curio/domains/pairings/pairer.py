@@ -36,7 +36,7 @@ from curio.domains.books.catalog import BookCatalog, name_key
 from curio.domains.books.models import Book
 from curio.domains.books.taxonomy import GENRES, shelf_label
 from curio.domains.cocktails.models import Cocktail
-from curio.domains.cocktails.recommend import CocktailRecommender, terms
+from curio.domains.cocktails.recommend import CocktailRecommender, is_crude, terms
 from curio.domains.pairings.models import (
     BookPairing,
     FlavourProfile,
@@ -97,21 +97,6 @@ MAX_EVIDENCE_INGREDIENTS = 3
 EXCLUDED_CATEGORIES = frozenset({"shot"})
 EXCLUDED_NAME_WORDS = frozenset({"shot", "shots", "slammer", "flaming"})
 OVERPROOF = ("151 proof rum", "everclear", "grain alcohol", "firewater")
-CRUDE_NAMES = frozenset(
-    name.casefold()
-    for name in (
-        "After sex",
-        "Brain Fart",
-        "Dirty Nipple",
-        "Fuzzy Asshole",
-        "Orgasm",
-        "Pink Panty Pulldowns",
-        "Pornstar Martini",
-        "Quick F**K",
-        "Royal Bitch",
-        "Smut",
-    )
-)
 # Base spirit (or, without one, main ingredient) families, for diversity. Checked in order;
 # the first family with a word in any ingredient name wins.
 SPIRIT_WORDS: tuple[tuple[str, frozenset[str]], ...] = tuple(
@@ -583,7 +568,7 @@ def _responsible(cocktail: Cocktail) -> bool:
     """Whether a recipe may be offered as a pairing at all."""
     if cocktail.category.casefold() in EXCLUDED_CATEGORIES:
         return False
-    if cocktail.name.casefold() in CRUDE_NAMES:
+    if is_crude(cocktail):
         return False
     if EXCLUDED_NAME_WORDS & set(_WORD.findall(cocktail.name.casefold())):
         return False
