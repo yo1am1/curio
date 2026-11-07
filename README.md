@@ -258,6 +258,11 @@ arguments, grounding, approvals, clarifying questions, safety and prompt injecti
 works with any OpenAI-compatible or Anthropic provider, or through a file relay for a model
 without an API key.
 
+**A React web app is on its way.** `web/` holds a React, TypeScript and Vite client for
+Plan my evening and the chat of every domain; build it with `npm ci && npm run build` in
+`web/` and the API serves it at http://localhost:8000. Streamlit remains the default UI
+until it covers every page ([web app](docs/technical-guide.md#web-app)).
+
 [Technical guide](docs/technical-guide.md) · [Agent architecture](docs/agent-architecture.md) ·
 [LLM setup](docs/technical-guide.md#llm-configuration) ·
 [Agent evaluation](docs/agent-eval.md) · [Tests and development](docs/technical-guide.md#development) ·

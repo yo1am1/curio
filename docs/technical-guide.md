@@ -466,8 +466,10 @@ src/curio/
     ├── services.py       # Composition root and domain registry
     ├── demo.py           # Demo customers
     ├── api.py            # FastAPI app
+    ├── web.py            # Serves the built React app (web/dist) beside the API routes
     └── ui/               # Streamlit client: main.py (entry), shell, client, common, chat,
                           # effects, fashion, cocktails, books, evening; ui.css
+web/                      # React app (Vite, React 19, TypeScript); see "Web app" below
 examples/hello_domain/    # A complete teas domain on the engine, in one file (teas.py)
 scripts/prepare_data.py # Sample the H&M Kaggle archive (or its unzipped CSVs) into data/
 scripts/fetch_photos.py # Download the sampled products' photos from the mirror
@@ -477,6 +479,7 @@ scripts/classify_product_types.py # Reviewable H&M-to-Shopify category decisions
 scripts/evaluate.py # Chronological holdout evaluation; JSON results for the Model quality page
 scripts/prepare_cocktails.py # Download the pinned recipe CSV, write data/cocktails.parquet
 scripts/prepare_books.py # Download pinned goodbooks-10k, write books + book_neighbours.parquet
+scripts/export_openapi.py # Write the API's OpenAPI schema (web/openapi.json) without a server
 ```
 
 ### Domain registry
@@ -544,6 +547,60 @@ Cross-domain features link loaded domains after loading: `link_domains` builds t
 build leaves both domains serving as before; `/pairings/book-cocktail` answers 503 with the
 setup hint of whichever domain is missing, and the UI shows its pairing controls only when
 `/health` reports both domains.
+
+## Web app
+
+`web/` is a React single-page app over the same API, replacing the Streamlit client in
+stages. Stage 1 has the shell and domain switch, Plan my evening, chat for every domain
+and the item dialogs; the browse pages (fashion feed, discover, connections, cocktail
+search and pantry, book search) are still Streamlit-only. Streamlit stays the default UI
+until the React app covers them.
+
+- **Stack:** Vite, React 19 and TypeScript (strict), React Router, TanStack Query, the
+  `motion` package for animation, `react-markdown` for answers and lucide icons. Styling
+  is hand-written CSS modules over design tokens (`src/styles/tokens.css`) ported from the
+  Streamlit theme and `ui.css`; dark mode follows `prefers-color-scheme`. Fonts (Source
+  Serif 4, Source Sans 3) are bundled, so the app makes no third-party requests except
+  recipe photos, Goodreads covers and Open Library covers, as the Streamlit client does.
+- **Layout:** `src/api` (fetch client, the NDJSON stream reader, query hooks, types
+  generated into `schema.d.ts`), `src/state` (the client-held session and its
+  `TurnContext`, chat transcripts, approval narrowing, effects), `src/domains` (the
+  registry: copy, badges, step labels, credits), `src/components` (shell, chat, evening,
+  cards, dialogs, session panel) and `src/ui` (buttons, toggles, dialog, toasts, photos).
+- **Routes:** `/evening` (Plan my evening, where a visit lands when the evening is served)
+  and `/ask/<domain>` (chat). They are chosen not to collide with API paths: never add a
+  page route under an API path such as `/books/…`, which the API answers itself.
+- **Session:** the shortlist, reading list, saved drinks, memory, outfit and evening
+  state, the approval toggles and the linked shopper live in `localStorage`
+  (`curio.session.v1`) and go back with every chat request field for field as the
+  Streamlit client sends them. Transcripts and the planner's current plan are kept for the
+  browser tab (`sessionStorage`).
+
+```bash
+cd web
+npm ci
+npm run dev        # http://localhost:5173, proxying the API at CURIO_API_URL (default :8000)
+npm run lint && npm run typecheck && npm test && npm run build
+```
+
+The dev server proxies every request except page navigations (GET with `Accept:
+text/html`), the same rule the API uses in production; `CURIO_API_URL` points it at
+another API and `CURIO_WEB_PORT` changes its port.
+
+**Production.** After `npm run build`, the API serves `web/dist` itself: `/assets/*` with
+long-lived caching, top-level files such as `favicon.svg`, and `index.html` for any GET
+that accepts `text/html` and matches no API route, so a deep link like `/ask/books` opens
+the app. API paths stay where they are (no `/api` prefix), and their 404s and 405s are
+unchanged. It is automatic when `WEB_DIST` (default `web/dist`, relative to where the API
+starts) holds a build, checked per request; `SERVE_WEB=false` turns it off. Open
+`http://localhost:8000/`.
+
+**API types.** `npm run gen:api` regenerates `src/api/schema.d.ts` from `web/openapi.json`
+with openapi-typescript; `npm run openapi:export` rewrites that file from the code
+(`uv run python -m scripts.export_openapi`, no server or data needed), and `npm run
+gen:api:live` reads a running API's `/openapi.json` instead. `tests/app/test_web.py` fails
+when the committed schema no longer matches the API, so regenerate both after an API
+change. TypeScript is 6.0, the newest release typescript-eslint supports.
 
 ## Quick start
 
@@ -931,6 +988,14 @@ with six parts), an invented drink caught by grounding, and the page at 390 px (
 LLM), checks that the evening plans the book and the drink and says the outfit needs the
 fashion catalogue (screenshot 88).
 
+`test_web_e2e.py` runs the React app the same way: the session's API serves `web/dist`
+(built with `npm run build` first when it is missing and `web/node_modules` exists; the
+tests skip otherwise). It checks that a visit lands on Plan my evening, plans a rainy Sunday
+in, swaps the book and saves the evening with one part unticked, streams a fashion turn
+with its live step trace and verified grounding, narrows a shortlist approval (the
+decision's `edited_args`), pairs a drink in the book dialog (alcohol-free, the recipe and
+back) and in book chat, and checks phone layouts. Its screenshots are `web-*.png`.
+
 The chat model is `tests/e2e/llm_stub.py`, a scripted OpenAI-compatible server: the app
 reaches it through `LLM_PROVIDER=openai` and `LLM_BASE_URL`, so the real provider path runs
 over HTTP while replies stay deterministic and need no key. It does not measure the
@@ -949,6 +1014,9 @@ holds the embedded Qdrant index, then run `uv run pytest -m e2e tests/e2e`. Scre
 each step go to `e2e-artifacts/` (override with `E2E_ARTIFACTS`); `E2E_DATA_DIR`,
 `E2E_QDRANT_PATH` and `E2E_CHROMIUM` point at other data or browsers. The default
 `uv run pytest` run excludes these tests.
+
+A second CI job, `web`, runs `npm ci`, lint (ESLint and Prettier), the type check, the
+Vitest suite and the production build of `web/` on Node 22.
 
 CI (`.github/workflows/ci.yml`) runs `uv sync --locked`, Ruff, `scripts.prepare_cocktails`
 (so the probes on the real recipe catalog run instead of skipping), the offline test suite,

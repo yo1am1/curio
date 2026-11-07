@@ -6,6 +6,23 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A React web app in `web/` (stage 1 of the move from Streamlit): Vite, React 19 and
+  TypeScript, with the app shell and domain switch from `/domains`, Plan my evening (plan,
+  swaps and Save evening through an approval), chat for every domain over `/chat/stream`
+  with a live step trace, grounding badges, item cards, quick replies and an approval drawer
+  that narrows proposals, the client-held session in localStorage with a session panel, and
+  product, recipe and book dialogs (with "Pair a drink"). Light and dark themes follow the
+  system. The Streamlit UI is unchanged and still the default.
+- The API serves the built app when `web/dist` holds a build (`WEB_DIST`, `SERVE_WEB`):
+  `/assets/*`, top-level files, and `index.html` for page navigations that match no API
+  route. API paths, 404s and 405s are unchanged.
+- `scripts.export_openapi` writes the OpenAPI schema without starting a server; the web
+  app's TypeScript types are generated from it (`npm run gen:api`), and a test keeps the
+  committed `web/openapi.json` current.
+- CI runs the web app's lint, typecheck, unit tests and build in a `web` job.
+
 ## [2.1.1] - 2026-11-07
 
 ### Fixed
