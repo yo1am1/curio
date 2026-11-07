@@ -646,6 +646,51 @@ _NEGATED_AFTER = re.compile(
 )
 NEGATION_WINDOW = 24
 
+# Words that ask for an alcohol-free evening, and those that make one alcohol-free for
+# safety (a pregnancy, a driver). They decide the drink only (`planner.alcohol_free_in`):
+# they never choose or change the theme, nor count as a guard (`drink_words_removed`).
+ALCOHOL_FREE_WORDS = re.compile(
+    r"(?<![\w'])(alcohol[- ]free|no alcohol|non[- ]alcoholic|sober|mocktails?|"
+    r"dry january|without alcohol|teetotal|teetotaller|booze[- ]free|zero[- ]proof)(?![\w'])",
+    re.IGNORECASE,
+)
+_EXPECTING = r"expecting(?!\s+(?:guests|friends|company|people|visitors|rain|snow|a crowd))"
+_DRIVER = (
+    r"designated drivers?|driving|(?:i'm|i am|i'll be|i will be) the driver|"
+    r"(?:i'll|i will|i have to|i need to|i've got to|i must|i'm going to|i am going to) drive"
+)
+SAFETY_WORDS = re.compile(
+    rf"(?<![\w'])(pregnant|pregnancy|{_EXPECTING}|baby shower|{_DRIVER})(?![\w'])",
+    re.IGNORECASE,
+)
+# The same words without "baby shower", which is an occasion (playful, with family) as well
+# as a reason to keep the drink alcohol-free.
+_DRINK_ONLY = re.compile(
+    r"(?<![\w'])(?:alcohol[- ]free|no alcohol|non[- ]alcoholic|sober|"
+    r"mocktails?|dry january|without alcohol|teetotal|teetotaller|booze[- ]free|zero[- ]proof|"
+    rf"pregnant|pregnancy|{_EXPECTING}|{_DRIVER})(?![\w'])",
+    re.IGNORECASE,
+)
+# Where the car goes is not the evening's mood or a work occasion: "driving us home",
+# "drive back", "I'm driving to work tomorrow".
+_DRIVE_HOME = re.compile(
+    r"(?<![\w'])(driv(?:e|es|ing)|drove)\b((?:\s+[\w']+){0,3}?)\s+"
+    r"(?:home|back|(?:to|from) (?:work|the office))(?![\w'])",
+    re.IGNORECASE,
+)
+# What a removed word leaves behind: a clause break, so no negation reaches across it.
+_GAP = " ; "
+
+
+def drink_words_removed(text: str) -> str:
+    """`text` without the words that only decide the drink: a driver (and where the car
+    goes), a pregnancy, an alcohol-free or sober evening. Themes and guards are read from
+    this, so "Date night, I'm driving us home" stays romantic, and "without alcohol" never
+    negates the theme word after it."""
+    text = text.replace("\u2019", "'")
+    text = _DRIVE_HOME.sub(lambda m: f"{_GAP}{m.group(2).strip()}{_GAP}", text)
+    return _DRINK_ONLY.sub(_GAP, text)
+
 
 def negated(text: str, start: int, end: int) -> bool:
     """Whether the mention at text[start:end] is negated ("not a date", "no kids",
@@ -666,7 +711,9 @@ def mentions(pattern: re.Pattern[str], text: str) -> tuple[str, ...]:
 
 
 def guard_in(text: str) -> tuple[Guard, tuple[str, ...]] | None:
-    """The first guard `text` mentions (kids before family before work), with its words."""
+    """The first guard `text` mentions (kids before family before work), with its words.
+    Words that only decide the drink are not read (`drink_words_removed`)."""
+    text = drink_words_removed(text)
     for guard, pattern in _GUARD_PATTERNS.items():
         if words := mentions(pattern, text):
             return guard, words
@@ -695,7 +742,12 @@ def detect_theme(occasion: str, mood: str | None = None) -> ThemeMatch:
     An occasion with kids, with family or for work (`GUARDS`) is never romantic or
     glamorous, even when it says "dinner", "party" or "birthday", or the mood asks for it:
     its other words decide, else the guard's own theme (`GUARD_FALLBACK`).
+
+    Words that only decide the drink ("I'm driving", "pregnant", "sober", "alcohol-free")
+    never choose or change the theme: they are removed first (`drink_words_removed`).
     """
+    occasion = drink_words_removed(occasion)
+    mood = drink_words_removed(mood) if mood else mood
     found_guard = guard_in(f"{occasion} {mood or ''}")
     guard, guard_words = found_guard if found_guard else (None, ())
     blocked = GUARDED_THEMES if guard else frozenset()

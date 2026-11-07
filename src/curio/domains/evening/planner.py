@@ -49,8 +49,10 @@ from curio.domains.evening.models import (
     ThemeInfo,
 )
 from curio.domains.evening.themes import (
+    ALCOHOL_FREE_WORDS,
     FALLBACK_BOOKS,
     KIDS_BOOKS,
+    SAFETY_WORDS,
     THEMES_BY_ID,
     BookSearch,
     Theme,
@@ -119,20 +121,10 @@ BUDGET_NOTE = (
     "Planned without a budget: €{amount} is not one Curio can plan with (an outfit budget is "
     "over €0 and at most €{limit:,})."
 )
-# Words that ask for an alcohol-free evening, and those that make one alcohol-free for
-# safety (a pregnancy, a driver): explicit `alcohol_free=false` overrides only the first.
-# Kids make an evening alcohol-free for safety too, family (`themes.GUARDS`) as asked.
-_ALCOHOL_FREE = re.compile(
-    r"(?<![\w'])(alcohol[- ]free|no alcohol|non[- ]alcoholic|sober|mocktails?|dry january|"
-    r"without alcohol|teetotal|teetotaller|booze[- ]free|zero[- ]proof)(?![\w'])",
-    re.IGNORECASE,
-)
-_SAFETY = re.compile(
-    r"(?<![\w'])(pregnant|pregnancy|expecting(?!\s+(?:guests|friends|company|people|"
-    r"visitors|rain|snow|a crowd))|baby shower|designated driver|driving|(?:i'm|i am) the "
-    r"driver)(?![\w'])",
-    re.IGNORECASE,
-)
+# `themes.ALCOHOL_FREE_WORDS` ask for an alcohol-free evening and `themes.SAFETY_WORDS` make
+# one alcohol-free for safety (a pregnancy, a driver): explicit `alcohol_free=false`
+# overrides only the first. Kids make an evening alcohol-free for safety too, family
+# (`themes.GUARDS`) as asked.
 SAFETY_NOTE = "The drink stays alcohol-free: {reason}."
 _WORD = re.compile(r"[a-z0-9]+")
 
@@ -172,12 +164,12 @@ def alcohol_free_in(text: str) -> tuple[str, str] | None:
     pregnancy, a driver or kids, ("asked", ...) for alcohol-free words or a family occasion,
     else None. Negated mentions ("alcohol-free is boring", "not sober-curious") do not count.
     """
-    if said := mentions(_SAFETY, text):
+    if said := mentions(SAFETY_WORDS, text):
         return "safety", f"you mentioned {said[0].lower()}"
     found = guard_in(text)
     if found is not None and found[0] == "kids":
         return "safety", f"you mentioned {found[1][0].lower()}"
-    if said := mentions(_ALCOHOL_FREE, text):
+    if said := mentions(ALCOHOL_FREE_WORDS, text):
         return "asked", f"you asked for {said[0].lower()}"
     if found is not None and found[0] == "family":
         return "asked", f"you mentioned {found[1][0].lower()}"
