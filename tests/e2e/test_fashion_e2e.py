@@ -43,7 +43,7 @@ def test_self_correction_of_an_invented_price(web):
     web.open("/ask/fashion")
     web.send("Black trousers under €30")
     expect(web.last_turn().get_by_test_id("grounding-badge")).to_have_text(
-        re.compile(r"^Checked \d+ prices and \d+ names against the catalog$")
+        re.compile(r"^Checked \d+ prices, \d+ names and \d+ colours against the catalog$")
     )
     web.send("Which is the best deal?")
     expect(web.last_turn().get_by_test_id("grounding-badge")).to_have_text(

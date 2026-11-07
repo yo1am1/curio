@@ -338,12 +338,12 @@ FALSE_ANSWERS = [
         "a question that states a false alcohol label",
         kind="question",
     ),
-    # Facts v2 does not check (colours, glasses, genres): kept so the corpus shows the misses.
     _false(
         TROUSERS,
         "The **Primo slacks** come in navy, a softer alternative to black.",
-        "MISSED BY DESIGN: colours are not checked (they are Black)",
+        "a wrong colour (they are Black)",
     ),
+    # Facts v2 does not check (glasses, genres): kept so the corpus shows the misses.
     _false(
         GIN,
         "The **Gimlet** is served tall in a highball glass over crushed ice.",

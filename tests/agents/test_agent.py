@@ -382,7 +382,7 @@ def test_an_empty_answer_falls_back_to_checked_catalog_facts(chat_model_replying
     assert "Slim Jeans · Blue · €29.99" in reply.text
     # The fallback is checked like an answer, so its report says what it states.
     assert reply.grounding.status == "verified"
-    assert reply.grounding.counts == {"price": 1}
+    assert reply.grounding.counts == {"price": 1, "colour": 1}
 
 
 def test_a_fallback_with_nothing_checkable_is_not_applicable(chat_model_replying, search, catalog):

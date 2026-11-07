@@ -22,7 +22,8 @@ tool supports. This module holds the domain-free parts:
   item this turn's tools returned (or something the shopper typed); "by <Author>" after an
   item must name one of its people.
 - Flags ("alcohol-free" must match the drink's flag) and claims no data can support
-  (allergen or health safety, stock and shipping), unless the answer negates or hedges them.
+  (allergen, health and age safety in every domain, stock and shipping), unless the answer
+  negates or hedges them.
 - `Tally`: counts checked facts by kind and collects issues into a `GroundingReport`.
 
 The engine asks for one rewrite of an unverified answer, then falls back to catalog facts.
@@ -135,6 +136,8 @@ KIND_NOUNS = {
     "pages": ("page count", "page counts"),
     "year": ("year", "years"),
     "percent": ("percentage", "percentages"),
+    "colour": ("colour", "colours"),
+    "ingredient": ("ingredient", "ingredients"),
     "claim": ("claim", "claims"),
     "fact": ("fact", "facts"),
 }
@@ -1097,24 +1100,113 @@ _HEDGE = re.compile(
 )
 
 
+_BOLD_NAME = re.compile(r"\*\*[^*\n]+\*\*|__[^_\n]+__")
+
+
 def hedged(text: str, start: int) -> bool:
     """Whether the clause before position `start` negates or hedges what follows ("I can't
-    guarantee it's nut-free", "check whether it's gluten-free")."""
+    guarantee it's nut-free", "check whether it's gluten-free"). Bold names do not count:
+    "**And Then There Were None** is fine for children" hedges nothing."""
     before = text[max(0, start - 120) : start]
     cuts = list(_CLAUSE_START.finditer(before))
     clause = before[cuts[-1].end() :] if cuts else before
-    return bool(_HEDGE.search(clause.lower()))
+    return bool(_HEDGE.search(_BOLD_NAME.sub(" ", clause).lower()))
+
+
+# A hedge later in the same sentence: "it's nut-free, but check the label".
+_HEDGE_AFTER = re.compile(
+    r"\bcheck(?:ing)? (?:the |its |their |with |whether |if )|\bdouble[- ]check|\bverify|"
+    r"\bi can(?:no|['\u2019])?t (?:confirm|guarantee|promise|be sure|say)|\bcan(?:no|['\u2019])?t "
+    r"(?:confirm|guarantee|promise)|\bnot (?:sure|certain)|\bunsure|\bconsult|\bask (?:your|a)\b"
+)
+_SENTENCE_STOP = re.compile(r"[.!?](?:\s|$)|\n")
+
+
+def hedged_after(text: str, end: int) -> bool:
+    """Whether the rest of the sentence after position `end` hedges what came before."""
+    rest = text[end : end + 160]
+    stop = _SENTENCE_STOP.search(rest)
+    return bool(_HEDGE_AFTER.search((rest[: stop.start()] if stop else rest).lower()))
 
 
 def check_unsupported(
-    text: str, pattern: re.Pattern[str], tally: Tally, *, reason: str, kind: str = "claim"
+    text: str,
+    pattern: re.Pattern[str],
+    tally: Tally,
+    *,
+    reason: str,
+    kind: str = "claim",
+    hedge_after: bool = False,
+    supported: Sequence[str] = (),
 ) -> None:
     """Claims no catalog data can support (`pattern`), unless the answer negates or hedges
-    them: each one is an issue."""
+    them (with `hedge_after`, also later in the sentence: "but check the label"), or the
+    evidence's own text says them (`supported`: a description that reads "nickel-free"):
+    each one is an issue."""
+    said = [_folded(s) for s in supported if s.strip()]
     for match in pattern.finditer(text):
         if hedged(text, match.start()):
             continue
+        if hedge_after and hedged_after(text, match.end()):
+            continue
+        phrase = _folded(match.group(0))
+        if phrase and any(phrase in s for s in said):
+            continue
         tally.add(kind, False, f"\u201c{match.group(0)}\u201d: {reason}")
+
+
+# Allergen, skin-health and age-suitability promises: no catalog in any domain records them.
+SAFETY_CLAIMS = re.compile(
+    r"\b(?:nut|peanut|tree[- ]nut|gluten|wheat|dairy|lactose|milk|egg|soy|allergen|allergy|"
+    r"latex|nickel|fragrance|scent)[- ]free\b"
+    r"|\b(?:allergy|allergen|allergic)[- ](?:safe|friendly)\b"
+    r"|\b(?:free (?:of|from)|contains no|has no|without any) (?:nuts?|peanuts?|gluten|dairy|"
+    r"lactose|allergens?|eggs?|latex|nickel)\b"
+    r"|\b(?:hypo-?allergenic|non-?allergenic|non-?irritating|non-?toxic|"
+    r"dermatologi(?:st|cally)[- ](?:tested|approved|recommended))\b"
+    r"|\b(?:gentle|kind|safe|suitable|fine|good|ideal|great) (?:on|for) (?:\w+ )?sensitive skin\b"
+    r"|\bwon['\u2019]t (?:irritate|cause (?:a )?rash)\b"
+    r"|\b(?:completely |totally |perfectly |100% |guaranteed |entirely )?safe (?:for|to|with|"
+    r"during|while|when) (?:anyone|everyone|everybody|kids|children|minors|teens?|teenagers|"
+    r"toddlers|babies|infants|pregnan\w*|you|your|people|those|someone|a nut|nut|allerg\w*|"
+    r"drink(?:ing)? while)\b"
+    r"|\b(?:suitable|fine|ok|okay|appropriate|age[- ]appropriate|safe) for (?:(?:a|an|your|my|"
+    r"young|younger|little|small|older|most|all) )*(?:kids?|children|child|minors|toddlers|"
+    r"babies|infants|tweens|teens?|teenagers|\d{1,2}[- ]year[- ]olds?|ages? \d{1,2}|"
+    r"(?:readers|kids|children) (?:aged|of) \d{1,2}|(?<=young )readers|(?<=younger )readers)\b"
+    r"|\b(?:for )?(?:kids|children|readers|ages?) (?:aged )?\d{1,2}\s?(?:\+|and up\b|and over\b|"
+    r"and older\b)"
+    r"|\b(?:kid|child|pregnancy|allergy|toddler|baby)[- ](?:safe|friendly|proof)\b"
+    r"|\bguaranteed(?: to be)? safe\b",
+    re.IGNORECASE,
+)
+SAFETY_REASON = "no catalog records allergen, diet, health or age-suitability facts"
+
+
+def check_safety(
+    text: str,
+    tally: Tally,
+    *,
+    pattern: re.Pattern[str] = SAFETY_CLAIMS,
+    reason: str = SAFETY_REASON,
+    supported: Sequence[str] = (),
+) -> None:
+    """Allergen, health and age-safety promises, unless negated or hedged before or after
+    ("I can't confirm it's nut-free", "it's nut-free, but check the label"), or stated by
+    the evidence's own text (`supported`)."""
+    check_unsupported(text, pattern, tally, reason=reason, hedge_after=True, supported=supported)
+
+
+# Stock, sizes, delivery and discounts: nothing in any catalog supports them.
+SHOP_CLAIMS = re.compile(
+    r"\b(?:in|out of|back in) stock\b|\bsold out\b|\bavailable in (?:all|every|your) sizes?\b"
+    r"|\bin (?:all|every) sizes?\b|\bships?(?: today| tomorrow| free| fast| within)\b"
+    r"|\b(?:free|fast|next[- ]day|express) (?:shipping|delivery|returns)\b"
+    r"|\bdelivered (?:today|tomorrow|by)\b|\bon sale\b|\b\d{1,2}\s?% off\b"
+    r"|(?:\u20ac\s?)?\b\d+(?:[.,]\d+)? off (?:this|today|now)\b|\b(?:discounted|clearance)\b",
+    re.IGNORECASE,
+)
+SHOP_REASON = "stock, sizes, delivery and discounts are not in the catalog"
 
 
 @dataclass(frozen=True)

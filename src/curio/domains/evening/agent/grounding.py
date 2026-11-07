@@ -144,7 +144,14 @@ class EveningGroundingCheck:
         pairer's reasons name The Long Goodbye when Chandler's gimlet chose a drink)."""
         tally = Tally()
         self._fashion.check_into(
-            text, products, amounts, typed, tally, citations=EVENING_PRODUCTS, names=False
+            text,
+            products,
+            amounts,
+            typed,
+            tally,
+            citations=EVENING_PRODUCTS,
+            names=False,
+            safety=False,  # the drinks check reads safety promises for the whole answer
         )
         product_names = [n for p in products for n in (p.name, p.display_name)]
         drink_names = [c.name for c in drinks]
@@ -158,6 +165,7 @@ class EveningGroundingCheck:
             also_allowed=[*drink_names, *product_names, *cited],
             citations=EVENING_BOOKS,
             names=False,
+            shop=False,  # the outfit has prices; the fashion check reads them
         )
         allowed = [*book_names, *authors, *product_names, *cited]
         self._drinks.check_into(

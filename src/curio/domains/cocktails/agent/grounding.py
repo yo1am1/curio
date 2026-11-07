@@ -1,10 +1,15 @@
 """Cocktail grounding: drink IDs, catalog drink names and recipe amounts in an answer."""
 
 import re
+import unicodedata
 from collections.abc import Iterable, Sequence
 
 from curio.domains.cocktails.models import NON_ALCOHOLIC, OPTIONAL_ALCOHOL, Cocktail
 from curio.engine.grounding import (
+    SAFETY_CLAIMS as ENGINE_SAFETY_CLAIMS,
+)
+from curio.engine.grounding import (
+    SAFETY_REASON,
     Binder,
     Citation,
     Claim,
@@ -16,7 +21,8 @@ from curio.engine.grounding import (
     check_flags,
     check_ids,
     check_marked_names,
-    check_unsupported,
+    check_safety,
+    hedged,
     name_allowed,
 )
 from curio.engine.schemas import GroundingReport
@@ -120,24 +126,50 @@ ALCOHOL_CLAIMS = (
     ),
 )
 # Allergen, dietary, health and age-safety promises: the recipes cannot support any of them.
+# Every domain's allergen and age-safety phrases, and the diet and health words of drinks.
 SAFETY_CLAIMS = re.compile(
-    r"\b(?:nut|peanut|tree[- ]nut|gluten|wheat|dairy|lactose|milk|egg|soy|allergen|allergy|"
-    r"sugar|caffeine)[- ]free\b"
-    r"|\b(?:allergy|allergen|allergic)[- ](?:safe|friendly)\b"
-    r"|\b(?:free (?:of|from)|contains no|has no|without any) (?:nuts?|peanuts?|gluten|dairy|"
-    r"lactose|allergens?|eggs?)\b"
-    r"|\b(?:completely |totally |perfectly |100% |guaranteed |entirely )?safe (?:for|to|with|"
-    r"during|while|when) (?:anyone|everyone|everybody|kids|children|minors|teens?|teenagers|"
-    r"pregnan\w*|you|your|people|those|someone|a nut|nut|allerg\w*|drink(?:ing)? while)\b"
-    r"|\b(?:kid|child|pregnancy|allergy)[- ](?:safe|friendly)\b"
-    r"|\bguaranteed(?: to be)? safe\b"
+    ENGINE_SAFETY_CLAIMS.pattern + r"|\b(?:sugar|caffeine|alcohol[- ]and[- ]caffeine)[- ]free\b"
     r"|\b(?:vegan|vegetarian|keto|paleo|halal|kosher|low[- ]calorie|low[- ]sugar|"
     r"diabetic[- ]friendly)\b"
     r"|\b(?:healthy|good for you|good for your health|cures?|detox\w*|hangover[- ]free|"
     r"prevents? hangovers?|boosts? (?:your )?immun\w*)\b",
     re.IGNORECASE,
 )
-SAFETY_REASON = "the recipes cannot support allergen, diet, health or age-safety claims"
+
+# Ingredients too generic to check against a recipe: "over ice", "a splash of water".
+_GENERIC_INGREDIENTS = frozenset(
+    {"ice", "water", "fruit", "fruit juice", "juice", "rose", "port", "garnish", "soda", "mix"}
+)
+# Names for the same ingredient: an answer may say either.
+_INGREDIENT_SYNONYMS = {
+    "white rum": "light rum",
+    "whipped cream": "whipping cream",
+    "club soda": "soda water",
+    "carbonated water": "soda water",
+    "simple syrup": "sugar syrup",
+    "cointreau": "triple sec",
+    "yogurt": "yoghurt",
+    "cachaça": "cachaca",
+}
+# Words between a drink and an ingredient that make the ingredient part of its recipe:
+# "the Moscow Mule uses ginger beer", "**Afterglow** - grenadine, ...", "made with gin".
+_RECIPE_CUE = re.compile(
+    r"\b(?:uses?|using|contains?|containing|made (?:with|from|of)|mix(?:es|ed)?|combines?|"
+    r"with|has|have|needs?|takes?|calls? for|blends?|built on|topped (?:up )?with|is|are|"
+    r"includes?|including|of)\b|[:|\u2013\u2014]|\s-\s"
+)
+# A clause about a substitute or a choice: "swap in ginger beer", "or use lemon instead".
+_SUBSTITUTE = re.compile(
+    r"\b(?:swap|substitut\w*|instead|replace\w*|alternative|variation|twist|version|could|"
+    r"can also|optional(?:ly)?|prefer|rather)\b"
+)
+# A bullet that is only an ingredient ("- Ginger beer", "* 2 dashes of bitters").
+_INGREDIENT_LINE = re.compile(
+    r"[ \t]*(?:[-*+\u2022]|\d+[.)])[ \t]+(?:[^\s.!?]+[ \t]+){0,5}[^\s.!?]*\s*$"
+)
+# The shopper's own bottle, not the recipe's: "your ginger beer", "the rum you have".
+_OWNED = re.compile(r"\b(?:your|my|our)\s+(?:own\s+)?(?:\w+\s+)?$")
+_INGREDIENT_CLAUSE = re.compile(r"[.!?;\n]|,\s|\bbut\b|\bwhile\b")
 
 
 def alcohol_label(cocktail: Cocktail) -> str:
@@ -151,13 +183,40 @@ def alcohol_label(cocktail: Cocktail) -> str:
 
 def drink_item(cocktail: Cocktail) -> Item:
     measures = tuple(m for i in cocktail.ingredients for _, m in measures_in(i.measure or ""))
+    ingredients = tuple(ingredient_key(i.name) for i in cocktail.ingredients if i.name.strip())
     return Item(
         "drink",
         cocktail.drink_id,
         (cocktail.name,),
-        {"amount": measures},
+        {"amount": measures, "ingredient": ingredients},
         flags={"alcohol": alcohol_label(cocktail)},
     )
+
+
+def ingredient_key(name: str) -> str:
+    """An ingredient name for comparison: lower case, no accents, single spaces, synonyms
+    folded ("White Rum" and "light rum" are one)."""
+    plain = unicodedata.normalize("NFKD", name)
+    plain = "".join(c for c in plain if not unicodedata.combining(c))
+    folded = " ".join(plain.casefold().split())
+    return _INGREDIENT_SYNONYMS.get(folded, folded)
+
+
+def recipe_has(ingredients: Sequence[str], named: str) -> bool:
+    """Whether a recipe of `ingredients` (keys) has the ingredient `named`: the same one,
+    or one naming it more or less precisely ("rum" for light rum, "lime juice" for lime)."""
+    key = ingredient_key(named)
+    return any(
+        key == have or _whole_word(have, key) or _whole_word(key, have) for have in ingredients
+    )
+
+
+def _folded_text(text: str) -> str:
+    return " ".join(re.sub(r"[*_`\"\u201c\u201d]", "", text).casefold().split())
+
+
+def _whole_word(haystack: str, needle: str) -> bool:
+    return re.search(r"(?<!\w)" + re.escape(needle) + r"(?!\w)", haystack) is not None
 
 
 def measure_claims(text: str) -> list[Claim]:
@@ -234,6 +293,24 @@ class CocktailGroundingCheck:
         self._vocabulary = {
             n.casefold() for n in [*ingredient_names, *glass_names, *categories] if n.strip()
         }
+        checked = sorted(
+            {
+                n
+                for n in ingredient_names
+                if n.strip() and ingredient_key(n) not in _GENERIC_INGREDIENTS
+            },
+            key=lambda name: (-len(name), name),
+        )
+        self._ingredients = (
+            re.compile(
+                r"(?<![\w-])(" + "|".join(map(re.escape, checked)) + r")(?:e?s)?(?!\w)",
+                re.IGNORECASE,
+            )
+            if checked
+            else None
+        )
+        glasses = sorted({g for g in glass_names if g.strip()}, key=len, reverse=True)
+        self._glasses = any_of(glasses, re.IGNORECASE) if glasses else None
 
     def vocabulary(self, words: str) -> bool:
         """Ingredients, glasses and categories: never a drink name on their own."""
@@ -297,7 +374,76 @@ class CocktailGroundingCheck:
             kind="alcohol",
             quoted=quoted,
         )
-        check_unsupported(text, SAFETY_CLAIMS, tally, reason=SAFETY_REASON)
+        if drinks:
+            self.check_ingredients(text, binder, tally, quoted=quoted)
+        check_safety(text, tally, pattern=SAFETY_CLAIMS, reason=SAFETY_REASON)
+
+    def check_ingredients(
+        self, text: str, binder: Binder, tally: Tally, *, quoted: Sequence[str] = ()
+    ) -> None:
+        """An ingredient said to be in a drink must be in its recipe. An ingredient counts as
+        said to be in a drink when the sentence names the drink and the words between them
+        make it part of the recipe ("uses", "made with", a colon or dash before a list), when
+        it is "<ingredient>-based", or when its sentence lists amounts ("- 2 oz vodka" under
+        the drink). Ingredients in drink or glass names, the shopper's own ("your ginger
+        beer"), in a hedged or negated clause ("if you want ginger beer", "not ginger beer"),
+        about a substitute ("swap in") or in tool text the answer repeats (`quoted`) are not
+        read.
+        """
+        if self._ingredients is None:
+            return
+        skip = [(r.start, r.end) for r in binder.refs]
+        if self._names is not None:
+            skip += [m.span() for m in self._names.finditer(text)]
+        if self._glasses is not None:
+            skip += [m.span() for m in self._glasses.finditer(text)]
+        measured = {binder.sentence(c.start) for c in measure_claims(text)}
+        said = [_folded_text(q) for q in quoted if q.strip()]
+        for match in self._ingredients.finditer(text):
+            start, end = match.span(1)
+            if any(s <= start < e for s, e in skip) or hedged(text, start):
+                continue
+            clause = self._clause(text, start)
+            if _SUBSTITUTE.search(clause) or _OWNED.search(clause):
+                continue
+            sentence = binder.sentence(start)
+            window = text[max(sentence[0], start - 30) : min(sentence[1], end + 30)]
+            if said and any(_folded_text(window) in q for q in said):
+                continue
+            binding = binder.bind(start, end)
+            if binding is None:
+                continue
+            based = re.match(r"[ -]based\b", text[match.end() :], re.IGNORECASE)
+            cue = self._recipe_cue(text, binder, start, end)
+            listed = bool(_INGREDIENT_LINE.match(text[sentence[0] : sentence[1]]))
+            if not (sentence in measured or based or cue or listed):
+                continue
+            named = match.group(1)
+            ok = any(recipe_has(item.values.get("ingredient", ()), named) for item in binding.items)
+            label = binding.items[0].label
+            tally.add(
+                "ingredient",
+                ok,
+                f"{label}'s recipe has no {named.lower()}",
+                key=f"{label}|{ingredient_key(named)}",
+            )
+
+    @staticmethod
+    def _clause(text: str, start: int) -> str:
+        before = text[max(0, start - 80) : start]
+        cuts = list(_INGREDIENT_CLAUSE.finditer(before))
+        return (before[cuts[-1].end() :] if cuts else before).lower()
+
+    @staticmethod
+    def _recipe_cue(text: str, binder: Binder, start: int, end: int) -> bool:
+        """Whether the drink named last before the ingredient in its sentence is tied to it
+        by a recipe word ("the **Moscow Mule** is 2 oz vodka ... and ginger beer")."""
+        first, _ = binder.sentence(start)
+        before = [r for r in binder.strong if first <= r.start and r.end <= start]
+        if not before:
+            return False
+        gap = text[before[-1].end : start]
+        return bool(_RECIPE_CUE.search(gap.lower()))
 
 
 def same_measure(a: Measure, b: Measure) -> bool:

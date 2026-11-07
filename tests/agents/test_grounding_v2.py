@@ -290,6 +290,87 @@ def test_the_shoppers_own_figures_are_theirs_never_an_items(text, status):
 @pytest.mark.parametrize(
     ("text", "status"),
     [
+        ("The **Summer Dress** is red, €24.99.", "verified"),
+        ("The **Summer Dress** (dark red) is €24.99.", "fallback"),  # the catalog says red
+        ("The **Slim Jeans** come in navy.", "fallback"),  # blue, not dark blue
+        ("The **Slim Jeans** are blue denim.", "verified"),
+        ("The **Run Shoe** - black, €59.99.", "verified"),
+        ("The **Run Shoe** is white.", "fallback"),
+        ("If you'd prefer black, the **Summer Dress** is the one to skip.", "verified"),
+        ("Pair the **Slim Jeans** with a white shirt.", "verified"),  # another thing's colour
+        ("You wanted black, but the **Summer Dress** is red.", "verified"),
+    ],
+)
+def test_fashion_checks_colours_bound_to_a_product(text, status, catalog):
+    assert check_grounding(text, catalog.get_many([1, 2, 3])).status == status
+
+
+@pytest.mark.parametrize(
+    ("catalog_colour", "said", "ok"),
+    [
+        ("Light Beige", "beige", True),
+        ("Light Beige", "light beige", True),
+        ("Beige", "light beige", False),
+        ("Dark Blue", "navy", True),
+        ("Blue", "navy", False),
+        ("Grey", "navy", False),
+        ("Off White", "white", True),
+        ("Greenish Khaki", "khaki", True),
+        ("Bronze/Copper", "copper", True),
+        ("Dark Grey", "light grey", False),
+        ("Grey", "gray", True),
+    ],
+)
+def test_colour_words_and_catalog_colours(catalog_colour, said, ok):
+    from curio.domains.fashion.agent.grounding import colour_allows
+
+    *shade, base = said.split()
+    assert colour_allows(catalog_colour, shade[0] if shade else None, base) is ok
+    assert colour_allows("Other", None, "black") is None
+
+
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [
+        ("The **Summer Dress** is hypoallergenic.", "fallback"),
+        ("The **Summer Dress** is safe for kids.", "fallback"),
+        ("The **Summer Dress** is gentle on sensitive skin.", "fallback"),
+        ("I can't confirm the **Summer Dress** is hypoallergenic.", "verified"),
+        ("The **Summer Dress** is cotton, but check the label for allergens.", "verified"),
+    ],
+)
+def test_fashion_reports_safety_promises(text, status, catalog):
+    report = check_grounding(text, catalog.get_many([3]))
+    assert (report.status == "fallback") is (status == "fallback"), report.issues
+
+
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [
+        ("**The Way of Kings** [id 3] is suitable for kids aged 8 and up.", "fallback"),
+        ("**The Way of Kings** [id 3] is fine for 10-year-olds.", "fallback"),
+        ("**The Way of Kings** [id 3] costs €9.99 in paperback.", "fallback"),
+        ("**The Way of Kings** [id 3] is in stock and ships within 24 hours.", "fallback"),
+        ("**The Way of Kings** [id 3] is available in hardcover.", "fallback"),
+        ("**The Way of Kings** [id 3] (★ 4.64); I can't check prices.", "verified"),
+        ("I can't say whether **The Way of Kings** [id 3] suits a 10-year-old.", "verified"),
+    ],
+)
+def test_books_report_age_safety_prices_and_store_claims(text, status, books, book_catalog):
+    assert books.check(text, book_catalog.get_many([3, 4])).status == status
+
+
+def test_the_readers_own_price_figure_may_be_repeated_as_theirs(books, book_catalog):
+    typed = "Fantasy under €15?"
+    text = (
+        "Books carry no prices, so I can't filter by your €15 budget: **The Way of Kings** [id 3]."
+    )
+    assert books.check(text, book_catalog.get_many([3]), typed).status == "verified"
+
+
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [
         # Each bullet is its own sentence: the rating before the next bullet's dash counts.
         ("- **The Way of Kings** - 4.64\n- **The Final Empire** - 4.43", "verified"),
         ("- **The Way of Kings** - 4.43\n- **The Final Empire** - 4.43", "fallback"),
@@ -308,3 +389,43 @@ def test_the_shoppers_own_figures_are_theirs_never_an_items(text, status):
 )
 def test_book_ratings_in_lists_and_page_totals(text, status, books, book_catalog):
     assert books.check(text, book_catalog.get_many([3, 4])).status == status
+
+
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [
+        (
+            "The **Mojito** [id 1] uses light rum, lime juice, mint, sugar and soda water.",
+            "verified",
+        ),
+        ("The **Mojito** [id 1] is made with white rum and mint.", "verified"),  # a synonym
+        ("The **Mojito** [id 1] is made with gin and mint.", "fallback"),
+        ("The **Daiquiri** [id 2] is a rum-based sour.", "verified"),
+        ("The **Daiquiri** [id 2] is a tequila-based sour.", "fallback"),
+        (
+            "**Daiquiri** [id 2]\n- 1 1/2 oz light rum\n- 1 oz lime juice\n- 1/2 oz grenadine",
+            "fallback",
+        ),
+        ("The **Mojito** [id 1]: 2 oz light rum, 1 oz lime juice and mint.", "verified"),
+        ("If you want gin, the **Daiquiri** [id 2] is not for you.", "verified"),  # hedged
+        ("The **Mojito** [id 1] uses rum, not gin.", "verified"),  # negated
+        ("Swap in your gin and the **Mojito** [id 1] becomes a twist.", "verified"),
+    ],
+)
+def test_cocktails_check_the_ingredients_said_to_be_in_a_drink(
+    text, status, cocktails, cocktail_catalog
+):
+    evidence = cocktail_catalog.get_many([1, 2, 3])
+    assert cocktails.check(text, evidence).status == status, cocktails.check(text, evidence)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The **Virgin Mojito** [id 3] is suitable for children.",
+        "The **Virgin Mojito** [id 3] is fine for kids.",
+        "The **Virgin Mojito** [id 3] is nut-free.",
+    ],
+)
+def test_cocktails_report_age_and_allergen_claims(text, cocktails, cocktail_catalog):
+    assert cocktails.check(text, cocktail_catalog.get_many([1, 2, 3])).status == "fallback"

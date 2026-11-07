@@ -4491,7 +4491,7 @@
    "domain": "fashion",
    "kind": "answer",
    "label": "false",
-   "note": "MISSED BY DESIGN: colours are not checked (they are Black)",
+   "note": "a wrong colour (they are Black)",
    "typed": "Black trousers under €30, please.",
    "answer": "The **Primo slacks** come in navy, a softer alternative to black.",
    "evidence": {

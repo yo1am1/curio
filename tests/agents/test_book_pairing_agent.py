@@ -90,8 +90,14 @@ def test_pairs_a_book_by_title_with_verified_drinks(agent):
     )
     reply = events[-1].reply
     assert reply.grounding.status == "verified"
-    # the book title, the drink name, its number and its alcohol label
-    assert reply.grounding.counts == {"title": 1, "id": 1, "name": 1, "alcohol": 1}
+    # the book title, the drink name, its number, its alcohol label and two ingredients
+    assert reply.grounding.counts == {
+        "title": 1,
+        "id": 1,
+        "name": 1,
+        "alcohol": 1,
+        "ingredient": 2,
+    }
     assert drinks(reply) == ["Manhattan", "Sazerac", "Martini"]
     assert reply.pairing is not None and reply.pairing.profile.source == "The Big Sleep"
     assert reply.books == []  # pairing shows drinks, not book cards

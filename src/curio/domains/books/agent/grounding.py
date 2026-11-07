@@ -6,19 +6,27 @@ from collections.abc import Callable, Iterable, Sequence
 from curio.domains.books.models import Book
 from curio.engine.grounding import (
     DASHES,
+    OTHER_CURRENCY,
+    SHOP_CLAIMS,
     Binder,
     Citation,
     Claim,
     FactCheck,
     Item,
     Tally,
+    amounts_in,
     any_of,
     check_bylines,
     check_ids,
     check_marked_names,
+    check_safety,
+    check_unsupported,
+    euro_claims,
+    hedged,
     marked_name,
     name_allowed,
     parse_number,
+    qualifier,
     same_number,
 )
 from curio.engine.schemas import GroundingReport
@@ -43,6 +51,14 @@ _BARE_RATING = re.compile(
     r"(?![ \t]*(?:%|€|eur|cm|mm|oz|ml|cl|hours?|million|m\b|k\b|[-\u2013\u2014][ \t]*\d))",
     re.IGNORECASE,
 )
+# Books carry no prices, formats or stock: a store claim in a book answer is invented.
+_BOOK_SHOP_CLAIMS = re.compile(
+    SHOP_CLAIMS.pattern
+    + r"|\bavailable (?:in|as|on|at|from) (?:paperback|hardcover|hardback|kindle|e-?books?|"
+    r"audiobooks?|amazon|(?:your |any |most )?(?:local )?(?:bookstores?|bookshops?|libraries))\b",
+    re.IGNORECASE,
+)
+_BOOK_SHOP_REASON = "the book catalog has no prices, formats, stock or delivery"
 # "320 pages", "a 300-page novel", "1,007 pp".
 _PAGES = re.compile(r"(?<![\d.,])(\d{1,2},\d{3}|\d{2,4})(?:\s+|-)(?:pages?|pp)\b", re.IGNORECASE)
 # "published in 1985", "first published 1937", "from 1985", "(1985)", "a 1960 novel".
@@ -146,6 +162,9 @@ class BookGroundingCheck:
       nearest book named in the sentence, else the last one named before) and must match
       it. A rating the reader typed counts only where the answer contradicts it. A page
       total ("2,786 pages in total") must add up the books named.
+    - Books carry no prices: currency amounts and stock, format, delivery or discount
+      claims are reported, and so are allergen and age-suitability promises ("suitable for
+      kids aged 8 and up").
     """
 
     def __init__(self, titles: Iterable[str], *, other_names: Iterable[str] = ()) -> None:
@@ -199,9 +218,12 @@ class BookGroundingCheck:
         citations: Sequence[Citation] = BOOK_CITATIONS,
         names: bool = True,
         skip_name: Callable[[str], bool] = lambda _: False,
+        shop: bool = True,
     ) -> None:
         """Add this answer's book facts to `tally`. With `names` False the caller checks
-        bold and quoted names itself (an evening answer names products and drinks too)."""
+        bold and quoted names itself (an evening answer names products and drinks too); with
+        `shop` False it checks prices, store and safety claims itself (an evening's outfit
+        has prices)."""
         id_pattern = citations[0].pattern
         checked, issues = check_ids(text, id_pattern, (b.book_id for b in evidence), "book")
         tally.counts["id"] += checked
@@ -219,6 +241,9 @@ class BookGroundingCheck:
             noun={"rating": "rating", "pages": "page count"},
             arithmetic=frozenset({"pages"}),
         ).check(book_claims(text), tally)
+        if shop:
+            check_book_prices(text, binder, typed, tally)
+            check_safety(text, tally)
         people = [author for b in evidence for author in b.authors]
         check_bylines(text, binder, tally, known=[*known, *people], typed=typed)
         if names:
@@ -257,6 +282,26 @@ class BookGroundingCheck:
             return True
         by = _BY.match(text[end:])
         return bool(by and self._others and self._others.match(text[end:], by.end()))
+
+
+def check_book_prices(text: str, binder: Binder, typed: str, tally: Tally) -> None:
+    """Books carry no prices: a currency amount, or a stock, format, delivery or discount
+    claim, is reported. The reader's own figure may be repeated as theirs ("your €20
+    budget", "the €9.99 you saw") or in a hedged clause ("I can't check prices")."""
+    typed_amounts = amounts_in(typed)
+    for claim in euro_claims(text):
+        sentence = binder.sentence(claim.start)
+        framing = qualifier(text, claim.start, claim.end, sentence)
+        own = any(abs(claim.value - t) < 1e-9 for t in typed_amounts)
+        if own and (framing.budget or framing.contradicted or framing.mode != "exact"):
+            continue
+        if hedged(text, claim.start):
+            continue
+        tally.add("price", False, f"{text[claim.start : claim.end]}: {_BOOK_SHOP_REASON}")
+    for match in OTHER_CURRENCY.finditer(text):
+        if not hedged(text, match.start()):
+            tally.add("price", False, f"{match.group(0)}: {_BOOK_SHOP_REASON}")
+    check_unsupported(text, _BOOK_SHOP_CLAIMS, tally, reason=_BOOK_SHOP_REASON)
 
 
 def _checkable_title(title: str) -> bool:
