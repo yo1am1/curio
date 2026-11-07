@@ -291,3 +291,87 @@ def test_uploads_are_decoded_only_as_png_or_jpeg(services, fmt) -> None:
         Image.new("RGB", (8, 8), "red").save(jpeg, format="JPEG")
         ok = client.post("/search/image", files={"file": ("a.jpg", jpeg.getvalue())})
         assert ok.status_code == 200
+
+
+# --- Response headers, Host check and the docs UI ---------------------------------------------
+
+
+def test_every_response_carries_the_security_headers(cocktail_catalog, tmp_path) -> None:
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><title>Curio</title>")
+    cocktails = CocktailServices(cocktail_catalog, CocktailRecommender(cocktail_catalog))
+    app = create_app(serve(cocktails=cocktails), web_dist=dist, settings=settings())
+    with TestClient(app) as client:
+        responses = [
+            client.get("/health"),
+            client.get("/ask/cocktails", headers={"accept": "text/html"}),  # the SPA
+            client.get("/cocktails/999999"),  # an error
+            client.post("/cocktails/search", content=b"x" * (2 * 1024 * 1024)),  # a 413
+        ]
+    assert [r.status_code for r in responses] == [200, 200, 404, 413]
+    for response in responses:
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+        assert response.headers["x-frame-options"] == "DENY"
+        policy = dict(
+            part.strip().split(" ", 1)
+            for part in response.headers["content-security-policy"].split(";")
+        )
+        assert policy["default-src"] == "'self'"
+        assert policy["script-src"] == "'self'"
+        assert policy["frame-ancestors"] == "'none'"
+        assert policy["connect-src"] == "'self'"
+        assert policy["object-src"] == "'none'"
+        images = policy["img-src"].split()
+        assert "https://www.thecocktaildb.com" in images
+        assert "https://images.gr-assets.com" in images
+        assert "https://covers.openlibrary.org" in images
+        assert "data:" not in images and "*" not in images and "https:" not in images
+
+
+def test_requests_under_a_foreign_host_name_are_refused(cocktail_catalog) -> None:
+    """DNS rebinding: a page on attacker.example resolving to 127.0.0.1 sends its own Host."""
+    cocktails = CocktailServices(cocktail_catalog, CocktailRecommender(cocktail_catalog))
+    app = create_app(
+        serve(cocktails=cocktails), settings=settings(allowed_hosts="localhost,127.0.0.1")
+    )
+    with TestClient(app, base_url="http://127.0.0.1:8000") as client:
+        assert client.get("/health").status_code == 200
+        assert client.get("/health", headers={"host": "localhost:8000"}).status_code == 200
+        rebound = client.get("/health", headers={"host": "attacker.example"})
+        assert rebound.status_code == 400
+        chat = client.post("/chat", json=CHAT, headers={"host": "attacker.example:8000"})
+        assert chat.status_code == 400
+
+
+def test_allowed_hosts_default_to_loopback_names_and_are_configurable(monkeypatch) -> None:
+    monkeypatch.delenv("ALLOWED_HOSTS", raising=False)
+    assert Settings(_env_file=None).allowed_hosts == ("localhost", "127.0.0.1")
+    monkeypatch.setenv("ALLOWED_HOSTS", " curio.lan, LOCALHOST ")
+    assert Settings(_env_file=None).allowed_hosts == ("curio.lan", "localhost")
+
+
+def test_the_docs_ui_is_off_by_default(cocktail_catalog) -> None:
+    cocktails = CocktailServices(cocktail_catalog, CocktailRecommender(cocktail_catalog))
+    with TestClient(create_app(serve(cocktails=cocktails), settings=settings())) as client:
+        assert client.get("/docs").status_code == 404
+        assert client.get("/redoc").status_code == 404
+        assert client.get("/openapi.json").status_code == 200  # the schema stays available
+
+
+def test_the_opt_in_docs_ui_loads_pinned_assets_with_sri(cocktail_catalog) -> None:
+    cocktails = CocktailServices(cocktail_catalog, CocktailRecommender(cocktail_catalog))
+    app = create_app(serve(cocktails=cocktails), settings=settings(api_docs=True))
+    with TestClient(app) as client:
+        page = client.get("/docs")
+        init = client.get("/docs/init.js")
+    assert page.status_code == 200 and init.status_code == 200
+    assert "swagger-ui-dist@5.33.3/swagger-ui-bundle.js" in page.text
+    assert page.text.count('integrity="sha384-') == 2
+    assert "swagger-ui-dist@5/" not in page.text  # no floating major version
+    assert "<script>" not in page.text  # nothing inline: the app's script-src has no hashes
+    assert "SwaggerUIBundle(" in init.text
+    policy = page.headers["content-security-policy"]
+    assert "script-src 'self' https://cdn.jsdelivr.net" in policy
+    assert "frame-ancestors 'none'" in policy

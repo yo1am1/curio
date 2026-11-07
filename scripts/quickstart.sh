@@ -17,10 +17,12 @@
 #
 # Environment: CURIO_BOOKS (1), CURIO_WEB_BUILD (1; 0 never builds the web app),
 # ENABLED_DOMAINS (default: cocktails,books; a domain whose data is not prepared is skipped),
-# DATA_DIR (data), CURIO_PORT (8000), CURIO_HOST (127.0.0.1).
+# DATA_DIR (data), CURIO_PORT (8000), CURIO_HOST (127.0.0.1), ALLOWED_HOSTS
+# (localhost,127.0.0.1, plus CURIO_HOST when it names one address).
 #
 # The server listens on this computer only. CURIO_HOST=0.0.0.0 opens Curio to your network:
-# anyone who can reach it can use the app and the API, and chat on your LLM key.
+# anyone who can reach it can use the app and the API, and chat on your LLM key. The API
+# answers only the host names in ALLOWED_HOSTS, so add the name or address others will use.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -30,6 +32,10 @@ HOST="${CURIO_HOST:-127.0.0.1}"
 export ENABLED_DOMAINS="${ENABLED_DOMAINS:-cocktails,books}"
 export DATA_DIR="${DATA_DIR:-data}"
 export WEB_DIST="web/dist"
+export ALLOWED_HOSTS="${ALLOWED_HOSTS:-localhost,127.0.0.1}"
+if [[ "$HOST" != 0.0.0.0 && "$HOST" != 127.0.0.1 && "$HOST" != localhost ]]; then
+    ALLOWED_HOSTS="${ALLOWED_HOSTS},${HOST}"  # the URL printed below names it
+fi
 # The health check talks to the local server, never through an HTTP proxy.
 export NO_PROXY="127.0.0.1,localhost${NO_PROXY:+,$NO_PROXY}"
 export no_proxy="$NO_PROXY"
@@ -130,7 +136,8 @@ PY
 
 if [[ "$HOST" != 127.0.0.1 && "$HOST" != localhost ]]; then
     echo "    Warning: CURIO_HOST=${HOST} serves Curio beyond this computer; anyone who can" \
-        "reach it can use the app, the API and the chat on your LLM key." >&2
+        "reach it can use the app, the API and the chat on your LLM key. It answers the" \
+        "host names in ALLOWED_HOSTS (${ALLOWED_HOSTS}); add the one others will use." >&2
 fi
 
 say "Curio is ready: open ${URL} (Ctrl+C stops it)"

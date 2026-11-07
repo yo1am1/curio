@@ -132,6 +132,15 @@ def test_the_server_opens_to_the_network_only_on_request_and_says_so(tmp_path):
     assert option(uvicorn, "--port") == "18000"
     assert "open http://127.0.0.1:18000" in output
     assert "Warning: CURIO_HOST=0.0.0.0 serves Curio beyond this computer" in output
+
+
+def test_opening_the_network_names_the_hosts_the_api_answers(tmp_path):
+    _, output = run_quickstart(tmp_path, CURIO_HOST="0.0.0.0", ALLOWED_HOSTS=None)
+    assert "host names in ALLOWED_HOSTS (localhost,127.0.0.1)" in output
+    (tmp_path / "ip").mkdir()
+    _, output = run_quickstart(tmp_path / "ip", CURIO_HOST="192.168.1.20", ALLOWED_HOSTS=None)
+    # The address the script prints (and health-checks) is allowed.
+    assert "ALLOWED_HOSTS (localhost,127.0.0.1,192.168.1.20)" in output
     assert "LLM key" in output
 
 

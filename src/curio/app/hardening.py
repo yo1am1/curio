@@ -166,3 +166,121 @@ async def _too_large(send: Send, detail: str) -> None:
         }
     )
     await send({"type": "http.response.body", "body": body})
+
+
+# --- Response headers -------------------------------------------------------------------------
+
+# Where the web app loads pictures from besides itself: recipe photos (TheCocktailDB), book
+# covers (Goodreads, then Open Library, whose covers redirect to archive.org) and `blob:` for
+# the preview of a photo being uploaded. Model text cannot add hosts: chat Markdown renders
+# no images at all, and this list keeps any other image URL from loading.
+IMAGE_SOURCES = (
+    "'self'",
+    "blob:",
+    "https://www.thecocktaildb.com",
+    "https://images.gr-assets.com",
+    "https://covers.openlibrary.org",
+    "https://archive.org",
+    "https://*.archive.org",
+)
+# Swagger UI for /docs (only with API_DOCS=true), pinned to one release with SRI hashes.
+SWAGGER_CDN = "https://cdn.jsdelivr.net"
+SWAGGER_JS = f"{SWAGGER_CDN}/npm/swagger-ui-dist@5.33.3/swagger-ui-bundle.js"
+SWAGGER_JS_SRI = "sha384-h00llMzD1afyNow1pDmnZKlHsUZgp9KE9HXLFXF2CvbwsBY0+WBO4f75SfGwvM4K"
+SWAGGER_CSS = f"{SWAGGER_CDN}/npm/swagger-ui-dist@5.33.3/swagger-ui.css"
+SWAGGER_CSS_SRI = "sha384-Ov4/wv3j2bmct8cDc5X4ngJZohVPzEmc6uDPH8WeljUxO5vtoykvMEfbu9Vh6RaW"
+
+
+def _policy(**directives: str) -> str:
+    return "; ".join(f"{name.replace('_', '-')} {value}" for name, value in directives.items())
+
+
+# Scripts, styles, fonts and API calls come from the app's own origin only. Inline styles
+# stay allowed: `motion` sets element styles and injects a <style> element for some
+# animations; scripts never run inline.
+APP_POLICY = _policy(
+    default_src="'self'",
+    script_src="'self'",
+    style_src="'self' 'unsafe-inline'",
+    img_src=" ".join(IMAGE_SOURCES),
+    font_src="'self'",
+    connect_src="'self'",
+    object_src="'none'",
+    base_uri="'self'",
+    form_action="'self'",
+    frame_ancestors="'none'",
+)
+DOCS_POLICY = _policy(
+    default_src="'self'",
+    script_src=f"'self' {SWAGGER_CDN}",
+    style_src=f"'self' 'unsafe-inline' {SWAGGER_CDN}",
+    img_src="'self' data:",
+    connect_src="'self'",
+    object_src="'none'",
+    base_uri="'self'",
+    form_action="'self'",
+    frame_ancestors="'none'",
+)
+DOCS_PATHS = ("/docs", "/docs/init.js")
+BASE_HEADERS = {
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "x-frame-options": "DENY",
+}
+
+
+class SecurityHeaders:
+    """ASGI middleware: CSP, nosniff, referrer policy and frame protection on every
+    response (a route's own value for a header wins)."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        policy = DOCS_POLICY if scope["path"] in DOCS_PATHS else APP_POLICY
+        added = {**BASE_HEADERS, "content-security-policy": policy}
+
+        async def with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                present = {name.lower() for name, _ in message.get("headers", [])}
+                extra = [
+                    (name.encode(), value.encode())
+                    for name, value in added.items()
+                    if name.encode() not in present
+                ]
+                message = {**message, "headers": [*message.get("headers", []), *extra]}
+            await send(message)
+
+        await self.app(scope, receive, with_headers)
+
+
+def swagger_page(title: str, openapi_url: str) -> str:
+    """The /docs page: the pinned Swagger UI with SRI, started by a same-origin script."""
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{title} - Swagger UI</title>
+<link rel="stylesheet" href="{SWAGGER_CSS}" integrity="{SWAGGER_CSS_SRI}" crossorigin="anonymous">
+</head>
+<body>
+<div id="swagger-ui" data-openapi-url="{openapi_url}"></div>
+<script src="{SWAGGER_JS}" integrity="{SWAGGER_JS_SRI}" crossorigin="anonymous"></script>
+<script src="/docs/init.js"></script>
+</body>
+</html>
+"""
+
+
+SWAGGER_INIT = """const root = document.getElementById("swagger-ui");
+window.ui = SwaggerUIBundle({
+  url: root.dataset.openapiUrl,
+  dom_id: "#swagger-ui",
+  deepLinking: true,
+  presets: [SwaggerUIBundle.presets.apis],
+  layout: "BaseLayout",
+});
+"""

@@ -53,11 +53,28 @@ class Settings(BaseSettings):
     # characters) fits in 1 MiB.
     max_body_bytes: int = Field(default=1024 * 1024, ge=64 * 1024, le=64 * 1024 * 1024)
 
+    # --- HTTP -------------------------------------------------------------
+    # Host names (the Host header, without the port) the API answers; others get 400. This
+    # stops DNS rebinding: a web page cannot reach a local Curio under its own domain name.
+    # Add the names browsers use when serving a network (CURIO_HOST); "*" turns it off.
+    allowed_hosts: Annotated[tuple[str, ...], NoDecode] = ("localhost", "127.0.0.1")
+    # Swagger UI at /docs (pinned, SRI-checked assets from jsDelivr). Off by default: it is a
+    # developer aid and would run third-party script on the app's origin. /openapi.json is
+    # always served.
+    api_docs: bool = False
+
     # --- Web app ----------------------------------------------------------
     # The built React app (`npm run build` in web/). The API serves it beside its own routes
     # whenever the folder holds a build; SERVE_WEB=false turns that off.
     web_dist: Path = Path("web/dist")
     serve_web: bool = True
+
+    @field_validator("allowed_hosts", mode="before")
+    @classmethod
+    def _split_hosts(cls, value: object) -> object:
+        if isinstance(value, str):
+            return tuple(part.strip().lower() for part in value.split(",") if part.strip())
+        return value
 
     @field_validator("enabled_domains", mode="before")
     @classmethod

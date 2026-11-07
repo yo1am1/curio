@@ -843,7 +843,8 @@ every fashion endpoint (`/products`, `/sections`, `/search`, `/outfits`, `/users
 `/chat` returns 503 when the requested domain is not served or has no assistant (no LLM);
 the detail says which. The flat `chat_enabled`, `ranking_enabled` and catalog counts in
 `/health` describe fashion and read `false`/`0` without it. The API title and
-version shown at `http://localhost:8000/docs` come from the installed package metadata.
+version in `/openapi.json` (and at `/docs` with `API_DOCS=true`) come from the installed
+package metadata.
 
 ## Offline evaluation
 

@@ -22,6 +22,11 @@ with credit to you unless you ask otherwise.
   `127.0.0.1` and does not publish Qdrant at all. `CURIO_HOST` opens either to a network on
   purpose (`CURIO_HOST=0.0.0.0`, plus your host name in `ALLOWED_HOSTS`); put an
   authenticating reverse proxy in front if anyone you do not trust can reach it.
+- The API answers only the host names in `ALLOWED_HOSTS` (default `localhost,127.0.0.1`), so
+  a web page cannot reach a local Curio through DNS rebinding. Responses carry a
+  Content-Security-Policy, `nosniff`, a referrer policy and frame protection, and the chat
+  never renders images from model text, so a prompt-injected answer cannot make the browser
+  send data to another host. `/docs` is off unless `API_DOCS=true`.
 - LLM keys come from the environment (`.env`) and are never written to logs, traces or
   replies. Never commit a `.env` file.
 - Agent approvals are HMAC-signed with `AGENT_SIGNING_KEY`. Left empty, each process uses a

@@ -14,13 +14,27 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    Response,
+    StreamingResponse,
+)
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from curio.app.config import Settings, get_settings
 from curio.app.demo import DemoCustomer
-from curio.app.hardening import BodySizeLimit, SlotStreamingResponse, TurnSlots
+from curio.app.hardening import (
+    SWAGGER_INIT,
+    BodySizeLimit,
+    SecurityHeaders,
+    SlotStreamingResponse,
+    TurnSlots,
+    swagger_page,
+)
 from curio.app.schemas import AssistantReply, ChatRequest, Domain, TurnContext
 from curio.app.services import (
     BOOKS,
@@ -409,6 +423,8 @@ def create_app(
         title="Curio Recommendation API",
         version=version("curio-recommendations"),
         lifespan=lifespan,
+        docs_url=None,  # see API_DOCS below
+        redoc_url=None,
     )
 
     app.add_middleware(
@@ -419,6 +435,21 @@ def create_app(
         ),
         limits={"/search/image": (MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES, UPLOAD_TOO_LARGE)},
     )
+    app.add_middleware(SecurityHeaders)
+    # Outermost: a request under a foreign Host name is refused before anything else runs.
+    app.add_middleware(
+        TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts), www_redirect=False
+    )
+
+    if settings.api_docs:
+
+        @app.get("/docs", include_in_schema=False)
+        def swagger_ui() -> HTMLResponse:
+            return HTMLResponse(swagger_page(app.title, app.openapi_url or "/openapi.json"))
+
+        @app.get("/docs/init.js", include_in_schema=False)
+        def swagger_init() -> Response:
+            return Response(SWAGGER_INIT, media_type="text/javascript")
 
     @app.exception_handler(IndexNotBuiltError)
     async def index_not_built(_: Request, error: IndexNotBuiltError) -> JSONResponse:

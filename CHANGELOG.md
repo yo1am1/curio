@@ -26,6 +26,19 @@ All notable changes to Curio are recorded here. The format follows
 - Uploaded images are decoded only as PNG or JPEG (what the UI offers): other formats get
   the existing 400 "Upload a valid PNG or JPEG image." without reaching Pillow's other
   parsers.
+- Every response carries a Content-Security-Policy (scripts, styles, fonts and requests from
+  the app's own origin; images also from the recipe and cover hosts the app shows;
+  `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin` and `X-Frame-Options: DENY`.
+- Host check against DNS rebinding: requests whose `Host` is not in `ALLOWED_HOSTS`
+  (default `localhost,127.0.0.1`) get **400**. Docker Compose passes `ALLOWED_HOSTS` through,
+  and `scripts/quickstart.sh` adds a `CURIO_HOST` that names one address.
+- The chat renders no Markdown images: model text such as `![](https://host/?q=...)` can no
+  longer make the browser call another site. Links still render.
+- `/docs` (Swagger UI) and `/redoc` are **off by default (404)**: they loaded an unpinned
+  `swagger-ui-dist@5` script from jsDelivr, without SRI, on the app's origin. `API_DOCS=true`
+  serves `/docs` with swagger-ui-dist 5.33.3 pinned by SRI hash and no inline script;
+  `/redoc` is gone. `/openapi.json` is unchanged.
 
 ### Removed
 

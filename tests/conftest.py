@@ -1,6 +1,7 @@
 """Shared fixtures: a fake encoder, a tiny catalog and an in-memory vector store."""
 
 import hashlib
+import os
 from collections.abc import Iterator, Sequence
 
 import numpy as np
@@ -12,6 +13,9 @@ from qdrant_client import QdrantClient
 from curio.domains.fashion.catalog import ProductCatalog
 from curio.domains.fashion.models import Product
 from curio.domains.fashion.vector_store import ProductVectorStore
+
+# Starlette's TestClient sends `Host: testserver`; the API answers only ALLOWED_HOSTS.
+os.environ["ALLOWED_HOSTS"] = "localhost,127.0.0.1,testserver"
 
 
 class FakeEncoder:
