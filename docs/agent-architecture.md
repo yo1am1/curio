@@ -38,7 +38,7 @@ engine, without the app.
 |---|---|---|---|---|
 | Toolkit | `domains/fashion/agent/` | `domains/cocktails/agent/` | `domains/books/agent/`; PairCocktail from `domains/pairings/agent/` | `domains/evening/agent/` |
 | Planning | Structured `SearchIntent` from the LLM, then an initial catalog search | The message is the query; no extra model call before the tool loop | As cocktails | As cocktails; the plan step lists the remembered tastes of every domain |
-| Grounding | Prices bound to their product, totals and budgets, product IDs and names, other currencies, percentages, stock and delivery claims | Drink IDs and names, recipe amounts bound to their drink, alcohol labels, allergen and health claims | Book IDs and titles, authors, ratings, page counts and years bound to their book; paired drinks as in cocktails | All of these, against the plan's parts |
+| Grounding | Prices and colours bound to their product, totals, differences and budgets, product IDs and names, other currencies, percentages, stock, delivery and safety claims | Drink IDs and names, recipe amounts and ingredients bound to their drink, alcohol labels, allergen and health claims | Book IDs and titles, authors, ratings, page counts (and their totals) and years bound to their book; prices, store and age-safety claims; paired drinks as in cocktails | All of these, against the plan's parts |
 | Reply items | `products` | `cocktails` | `books`; a pairing's drinks in `cocktails` and `pairing` | The plan in `evening`; its pieces, book and drink in `products`, `books`, `cocktails` |
 
 The engine owns everything shared: the tool-call and time budgets, policy enforcement,
@@ -335,20 +335,41 @@ evidence). The fact must then match *that* item:
 | Page count, year | books, evening | That book's pages (within 5%, "a 300-page novel") and publication year ("published in", "from", "(1985)"). |
 | Recipe amount | cocktails, pairings, evening | An amount in that drink's recipe ("1 1/2 oz"). |
 | Percentage | fashion, evening | Must appear in that product's description ("100% cotton"). |
+| Colour | fashion, evening | A colour word within a few words of a product in its sentence ("**Tambov** – navy", "the **Paris Trench** (beige)", "the navy **Tambov**", or a "Colour:" line under it) must fit its catalog colour. A plain word covers the catalog's shades ("beige" for Light Beige, "white" for Off White), but a shade must be the catalog's ("light grey" is not Grey); "navy" is Dark Blue, "gray" grey, "golden" gold. Colours in a hedged or negated clause ("if you'd like black", "not navy"), about the shopper ("your white sneakers"), across a turn ("black, but the **Waverly hoodie**"), of a part or another thing ("a gold buckle", "a white shirt") or of food ("orange juice") are not read. |
+| Ingredient | cocktails, pairings, evening | An ingredient said to be in a drink must be in its recipe: the sentence names the drink and a recipe word ties them ("uses", "made with", "is", a colon, dash or table cell before the list), or it is "<ingredient>-based", or its sentence or bullet lists amounts or only ingredients ("- 8 oz ginger beer" under the drink). A name may be more or less precise than the recipe's ("rum" for Light rum, "lime juice" for Lime), and a few synonyms count (white/light rum, Cointreau/triple sec). The shopper's own ("your ginger beer"), hedged or negated mentions ("if you want ginger beer", "not ginger beer"), substitutes ("swap in"), ingredients in drink or glass names and tool text the answer repeats are not read; nor are ice and water. |
 | Author | books, evening | "<title> by <name>" must name one of that book's authors. |
 | Alcohol label | cocktails, pairings, evening | "Alcohol-free", "non-alcoholic", "mocktail" only for a drink marked non-alcoholic; "contains alcohol" for one with alcohol or alcohol optional; "alcohol optional" only for an optional one. Negated labels flip ("not alcohol-free"). A plural label with no drink in its sentence ("All of these are alcohol-free:") covers the list after it. |
 
 A number bound to no item is allowed only if it equals a value the tools stated without an
 item: an outfit's or evening's total, its budget, what is left, the cheapest option of a
 gap, a price filter or a remembered limit. Otherwise it is reported as *unattributed*. An
-unbound "under €30" must hold for every item the answer names. Differences between two
-prices are no longer allowed: no tool states one, and "€5 off" was the audit's example of
-an invented discount that the old whitelist passed.
+unbound "under €30" must hold for every item the answer names.
+
+**Totals, differences and multiples are verified, not whitelisted.** A price or page count
+that matches no item may be a sum or a difference of the items' values. It is accepted when
+its words frame it so and it adds up: a total anywhere in its sentence ("together that's
+€74.98", "Buying both would be €46.98", "| **Total** | €23.97 |", "2,786 pages in total"),
+a difference in its own clause ("so the Waverly is €5.00 cheaper", "but €5 less", "saves
+you €5", "466 pages longer", "€6.98 over your budget" against the shopper's budget), or a
+multiple ("4 pairs for €23.96", "two of them come to €11.98"). The operands are the items
+the sentence names, or, when it names fewer than two, the items the answer names (any two
+or more of them for a total); an answer that names none may give the total of everything
+the tools returned. It must match to the cent, or to the precision written ("€76" for
+€75.96, "about 1,200 pages" for 1,157, but not "about 1,203"). A wrong total or difference
+is reported. A difference never makes a discount: "€5 off", "on sale" or "discounted"
+anywhere in the sentence is a discount claim, so the audit's "€5 off" probe is still caught.
+A price stated for one item stays that item's price even in a sentence that says "cheaper"
+("the cheaper option at €19.99" is checked against that product). When a sentence names n
+items and then lists n facts of one kind joined only by "and", commas or "respectively"
+("rated 4.53 and 4.46 respectively"), the k-th fact binds to the k-th item.
 
 **What the shopper typed is not evidence.** A number the shopper typed may appear only as
-their own figure: in a budget or limit ("under €30", "your €100 budget"), attributed to them
-("the €4.99 your friend saw"), or contradicted ("€8.99, not €4.99", "isn't rated 4.5").
-"Yes, it's €4.99" for an €8.99 dress binds €4.99 to the dress and is reported. A question
+their own figure: in a budget or limit ("under €30", "your €100 budget", "within €40", "a
+€50 limit"), attributed to them ("the €4.99 your friend saw", "you mentioned €4.99"),
+contradicted ("€8.99, not €4.99", "isn't rated 4.5"), or compared against in a clause that
+names no item and is not about a single one ("the last two are over €50"). "Yes, it's
+€4.99" or "Yes, the dress is under €20" for an €8.99 dress binds the figure to the dress
+and is reported. A question
 or quick reply may suggest a budget ("Something under €20?"). Names the shopper typed may
 be repeated ("*The Seven Moons of Maali Almeida* isn't in the catalog").
 
@@ -365,14 +386,19 @@ books**") are skipped. In fashion, a sentence-case span counts when it is a cata
 name. So a book, drink or brand outside the catalog ("**Paper Plane**", "**Nike Air Max
 90**") is caught.
 
-**Claims no data supports.** Allergen, dietary, health and age-safety promises ("nut-free",
-"gluten-free", "safe for kids", "safe during pregnancy", "vegan", "caffeine-free",
-"healthy") in cocktail, book (paired drinks) and evening answers, and stock, size,
-delivery and discount promises ("in stock", "ships tomorrow", "20% off") in fashion and
-evening answers, are always reported, unless the clause negates or hedges them ("I can't
-guarantee it's nut-free", "check whether it's gluten-free"). Amounts in dollars, pounds or
-yen are reported in fashion and evening answers, even the shopper's own figure: the answer
-should say how the budget was read in euros.
+**Claims no data supports.** Allergen, skin-health and age-suitability promises
+("nut-free", "hypoallergenic", "gentle on sensitive skin", "safe for kids", "suitable for
+children", "fine for 8-year-olds", "ages 8 and up") are reported in every domain; drinks
+add dietary and health promises ("vegan", "caffeine-free", "healthy", "safe during
+pregnancy"). Stock, size, delivery and discount promises ("in stock", "ships tomorrow",
+"20% off") are reported in fashion, book and evening answers, and a book answer's prices
+and formats too ("€9.99 in paperback", "available in hardcover"): books carry none. Each is
+reported unless the clause before negates or hedges it ("I can't guarantee it's nut-free",
+"check whether it's gluten-free"), or, for safety, the rest of the sentence hedges it ("...
+but check the label"), or the product's own description says it. A reader's own figure may
+be repeated as theirs in a book answer ("I can't filter by your €15 budget"). Amounts in
+dollars, pounds or yen are reported in fashion, book and evening answers, even the
+shopper's own figure: the answer should say how the budget was read in euros.
 A sentence that repeats tool text word for word (an evening swap's "An alcohol-free drink:
 Figgy Thyme → Masala Chai") is the tool's own.
 
@@ -393,8 +419,8 @@ as "Empty answer"), is checked too, so its report says what it states.
 matched; `not_applicable` when the answer stated nothing checkable; `repaired` when the
 rewrite passed; `fallback` when catalog facts replaced the answer. `checked` counts the
 facts of the first check and `counts` splits them by kind (`price`, `id`, `rating`, `title`,
-`name`, `author`, `amount`, `alcohol`, `pages`, `year`, `percent`, `claim`; `fact` for
-toolkits that do not split them). The trace's "Grounding check" step and the UI badge say
+`name`, `author`, `amount`, `alcohol`, `pages`, `year`, `percent`, `colour`, `ingredient`,
+`claim`; `fact` for toolkits that do not split them). The trace's "Grounding check" step and the UI badge say
 what was checked: "Checked 3 prices and 2 names against the catalog" (three kinds at most,
 then "N other facts"). Nothing is shown for `not_applicable`. "Self-corrected to match the
 catalog" and "Unverified answer replaced with catalog facts" keep their labels; their
@@ -415,12 +441,13 @@ prepared catalogs, and the euro figures the tools stated without an item), by
 | The audit's 13 probes (F1), on the test fixtures | 13 | 13 | | |
 | Real-model texts of the first evaluation run (39 answers, 4 questions) | | | 43 | 0 |
 | Scripted end-to-end model, eval dry run plus its e2e scenarios | 4 (its deliberate inventions) | 4 | 68 | 1 |
-| Written for this corpus, on the evidence of real turns | 49 | 46 | 35 | 0 |
-| **Total** | **66** | **63 (recall 0.955)** | **146** | **1 (false-alarm rate 0.007)** |
+| Written for this corpus, on the evidence of real turns | 49 | 47 | 35 | 0 |
+| **Total** | **66** | **64 (recall 0.970)** | **146** | **1 (false-alarm rate 0.007)** |
 
-The three misses are kept on purpose and are misses by design: a wrong colour, a wrong
-glass and a wrong genre ("Gone Girl is a gentle cosy mystery"). Colours, glasses, genres,
-descriptions, plot and shelves are not checked. The false alarm is the scripted model's
+The two misses are kept on purpose and are misses by design: a wrong glass and a wrong
+genre ("Gone Girl is a gentle cosy mystery"). Glasses, genres, descriptions, plot and
+shelves are not checked. (Before v2.1 the wrong colour, "The **Primo slacks** come in navy",
+was a third; colours are checked now.) The false alarm is the scripted model's
 evening answer for "budget $150", whose "why it works" line repeats the shopper's "$150":
 nothing in it is false, but every non-euro amount is reported, so it is rewritten (the
 evaluation's dollar-budget task wants no "$" in the answer either). On the same corpus the previous check
@@ -433,6 +460,29 @@ relay and stub texts, so the corpus is not a held-out test: it shows the check c
 listed failure classes and flags only one of these 146 texts, not how it does on a new model's
 answers. The real-model sample is one run of 39 answers.
 
+### Held-out sets
+
+A held-out set is written blind: by someone who has not seen the check, after it was
+frozen, on the evidence of real catalog items. `tests/agents/grounding_heldout/v1.json` (laid
+out like the corpus by `grounding_heldout/build.py`) holds the first: 80 answers in fashion,
+cocktails and books, 39 false and 41 correct.
+
+| Held-out v1 | False answers caught | Correct answers flagged |
+|---|---|---|
+| Blind, grounding v2 before the fixes | 33 of 39 (recall 0.846) | 7 of 41 (false-alarm rate 0.171) |
+| Grounding v2.1, after using it for development, no longer blind | 39 of 39 (recall 1.000) | 0 of 41 (false-alarm rate 0.000) |
+
+The blind result was far below the corpus's in-sample numbers (0.955 and 0.007). The seven
+false alarms were all arithmetic (a total, a difference or the shopper's "over €50"
+reported as an item's wrong price); the six misses were a colour, a hypoallergenic claim,
+an ingredient ("ginger beer" for a recipe with ginger ale), a book's age suitability, a
+book's price and shipping, and another book's rating, which slipped through because a bare
+rating before the next bullet's dash was not read. Each was fixed by category (the rules
+above), never by string, and the corpus gate still holds. The second row is a regression
+floor (`test_grounding_heldout.py`), not an estimate: the set shaped the fixes, so it can no
+longer say how the check does on answers it has not seen. A second blind set (v2), written
+after these fixes, follows, and its numbers are the ones to quote.
+
 ### Limits
 
 - Binding is positional. A price in a sentence that names one product but describes
@@ -441,9 +491,14 @@ answers. The real-model sample is one run of 39 answers.
   binds to the last one named.
 - A fact that equals a total, budget or remainder the tools stated passes wherever it
   stands, even bound to the wrong item.
-- Colours, materials (other than percentages), sizes, glasses, genres, shelves, series
-  positions, descriptions, plot and ratings counts are not checked; nor is whether a
-  recommendation fits the request.
+- Materials (other than percentages), sizes, glasses, genres, shelves, series positions,
+  descriptions, plot and ratings counts are not checked; nor is whether a recommendation
+  fits the request. Colours are read only next to a product and in the base words the
+  catalog uses ("cream", "charcoal" or "olive" are not read); ingredients only where the
+  answer ties them to a named drink.
+- A total, difference or multiple is accepted when it adds up for some of the items the
+  answer names, so a sum that happens to equal the wrong subset passes; one that names its
+  items by pronoun ("both Dune books" with one named) may be reported.
 - A drink called alcohol-free in a sentence that names no drink, without a list after it,
   is not checked.
 - The checks read English phrasing; another language passes unchecked.
@@ -513,9 +568,9 @@ actions. Gaps addressed here:
   the other (the drink from the book), not jointly, and nothing checks that the outfit's
   colours suit the book or drink.
 - The grounding check verifies prices, IDs, names, titles, authors, ratings, page counts,
-  years, recipe amounts and alcohol labels, each bound to its item, and reports safety, stock
-  and foreign-currency claims; it does not verify descriptive claims (see "Grounding
-  guardrail").
+  years, recipe amounts, ingredients, colours and alcohol labels, each bound to its item, and
+  totals and differences of them, and reports safety, stock and foreign-currency claims; it
+  does not verify other descriptive claims (see "Grounding guardrail").
 - A book title that is a single short word ("Dune") is checked only when the answer marks
   it (bold, italic or quoted); one that is also a common word ("It") never is, so the agent
   could name such a book without evidence.

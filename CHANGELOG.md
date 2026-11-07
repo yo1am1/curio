@@ -48,6 +48,22 @@ All notable changes to Curio are recorded here. The format follows
   wrong authors, wrong alcohol labels, allergen, diet, health and age-safety promises,
   stock and delivery promises, percentages not in the description and non-euro amounts in
   fashion and evening answers (as before, even the shopper's own "$150") are reported.
+- **Grounding v2.1: the misses and false alarms of the first blind held-out set.** On 80
+  answers written blind (`tests/agents/grounding_heldout/v1.json`) v2 caught 33 of 39 false
+  answers (recall 0.846) and flagged 7 of 41 correct ones (0.171). Fixed by category: a
+  total, difference or multiple of the named items' prices or page counts ("together that's
+  €74.98", "€5 cheaper", "4 pairs for €23.96", "2,786 pages in total") is verified rather
+  than reported as unattributed, and a wrong one is caught, while "€5 off" stays a discount
+  claim; "over €50" against the shopper's own €50 is their figure; allergen, skin-health
+  and age-suitability promises ("hypoallergenic", "suitable for kids aged 8 and up") are
+  reported in every domain; a book answer's prices, stock, formats and delivery are
+  reported; an ingredient said to be in a drink ("the Moscow Mule ... 8 oz ginger beer")
+  must be in its recipe; a colour word next to a product must fit its catalog colour
+  ("navy" for a grey sweater). Two binding bugs went too: a bare rating at the end of a
+  bullet was skipped when the next bullet began with a dash (so "Goblet of Fire – 4.46",
+  another book's rating, passed), and a name ending in a period ("Curvy Jegging HW.") ended
+  its sentence. After using it for development (no longer blind) v1 scores 39/39 and 0/41;
+  the corpus 64/66 (0.970) and 1/146 (0.007). A second blind set (v2) follows.
 - Clarifying questions and their quick replies are grounded like answers: an unverified
   question goes back to the model once, then becomes a general question without quick
   replies.
