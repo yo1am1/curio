@@ -6,6 +6,13 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- CI: a "Docker image" workflow builds and smoke-tests the image on pull requests that can
+  change it (Dockerfile, dependencies, base images), so those bumps are proven before merge.
+- Dependabot skips TypeScript major versions in `web/` until typescript-eslint supports
+  TypeScript 7.
+
 ## [3.0.0] - 2026-11-07
 
 Curio's UI is now a React app that the API serves on its own port: one process, or one
