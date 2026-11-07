@@ -38,7 +38,7 @@ class ActionSigner:
     ) -> str:
         filters = intent.model_dump(mode="json") if intent is not None else None
         payload = json.dumps(
-            [action_id, tool, args, request, issued_at, filters],
+            _canonical([action_id, tool, args, request, issued_at, filters]),
             sort_keys=True,
             separators=(",", ":"),
         )
@@ -77,6 +77,18 @@ class ActionSigner:
         if not 0 <= self._clock() - action.issued_at <= self._ttl:
             raise InvalidActionError("This proposal has expired. Please ask again.")
         return action
+
+
+def _canonical(value: Any) -> Any:
+    """`value` with whole floats as ints, so a proposal survives a JSON round trip through a
+    client that does not keep `40.0` apart from `40` (JavaScript)."""
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, dict):
+        return {key: _canonical(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_canonical(item) for item in value]
+    return value
 
 
 def narrow_args(decision: ActionDecision) -> dict[str, Any]:

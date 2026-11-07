@@ -1,0 +1,119 @@
+.outfit {
+  display: grid;
+  gap: 0.9rem;
+  justify-items: start;
+  padding: 1rem 1.1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--accent);
+}
+
+.title {
+  color: var(--ink);
+  font-size: 1.1rem;
+}
+
+.slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(9rem, 44%), 1fr));
+  gap: 1rem 0.85rem;
+}
+
+.slot {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+  min-width: 0;
+}
+
+.slotLabel {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.piece {
+  display: grid;
+  gap: 0.25rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.piece > div:first-child {
+  box-shadow: 0 0 0 1px var(--line-soft);
+  margin-bottom: 0.3rem;
+}
+
+.piece:hover .name {
+  color: var(--accent);
+}
+
+.name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+
+.meta,
+.reason,
+.note {
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.gap {
+  display: flex;
+  gap: 0.35rem;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.actions {
+  display: flex;
+  margin-left: -0.6rem;
+}
+
+.actions button {
+  min-height: 1.9rem;
+  font-size: 0.8125rem;
+}
+
+.total {
+  display: grid;
+  gap: 0.35rem;
+  width: 100%;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+
+.meter {
+  height: 0.4rem;
+  border-radius: var(--radius-pill);
+  background: var(--bg-sunk);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+}

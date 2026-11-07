@@ -1,4 +1,4 @@
-"""Books end to end: the real goodbooks-10k catalog through the API, the UI and the agent.
+"""Books end to end: the real goodbooks-10k catalog through the API, the agent and the app.
 
 Needs `uv run python -m scripts.prepare_books` (data/books.parquet and
 data/book_neighbours.parquet) besides the data the rest of the suite uses.
@@ -11,8 +11,7 @@ import httpx
 import pytest
 from playwright.sync_api import expect
 
-from tests.e2e.conftest import DATA_DIR
-from tests.e2e.test_ui_e2e import chat_turns, visible_photos
+from tests.e2e.conftest import DATA_DIR, results
 
 pytestmark = pytest.mark.skipif(
     not (DATA_DIR / "books.parquet").exists()
@@ -144,96 +143,107 @@ def test_book_turn_streams_a_grounded_answer(api):
     assert reply["grounding"]["status"] == "verified"
 
 
-# --- UI ----------------------------------------------------------------------------------
+# --- Browser (the React app) ------------------------------------------------------------
 
 
-def test_books_page_search_dialog_because_and_browse(ui):
-    ui.open("books")
-    ui.page.get_by_label("Describe a book").fill("Fantasy like The Name of the Wind")
-    ui.click(ui.page.get_by_role("button", name="Find books"))
-    cards = ui.page.locator('[class*="st-key-book_card_search_"]')
-    expect(cards.first).to_be_visible()
-    assert cards.count() >= 6
-    expect(
-        cards.first.get_by_text(re.compile("readers who liked The Name of the Wind"))
-    ).to_be_visible()
-    visible_photos(ui, 3)
-    ui.shot("26-books-search")
+def test_books_page_search_dialog_because_and_browse(web):
+    web.open("/reading")
+    web.page.get_by_label("Describe a book").fill("Fantasy like The Name of the Wind")
+    web.page.get_by_role("button", name="Find books").click()
+    cards = results(web, "Matching books").get_by_test_id("book-card")
+    expect(cards.nth(5)).to_be_visible()
+    expect(cards.first).to_contain_text(re.compile("readers who liked The Name of the Wind"))
+    web.shot("books-01-search", full_page=True)
 
-    ui.click(cards.first.get_by_role("button", name=re.compile(r"^View ")))
-    dialog = ui.page.get_by_role("dialog")
+    cards.first.get_by_role("button", name=re.compile(r"^View ")).click()
+    dialog = web.page.get_by_role("dialog")
     expect(dialog.get_by_text("Readers also liked")).to_be_visible()
     expect(dialog.get_by_text(re.compile(r"^More by "))).to_be_visible()
     expect(dialog.get_by_text(re.compile("goodbooks-10k"))).to_be_visible()
-    ui.shot("27-book-dialog")
-    ui.click(dialog.get_by_role("button", name="Save to reading list"))
+    web.shot("books-02-book-dialog")
+    dialog.get_by_role("button", name="Save to reading list").click()
     expect(dialog.get_by_role("button", name="On your reading list")).to_be_visible()
-    ui.click(dialog.get_by_label("Close"))
+    dialog.get_by_role("button", name="Close").click()
     expect(dialog).to_have_count(0)
 
-    ui.click(ui.page.get_by_text("Because you liked…", exact=True))
-    expect(ui.page.get_by_role("heading", name="Readers like you also loved")).to_be_visible()
-    because = ui.page.locator('[class*="st-key-book_card_because_"]')
-    expect(because.first.get_by_text(re.compile("^Because you liked"))).to_be_visible()
-    ui.shot("28-books-because-you-liked", full_page=True)
+    web.page.get_by_role("link", name="Because you liked…").click()
+    because = results(web, "Readers like you also loved").get_by_test_id("book-card")
+    expect(because.first).to_contain_text(re.compile("Because you liked"))
+    web.shot("books-03-because-you-liked", full_page=True)
 
-    ui.click(ui.page.get_by_text("Browse by mood", exact=True))
-    ui.click(ui.key("browse_mood").get_by_text("Cosy", exact=True))
-    browse = ui.page.locator('[class*="st-key-book_card_browse_"]')
-    expect(browse.first.get_by_text(re.compile("^Mood: Cosy"))).to_be_visible()
-    ui.shot("29-books-browse-cosy")
+    web.page.get_by_role("link", name="Browse by mood").click()
+    web.page.get_by_role("radio", name="Cosy").click()
+    browse = results(web, "Cosy").get_by_test_id("book-card")
+    expect(browse.first).to_contain_text(re.compile("Mood: Cosy"))
+    web.shot("books-04-browse-cosy", full_page=True)
 
 
-def test_book_agent_end_to_end(ui):
-    ui.open()
-    ui.click(ui.page.get_by_test_id("stButtonGroup").first.get_by_text("Books", exact=True))
-    expect(ui.page.get_by_role("heading", name="Find your next great read.")).to_be_visible()
-    ui.send("Fantasy like The Name of the Wind")
-    expect(ui.page.get_by_text("Titles and ratings checked against the catalog")).to_be_visible()
-    books = ui.key("agent_conversation").locator('[class*="st-key-chat_book_home_1_"]')
-    assert books.count() >= 3
-    visible_photos(ui, 3)
-    ui.click(ui.page.get_by_text(re.compile(r"How Curio worked")).last)
-    ui.shot("30-book-agent-search")
+def approve(web, *, contains: re.Pattern | None = None) -> None:
+    drawer = web.page.get_by_test_id("approval-drawer")
+    expect(drawer.get_by_role("heading", name="Needs your approval")).to_be_visible()
+    if contains:
+        expect(drawer).to_contain_text(contains)
+    drawer.get_by_role("button", name="Approve").click()
+    expect(drawer).to_be_hidden(timeout=120_000)
 
-    ui.send("Which is the highest rated?")
-    expect(ui.page.get_by_text("Self-corrected to match the catalog")).to_be_visible()
-    ui.shot("31-book-agent-self-correction")
 
-    ui.send("Save the first one")
-    card = ui.page.locator('[class*="st-key-approval_home_"]').last
-    expect(card.get_by_text("Needs your approval")).to_be_visible()
-    ui.shot("32-book-approval-proposed")
-    ui.click(card.get_by_role("button", name="Approve"))
-    expect(ui.page.get_by_text("Reading list · 1")).to_be_visible()
+def test_book_agent_end_to_end(web):
+    web.open("/")
+    web.page.get_by_role("navigation", name="Catalog").get_by_role("link", name="Books").click()
+    web.page.get_by_role("navigation", name="Books pages").get_by_role(
+        "link", name="Ask Curio"
+    ).click()
+    expect(web.page.get_by_role("heading", name="Find your next great read.")).to_be_visible()
+    web.send("Fantasy like The Name of the Wind")
+    turn = web.last_turn()
+    expect(turn.get_by_test_id("grounding-badge")).to_have_text(
+        "Titles and ratings checked against the catalog"
+    )
+    assert turn.get_by_test_id("book-card").count() >= 3
+    turn.get_by_role("button", name=re.compile(r"How Curio worked")).click()
+    expect(turn.get_by_text("Search books", exact=True)).to_be_visible()
+    web.shot("books-05-agent-search", full_page=True)
 
-    ui.send("Remember I never read horror")
-    card = ui.page.locator('[class*="st-key-approval_home_"]').last
-    expect(card.get_by_text("No Horror")).to_be_visible()
-    ui.click(card.get_by_role("button", name="Approve"))
-    expect(
-        ui.key("session_memory").get_by_role("button", name=re.compile("No Horror"))
-    ).to_be_visible()
-    ui.send("Something dark")
-    ui.click(ui.page.get_by_text(re.compile(r"How Curio worked")).last)
-    expect(ui.page.get_by_text(re.compile("avoiding Horror")).last).to_be_visible()
-    ui.shot("33-book-memory-applied")
+    web.send("Which is the highest rated?")
+    expect(web.last_turn().get_by_test_id("grounding-badge")).to_have_text(
+        "Self-corrected to match the catalog"
+    )
+    web.shot("books-06-agent-self-correction")
 
-    ui.send("Recommend me a book")
-    options = ui.page.locator('[class*="st-key-chat_options_home_"] button')
-    expect(options).to_have_count(3)
-    ui.shot("34-book-clarifying-question")
+    web.send("Save the first one")
+    web.shot("books-07-approval-proposed")
+    approve(web)
+    panel = web.page.get_by_test_id("session-panel")
+    expect(panel.get_by_role("heading", name=re.compile(r"Reading list · 1"))).to_be_visible()
+
+    web.send("Remember I never read horror")
+    approve(web, contains=re.compile("No horror", re.I))
+    memory = panel.get_by_role("list", name="Remembered for this session")
+    expect(memory.get_by_role("button", name=re.compile("No horror", re.I))).to_be_visible()
+    web.send("Something dark")
+    turn = web.last_turn()
+    turn.get_by_role("button", name=re.compile(r"How Curio worked")).click()
+    expect(turn.get_by_text(re.compile("avoiding Horror")).first).to_be_visible()
+    web.shot("books-08-memory-applied", full_page=True)
+
+    web.send("Recommend me a book")
+    groups = web.last_turn().get_by_role("group")
+    options = groups.filter(has_not=web.page.get_by_role("button", name="Helpful")).filter(
+        has_not=web.page.get_by_role("link")
+    )
+    expect(options.first.get_by_role("button")).to_have_count(3)
+    web.shot("books-09-clarifying-question")
 
     # Cocktails keep their own conversation.
-    ui.click(ui.page.get_by_test_id("stButtonGroup").first.get_by_text("Cocktails", exact=True))
-    expect(ui.page.get_by_role("heading", name=re.compile("Mix something"))).to_be_visible()
-    assert chat_turns(ui) <= 1
+    web.open("/ask/cocktails")
+    expect(web.page.get_by_role("heading", name=re.compile("Mix something"))).to_be_visible()
+    expect(web.turns()).to_have_count(0)
 
 
-def test_phone_books_page_does_not_scroll_sideways(phone):
-    phone.open("books")
-    phone.page.get_by_label("Describe a book").fill("Short classic novels")
-    phone.click(phone.page.get_by_role("button", name="Find books"))
-    expect(phone.page.locator('[class*="st-key-book_card_search_"]').first).to_be_visible()
-    assert phone.no_horizontal_scroll()
-    phone.shot("35-phone-books")
+def test_phone_books_page_does_not_scroll_sideways(web_phone):
+    web_phone.open("/reading")
+    web_phone.page.get_by_label("Describe a book").fill("Short classic novels")
+    web_phone.page.get_by_role("button", name="Find books").click()
+    expect(results(web_phone, "Matching books").get_by_test_id("book-card").first).to_be_visible()
+    assert web_phone.no_horizontal_scroll()
+    web_phone.shot("books-10-phone-search")

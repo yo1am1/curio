@@ -1,0 +1,137 @@
+.user {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.bubble {
+  max-width: min(36rem, 85%);
+  padding: 0.7rem 1rem;
+  border-radius: 1.1rem 1.1rem 0.3rem 1.1rem;
+  background: var(--ink);
+  color: var(--bg);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.user[data-pending="true"] .bubble {
+  opacity: 0.85;
+}
+
+.assistant {
+  display: grid;
+  grid-template-columns: 2.1rem minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 600 1.05rem/1 var(--font-serif);
+  box-shadow: var(--shadow-sm);
+}
+
+.body {
+  display: grid;
+  gap: 0.9rem;
+  justify-items: start;
+  min-width: 0;
+}
+
+.body > * {
+  max-width: 100%;
+}
+
+.body > ul,
+.body > div,
+.body > section {
+  width: 100%;
+}
+
+.panel {
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.proposal {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink-soft);
+}
+
+.proposal svg {
+  flex: none;
+  margin-top: 0.2rem;
+}
+
+.waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--accent);
+  font-size: 0.875rem;
+  font-weight: 550;
+}
+
+.proposalTitle {
+  color: var(--ink);
+  font-weight: 650;
+  font-size: 0.925rem;
+}
+
+.proposalSummary {
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+
+.proposalStatus {
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.suggestions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  margin-left: -0.25rem;
+}
+
+.feedback {
+  display: flex;
+  gap: 0.1rem;
+  margin: -0.4rem 0 0 -0.6rem;
+  opacity: 0.75;
+}
+
+@media (max-width: 640px) {
+  .assistant {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .avatar {
+    width: 1.75rem;
+    height: 1.75rem;
+    font-size: 0.9rem;
+  }
+}

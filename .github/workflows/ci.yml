@@ -56,3 +56,50 @@ jobs:
           for profile in demo fashion ollama tools; do
             docker compose --profile "$profile" config --quiet
           done
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  # The quick start in a browser: the API with only the recipes (prepared above in `checks`,
+  # here again: a pinned ~400 KB download) serves the built React app, and Chromium checks
+  # that it lands on the cocktail pages and shows fashion as unavailable with its hint. The
+  # rest of tests/e2e needs the H&M data, its image index and the books, so it runs locally.
+  e2e-quickstart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.32"
+          enable-cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: uv sync --locked --all-extras
+      - run: uv run python -m scripts.prepare_cocktails
+      - run: npm ci && npm run build
+        working-directory: web
+      - run: uv run playwright install --with-deps chromium
+      - run: uv run pytest -m e2e tests/e2e/test_quickstart_e2e.py -q
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: e2e-quickstart
+          path: e2e-artifacts/

@@ -1,0 +1,51 @@
+.region {
+  position: fixed;
+  z-index: 60;
+  inset-inline-end: 1.25rem;
+  inset-block-end: 1.25rem;
+  display: grid;
+  gap: 0.5rem;
+  justify-items: end;
+  width: min(24rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-lg);
+  font-size: 0.925rem;
+  line-height: 1.4;
+  pointer-events: auto;
+}
+
+.toast svg {
+  flex: none;
+  margin-top: 0.1rem;
+}
+
+.success svg {
+  color: var(--green);
+}
+
+.info svg {
+  color: var(--blue);
+}
+
+.error svg {
+  color: var(--red);
+}
+
+@media (max-width: 640px) {
+  .region {
+    inset-inline: 1rem;
+    inset-block-end: 1rem;
+    width: auto;
+    justify-items: stretch;
+  }
+}

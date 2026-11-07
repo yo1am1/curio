@@ -1,8 +1,8 @@
 [project]
 name = "curio-recommendations"
-version = "2.1.1"
+version = "3.0.0"
 description = "Curio: an engine for trustworthy, tool-using recommendation agents, with three deliberately different reference domains (fashion, cocktails, books)."
-keywords = ["recommendations", "agent", "llm", "grounding", "human-in-the-loop", "fashion", "cocktails", "books", "clip", "qdrant", "fastapi", "streamlit"]
+keywords = ["recommendations", "agent", "llm", "grounding", "human-in-the-loop", "fashion", "cocktails", "books", "clip", "qdrant", "fastapi", "react"]
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
@@ -22,8 +22,6 @@ dependencies = [
     "python-multipart>=0.0.32",
     "qdrant-client>=1.19.1",
     "scipy>=1.18.1",
-    # Streamlit 1.59 gzip middleware breaks on starlette 1.8 (in-memory images return 500).
-    "starlette<1.11",
     "torch>=2.14.1",
     "tqdm>=4.70.1",
     "transformers>=5.19.0",
@@ -31,9 +29,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-ui = [
-    "streamlit>=1.59.1",
-]
 anthropic = [
     "langchain-anthropic>=1.7.6",
 ]

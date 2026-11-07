@@ -2,8 +2,8 @@
 
 [Back to the product overview](../README.md).
 
-Curio has three domains, fashion, cocktails and books, behind one API, one Streamlit UI
-and one agent engine. Fashion needs the prepared H&M data and image index; cocktails need
+Curio has three domains, fashion, cocktails and books, behind one API, one React web app
+(served by that API) and one agent engine. Fashion needs the prepared H&M data and image index; cocktails need
 only `data/cocktails.parquet`; books need `data/books.parquet` and
 `data/book_neighbours.parquet`. Every domain is optional at serving time: the API serves
 whichever domains are prepared, so the [quick start](#quick-start) runs with cocktails alone.
@@ -396,7 +396,8 @@ alternatives. Price does not establish quality or upsell value.
 
 ```mermaid
 flowchart LR
-    UI[Streamlit UI] -- HTTP --> API[FastAPI]
+    UI[React web app] -- HTTP --> API[FastAPI]
+    API -. serves web/dist .-> UI
     API --> S[ProductSearch]
     API --> CB[ContentBasedRecommender]
     API --> CF[CollaborativeRecommender]
@@ -459,15 +460,15 @@ src/curio/
 │   ├── books/            # models, catalog, taxonomy, recommend, agent/
 │   ├── pairings/         # models, themes, pairer; agent/ (PairCocktail, PairedDrinkCheck)
 │   └── evening/          # themes, models, planner (Plan my evening); agent/ (PlanEvening…)
-└── app/                  # Composition: settings, wire format, assistants, API, UI
+└── app/                  # Composition: settings, wire format, assistants, API
     ├── config.py         # Settings from env / .env (pydantic-settings)
     ├── schemas.py        # The /chat wire models: the engine's plus every domain's payloads
     ├── assistants.py     # ShoppingAssistant, CocktailAssistant, BookAssistant, EveningAssistant
     ├── services.py       # Composition root and domain registry
     ├── demo.py           # Demo customers
     ├── api.py            # FastAPI app
-    └── ui/               # Streamlit client: main.py (entry), shell, client, common, chat,
-                          # effects, fashion, cocktails, books, evening; ui.css
+    └── web.py            # Serves the built React app (web/dist) beside the API routes
+web/                      # The React app (Vite, React 19, TypeScript); see "Web app" below
 examples/hello_domain/    # A complete teas domain on the engine, in one file (teas.py)
 scripts/prepare_data.py # Sample the H&M Kaggle archive (or its unzipped CSVs) into data/
 scripts/fetch_photos.py # Download the sampled products' photos from the mirror
@@ -477,6 +478,7 @@ scripts/classify_product_types.py # Reviewable H&M-to-Shopify category decisions
 scripts/evaluate.py # Chronological holdout evaluation; JSON results for the Model quality page
 scripts/prepare_cocktails.py # Download the pinned recipe CSV, write data/cocktails.parquet
 scripts/prepare_books.py # Download pinned goodbooks-10k, write books + book_neighbours.parquet
+scripts/export_openapi.py # Write the API's OpenAPI schema (web/openapi.json) without a server
 ```
 
 ### Domain registry
@@ -501,13 +503,14 @@ From that registry, without per-domain code:
   FastAPI dependency per domain (`FashionDep`, `CocktailsDep`, `BooksDep`).
 - `POST /chat` routes by `ChatRequest.domain` to that runtime's assistant.
 
-The UI mirrors this with `DOMAIN_VIEWS` (`app/ui/common.py`, filled in `app/ui/shell.py`): one `DomainView` per domain (switch
-label, copy, session-state keys, grounding badges, approval tools, pages, session panel,
-chat-request fields, footer). It reads availability from `/health`, registers only the
-pages of served domains, opens on Evening's Plan my evening page when the API serves the
-evening (choosing Evening in the switch lands there too, not on its chat), else on the first
-served domain, and shows a setup page when the API serves none. A domain the server does not serve appears beside the switch as "… is not
-available", with the server's hint.
+The web app mirrors this with its registry (`web/src/domains/registry.ts`): one `DomainView`
+per domain (switch label, copy, grounding badges, approval tools, credit line) and its pages
+(`DOMAIN_PAGES`). It reads availability from `/domains`, routes only to the pages of served
+domains (a deep link to another domain's page lands on the landing page), opens on Plan my
+evening when the API serves the evening (choosing Evening in the switch lands there too, not
+on its chat), else on the first served domain's main page, and shows a setup page when the
+API serves none. A domain the server does not serve stays in the switch, disabled, with
+"… is not available" and the server's hint.
 
 `ENABLED_DOMAINS` (comma-separated ids, e.g. `cocktails`) limits loading to those domains
 even when other data is present; an unknown id fails startup. Unset, every prepared domain
@@ -516,13 +519,13 @@ loads.
 Books were added this way, which is the recipe for the next domain: its catalog and
 recommender (`domains/books/`), a runtime dataclass and a loader in `app/services.py`, a
 `DomainSpec` appended to `DOMAINS`, its id in `app.schemas.Domain`, its endpoints behind a `BooksDep`
-dependency, and a `DomainView` with its pages in `DOMAIN_VIEWS`. Its agent is a `BaseToolkit` for
+dependency, and a `DomainView` with its pages in the web app's registry. Its agent is a `BaseToolkit` for
 the shared engine ([agent architecture](agent-architecture.md)). The shared parts needed
 only data-driven additions: the domain's approval tools in `ApprovalTool`, its context
 fields on `TurnContext` (`book_preferences`, `book_shortlist`), its effect kinds on
 `AppliedEffect` (serialized with their own fields only), and one entry each in the engine's
 `_MEMORY_EFFECTS` and `_SHORTLIST_EFFECTS` tables. The engine loop, budgets, signing,
-grounding flow and UI chat code did not change.
+grounding flow and chat code did not change.
 
 A **composed domain** has no data of its own: its `DomainSpec` has `compose` instead of
 `load`, and `build_services` builds it from the loaded domains after linking. `evening` is the
@@ -542,8 +545,82 @@ Cross-domain features link loaded domains after loading: `link_domains` builds t
 `BookCocktailPairer` when books and cocktails are both served, stores it on `BookServices`
 (`services.pairing`) and enables the book agent's PairCocktail tool. A pairer that fails to
 build leaves both domains serving as before; `/pairings/book-cocktail` answers 503 with the
-setup hint of whichever domain is missing, and the UI shows its pairing controls only when
-`/health` reports both domains.
+setup hint of whichever domain is missing, and the web app shows its pairing controls only
+when `/domains` reports both domains.
+
+## Web app
+
+`web/` is Curio's UI: a React single-page app over the API, which serves its build on the
+same port. It has the shell and domain switch, Plan my evening, chat for every domain, the
+item dialogs, the fashion feed (For you), Discover (description and photo search), Product
+connections, Model quality, recipe search, "What can I make?", book search, "Because you
+liked…", browse by mood, the reading list's cocktail and the Compare dialogs.
+
+- **Stack:** Vite, React 19 and TypeScript (strict), React Router, TanStack Query, the
+  `motion` package for animation, `react-markdown` for answers and lucide icons. Styling
+  is hand-written CSS modules over design tokens (`src/styles/tokens.css`); dark mode follows
+  `prefers-color-scheme`. Fonts (Source
+  Serif 4, Source Sans 3) are bundled, so the app makes no third-party requests except
+  recipe photos, Goodreads covers and Open Library covers.
+- **Layout:** `src/api` (fetch client, the NDJSON stream reader, query hooks, types
+  generated into `schema.d.ts`), `src/state` (the client-held session and its
+  `TurnContext`, chat transcripts, approval narrowing, effects), `src/domains` (the
+  registry: copy, badges, step labels, credits), `src/components` (shell, chat, evening,
+  cards, dialogs, session panel) and `src/ui` (buttons, toggles, dialog, toasts, photos).
+- **Routes:** each domain opens on its main page, with its pages and its chat in the
+  sub-navigation (`DOMAIN_PAGES` in `src/domains/registry.ts`):
+
+  | Domain | Pages |
+  |---|---|
+  | Fashion | `/fashion` (For you), `/fashion/discover`, `/fashion/connections`, `/fashion/quality` (Model quality, linked from For you, not in the navigation) |
+  | Cocktails | `/drinks` (recipe search), `/drinks/pantry` ("What can I make?") |
+  | Books | `/reading` (search), `/reading/because`, `/reading/moods` |
+  | Evening | `/evening` (Plan my evening, where a visit lands when the evening is served) |
+
+  Chat is `/ask/<domain>`. Page paths never sit under an API path (`/books/…`,
+  `/cocktails/…`, `/products/…`, `/search/…`, `/users/…`, `/evaluation`…), which the API
+  answers itself; that is why cocktails live under `/drinks` and books under `/reading`.
+- **Browse pages:** filters become request bodies in `src/domains/requests.ts` (remembered
+  reading tastes boost liked genres and leave out avoided genres and authors;
+  remembered cocktail tastes leave out avoided ingredients and make "Any" mean
+  alcohol-free). Inputs are kept for the browser tab (`curio.page.*` in `sessionStorage`).
+  Photo search uploads the file (or an example photo) as multipart form data
+  (`postForm`). The filter controls are a hand-written accessible combobox
+  (`src/ui/Combobox.tsx`, the WAI-ARIA list-autocomplete pattern) and styled native
+  selects; the product connections graph and the Model quality chart are hand-drawn SVG
+  (`ConnectionsGraph.tsx`, a radial layout from `graph.ts`), so no chart or graph library
+  is bundled. The saved list's count in the sub-navigation opens the session panel, with
+  Compare for pieces and drinks.
+- **Session:** the shortlist, reading list, saved drinks, memory, outfit and evening
+  state, the approval toggles and the linked shopper live in `localStorage`
+  (`curio.session.v1`) and go back with every chat request as its `TurnContext`. Transcripts and the planner's current plan are kept for the
+  browser tab (`sessionStorage`).
+
+```bash
+cd web
+npm ci
+npm run dev        # http://localhost:5173, proxying the API at CURIO_API_URL (default :8000)
+npm run lint && npm run typecheck && npm test && npm run build
+```
+
+The dev server proxies every request except page navigations (GET with `Accept:
+text/html`), the same rule the API uses in production; `CURIO_API_URL` points it at
+another API and `CURIO_WEB_PORT` changes its port.
+
+**Production.** After `npm run build`, the API serves `web/dist` itself: `/assets/*` with
+long-lived caching, top-level files such as `favicon.svg`, and `index.html` for any GET
+that accepts `text/html` and matches no API route, so a deep link like `/ask/books` opens
+the app. API paths stay where they are (no `/api` prefix), and their 404s and 405s are
+unchanged. It is automatic when `WEB_DIST` (default `web/dist`, relative to where the API
+starts) holds a build, checked per request; `SERVE_WEB=false` turns it off. Open
+`http://localhost:8000/`.
+
+**API types.** `npm run gen:api` regenerates `src/api/schema.d.ts` from `web/openapi.json`
+with openapi-typescript; `npm run openapi:export` rewrites that file from the code
+(`uv run python -m scripts.export_openapi`, no server or data needed), and `npm run
+gen:api:live` reads a running API's `/openapi.json` instead. `tests/app/test_web.py` fails
+when the committed schema no longer matches the API, so regenerate both after an API
+change. TypeScript is 6.0, the newest release typescript-eslint supports.
 
 ## Quick start
 
@@ -562,25 +639,29 @@ Plan my evening. Opt out with `DEMO_BOOKS=0 docker compose --profile demo up --b
 are prepared.
 
 On the first run both download the pinned recipe file (about 400 KB, SHA-256 checked) and
-then start the API (port 8000) and the UI (port 8501); later runs reuse the recipes. Expect
+then start one server on port 8000: the API, which also serves the web app. Open
+http://localhost:8000; later runs reuse the recipes. Expect
 a few minutes for the first Docker build or `uv sync` (PyTorch is a dependency of the
 fashion engine even though the demo never loads it), then seconds to start.
 
 - **Docker** (`demo` profile): `demo-data` prepares the recipes into the `demo-data`
   volume (nothing is written to `./data`), plus the books unless `DEMO_BOOKS=0`; `demo-api`
-  serves them with `ENABLED_DOMAINS=cocktails,books` (it never loads CLIP or opens Qdrant),
-  and `demo-ui` starts once the API is healthy. `docker compose --profile demo down -v`
-  removes the volume.
-- **`scripts/quickstart.sh`**: runs `uv sync --locked --extra ui --extra anthropic`, writes
+  serves them and the web app (built into the image) with `ENABLED_DOMAINS=cocktails,books`
+  (it never loads CLIP or opens Qdrant) on port 8000, with a health check on `/health`.
+  `docker compose --profile demo down -v` removes the volume.
+- **`scripts/quickstart.sh`**: runs `uv sync --locked --extra anthropic`, writes
   `data/cocktails.parquet` if it is missing (and the book files unless `CURIO_BOOKS=0`),
-  starts the API in the background, prints which domains and chat are available, then runs
-  the UI; Ctrl+C stops both. `ENABLED_DOMAINS` (default `cocktails,books`; a domain that is
-  not prepared is skipped), `API_PORT` and `UI_PORT` change what it serves and where. With
-  fashion prepared, `ENABLED_DOMAINS=fashion,cocktails,books scripts/quickstart.sh` serves
-  all three. Both servers listen on 127.0.0.1 only: the UI holds the chat, which spends the
-  configured LLM key. `UI_HOST=0.0.0.0` opens the UI to the network on purpose (the script
-  warns); the API never leaves 127.0.0.1. `tests/test_quickstart_script.py` runs the script
-  with a recording `uv` to check both bindings.
+  builds the web app with `npm ci && npm run build` when `web/dist` is missing or older than
+  its sources and npm (Node 22) is installed (`CURIO_WEB_BUILD=0` skips it; without npm a
+  build made before is served, and with none the script says how to get one), starts the
+  server, prints which domains and chat are available and the URL; Ctrl+C stops it.
+  `ENABLED_DOMAINS` (default `cocktails,books`; a domain that is not prepared is skipped)
+  and `CURIO_PORT` (8000) change what it serves and where. With fashion prepared,
+  `ENABLED_DOMAINS=fashion,cocktails,books scripts/quickstart.sh` serves all three. The
+  server listens on 127.0.0.1 only: it holds the chat, which spends the configured LLM key.
+  `CURIO_HOST=0.0.0.0` opens it to the network on purpose (the script warns).
+  `tests/test_quickstart_script.py` runs a copy of the script with a recording `uv` and
+  `npm` to check the binding and when the web app is built.
 
 Chat works when `LLM_*` is set in `.env` (see [LLM configuration](#llm-configuration));
 both ways read it. Without it, the assistant says chat is unavailable and how to enable
@@ -612,7 +693,7 @@ Requires [uv](https://docs.astral.sh/uv/) and Python 3.13.
 
 ```bash
 uv sync --all-extras
-cp .env.example .env                                   # optional: configure an LLM for the chat tab
+cp .env.example .env                                   # optional: configure an LLM for chat
 uv run python -m scripts.prepare_cocktails             # optional: enables the cocktail domain
 ```
 
@@ -643,8 +724,8 @@ Then build the image index, fetch a few example photos for image search, and sta
 uv run python -m scripts.build_index                   # all products: ~5 min at 50 img/s on 4 CPU cores
 uv run python -m scripts.fetch_query_photos --articles data/raw/articles.csv
 uv run python -m scripts.evaluate --qdrant-path .qdrant --output data/evaluation.json
-uv run uvicorn curio.app.api:create_app --factory --reload   # http://localhost:8000/docs
-uv run streamlit run src/curio/app/ui/main.py     # http://localhost:8501
+(cd web && npm ci && npm run build)                    # the web app, served by the API
+uv run uvicorn curio.app.api:create_app --factory --reload   # http://localhost:8000
 ```
 
 To enable the learned ranking shown in the screenshots, train its optional model
@@ -656,7 +737,7 @@ uv run python -m scripts.train_ranker --data-dir data --train-through 2020-09-15
 
 The example photos show H&M garments that are not in the sampled catalog, so image search
 always has to find a different product that looks alike. `scripts.evaluate` writes the
-results that the Model quality page shows; without it, that tab explains how to create them.
+results that the Model quality page shows; without it, that page explains how to create them.
 
 `build_index --limit N` indexes a smaller subset spread across sections. Qdrant runs
 embedded (stored in `.qdrant/`) unless `QDRANT_URL` is set, so no external service is needed.
@@ -665,15 +746,18 @@ starting the API (or point everything at a Qdrant server).
 
 ### Docker
 
-The full stack (Qdrant server, API and UI over `./data`) is the `fashion` profile:
+The full stack (a Qdrant server, and the API serving the web app over `./data` on port 8000)
+is the `fashion` profile:
 
 ```bash
 docker compose --profile fashion up --build
 docker compose --profile fashion exec api python -m scripts.build_index --limit 3000
 ```
 
-The image includes the `ui` and `anthropic` extras, so `LLM_PROVIDER=anthropic` works in
-Docker; development tools are left out. The API mounts `./data` read-only, so prepare the
+The image is built in two stages: a `node:22` stage runs `npm ci && npm run build` in `web/`,
+and the Python image copies `web/dist` from it, so one container serves the API and the app
+on one port. It includes the `anthropic` extra, so `LLM_PROVIDER=anthropic` works in Docker;
+development tools are left out. The API mounts `./data` read-only, so prepare the
 cocktail recipes with the one-off `prepare-cocktails` service, which mounts it writable,
 then restart the API so it loads the file:
 
@@ -885,62 +969,79 @@ mirror (14,280 of 14,300 products photographed), goodbooks-10k and the real reci
 chat replies come from the scripted stub, as the README says. The overview animation
 (`docs/screenshots/curio-overview.webp`) comes from `scripts.record_overview` against the
 same stack: it warms the models, records a captioned tour with Chrome's screencast and
-builds an animated WebP with the same rounded corners with ffmpeg (about 40 s).
+builds an animated WebP with the same rounded corners with ffmpeg (about 40 s): Plan my
+evening, the agent's step trace and grounding check, the approval drawer, the Gatsby pairing
+and dark mode. Both open the API's URL (`--url`, default http://127.0.0.1:8000), which serves
+the built app.
 
 ### End-to-end tests
 
-`tests/e2e` starts the real API (real catalog, CLIP index, recommenders and ranker), the
-real Streamlit UI and Chromium, then clicks through every page in all three domains: the feed
-and its strategies, description and photo search, the product dialog hand-off to the
-assistant, product connections, model quality, the agent trace, self-correction,
-approve / narrow / decline, clarifying questions, memory, personal picks, the cocktail
-chat, recipe search, "What can I make?", the Books page (search seeded by a title, the book
-dialog, "Because you liked…", browse by mood), the book agent (grounded search,
-self-correction of an invented rating, reading-list approval, remembered tastes in the
-trace, a clarifying question) and phone layouts. API scenarios check CLIP retrieval
-quality, image search finding the photographed product, every strategy's evidence, signed
-approvals (including cross-domain replay), the cocktail endpoints and the book probes on
-the real catalog ("fantasy like The Name of the Wind", "short classic novels").
-`test_books_e2e.py` skips when the book files are not prepared. `test_outfit_e2e.py` plans
-outfits for six occasions on the real index and checks that each is a real outfit (one piece
-of the slot's kind per slot, at least three product groups, no repeated type, the audience's
-sections, the total within the budget), that a €8 wedding budget names the slot that does
-not fit, that swaps never exceed the budget or bring a piece back, and that the agent streams
-a step per slot with a verified total. In the browser it follows the "Outfit for an
-occasion" starter: the clarifying question, the outfit card, "Cheaper" shoes, and "Save
-outfit" narrowed to three pieces in the approval card (screenshots 36-40). `test_pairing_e2e.py`
-pairs 14 famous books on the real catalogs and writes their top three drinks to
-`pairings.json`; it checks that a noir mystery gets a whiskey-forward drink, that children's
-books only ever get alcohol-free drinks (every set), that The Great Gatsby gets a Jazz Age
-gin or Champagne drink, reader taste with avoided genres, and the agent's PairCocktail turn
-(verified) and an invented drink (caught, replaced by the paired drinks). In the browser it
-pairs a drink in the book dialog (another pairing, the alcohol-free toggle, the hand-off to
-the recipe), the reading-list cocktail card, the chat starter, and the dialog at phone
-width (screenshots 70-74). `test_evening_e2e.py` plans fifteen occasions on the real
-catalogs (among them date night, dinner with my parents, business dinner, kids birthday
-party, family movie night, baby shower, girls' night in, summer garden party and murder
-mystery night) and writes them to `evening-plans.json`, checking that each is complete
-exactly when its outfit is, within its budget, alcohol-free when asked or for kids, family
-and a baby shower, never romantic or glamorous for family, kids or work, with a well-known
-book that carries no excluded shelf and a drink the pairer pairs with it, and that swaps
-work on the real data. A new visit opens on the Plan my evening page. In the browser it plans "rainy Sunday in" and "book club,
-alcohol-free" on the Plan my evening page (another book, Save evening through the approval
-dialog), "date night under €100" in evening chat (a cheaper piece, a SaveEvening approval
-with six parts), an invented drink caught by grounding, and the page at 390 px (screenshots
-80-87). A third API, the quick-start demo with books (recipes and books, no fashion, no
-LLM), checks that the evening plans the book and the drink and says the outfit needs the
-fashion catalogue (screenshot 88).
+`tests/e2e` starts the real API (real catalog, CLIP index, recommenders and ranker), which
+serves the built React app (`web/dist`, built with `npm run build` first when it is missing
+and `web/node_modules` exists; the browser tests skip otherwise), and drives it in Chromium.
+Each test file covers one area in the browser and through the API:
+
+- `test_web_e2e.py`: a visit lands on Plan my evening; a rainy Sunday in with a swapped book
+  and a save with one part unticked; a fashion turn with its live step trace and verified
+  grounding; a narrowed shortlist approval (the decision's `edited_args`); a drink paired in
+  the book dialog (alcohol-free, the recipe and back) and in book chat; the fashion feed with
+  every strategy and its evidence, Model quality, description and photo search (a multipart
+  upload), the connections graph, recipe search with filters, a pantry match, book search,
+  the reading list's cocktail, "Because you liked…", browse by mood, both Compare dialogs,
+  deep links after a reload and every page at 390 px without sideways scrolling.
+- `test_fashion_e2e.py`: the product dialog's hand-off to the assistant, self-correction of
+  an invented price, a narrowed approval, a clarifying question, a remembered budget applied
+  to the next search, a declined proposal and personal picks from a linked shopping history.
+- `test_cocktails_e2e.py`: the cocktail chat (a pantry question, a saved drink, an
+  alcohol-free taste remembered and applied, conversations kept per domain) and the recipe
+  dialog.
+- `test_books_e2e.py`: the book probes on the real catalog ("fantasy like The Name of the
+  Wind", "short classic novels", author and series caps); in the browser the Books pages
+  (search seeded by a title, the book dialog, "Because you liked…", browse by mood), the book
+  agent (grounded search, self-correction of an invented rating, reading-list approval,
+  remembered tastes in the trace, a clarifying question) and the page at 390 px. It skips
+  when the book files are not prepared.
+- `test_outfit_e2e.py`: outfits for six occasions on the real index, each a real outfit (one
+  piece of the slot's kind per slot, at least three product groups, no repeated type, the
+  audience's sections, the total within the budget), a €8 wedding budget that names the slot
+  that does not fit, swaps that never exceed the budget or bring a piece back, and the agent
+  streaming a step per slot with a verified total; in the browser the "Outfit for an
+  occasion" starter, the outfit card, "Cheaper" shoes and "Save outfit" narrowed to three
+  pieces in the approval drawer.
+- `test_pairing_e2e.py`: 14 famous books paired on the real catalogs (their top three drinks
+  go to `pairings.json`): a noir mystery gets a whiskey-forward drink, children's books only
+  alcohol-free drinks, The Great Gatsby a Jazz Age gin or Champagne drink, reader taste with
+  avoided genres, and the agent's PairCocktail turn and an invented drink caught; in the
+  browser a drink in the book dialog (another pairing, alcohol-free, the recipe and back), the
+  reading-list cocktail card, the chat starter and the dialog at phone width.
+- `test_evening_e2e.py`: fifteen occasions planned on the real catalogs and written to
+  `evening-plans.json` (complete exactly when the outfit is, within budget, alcohol-free when
+  asked or for kids, family and a baby shower, never romantic for family, kids or work, a
+  well-known book and a drink paired with it) and swaps on the real data; in the browser the
+  landing and the brand, "rainy Sunday in" and "book club, alcohol-free" on the planner page,
+  "date night under €100" in evening chat (a cheaper piece, a SaveEvening approval with six
+  parts), an invented drink caught by grounding and the page at 390 px. A third API, the
+  quick-start demo with books (no fashion, no LLM), plans the book and the drink and says the
+  outfit needs the fashion catalogue.
+- `test_api_e2e.py`: CLIP retrieval quality, image search finding the photographed product,
+  every strategy's evidence, signed approvals (including cross-domain replay) and the
+  cocktail endpoints.
+
+Screenshots are `web-*.png`, named by area.
 
 The chat model is `tests/e2e/llm_stub.py`, a scripted OpenAI-compatible server: the app
 reaches it through `LLM_PROVIDER=openai` and `LLM_BASE_URL`, so the real provider path runs
 over HTTP while replies stay deterministic and need no key. It does not measure the
 quality of a real model's answers.
 
-`test_quickstart_e2e.py` starts a second API and UI the way the quick start does: a data
-folder with only `cocktails.parquet`, no image index, no LLM and no `.env`. It checks that
-`/health` and `/domains` report fashion as not prepared, that fashion endpoints answer 503,
-and that the UI opens on cocktails, says how to enable chat and has no fashion pages. It
-opens no Qdrant index, so it runs beside the full-data API.
+`test_quickstart_e2e.py` starts a second API the way the quick start does: a data folder
+with only `cocktails.parquet`, no image index, no LLM and no `.env`, serving the built app.
+It checks that `/health` and `/domains` report fashion as not prepared, that fashion
+endpoints answer 503, and that the app lands on the cocktail pages, shows fashion as
+unavailable with its hint, says how to enable chat and sends fashion deep links back to the
+landing. It opens no Qdrant index, so it runs beside the full-data API, and it needs only the
+recipes, so CI runs it (the `e2e-quickstart` job); the rest of the suite runs locally on the
+prepared data.
 
 Prepare the data as in [Fashion data](#fashion-data) (`prepare_data`, `fetch_photos`, `build_index`,
 `fetch_query_photos`, `train_ranker`, `evaluate`, `prepare_cocktails`, `prepare_books`),
@@ -950,6 +1051,10 @@ each step go to `e2e-artifacts/` (override with `E2E_ARTIFACTS`); `E2E_DATA_DIR`
 `E2E_QDRANT_PATH` and `E2E_CHROMIUM` point at other data or browsers. The default
 `uv run pytest` run excludes these tests.
 
+A second CI job, `web`, runs `npm ci`, lint (ESLint and Prettier), the type check, the
+Vitest suite and the production build of `web/` on Node 22. A third, `e2e-quickstart`,
+builds the app, installs Chromium and runs `test_quickstart_e2e.py` on the recipes alone.
+
 CI (`.github/workflows/ci.yml`) runs `uv sync --locked`, Ruff, `scripts.prepare_cocktails`
 (so the probes on the real recipe catalog run instead of skipping), the offline test suite,
 a startup check of the real API with only the recipes (the runner has no H&M data: `/health`
@@ -957,17 +1062,17 @@ must report cocktails served and fashion not, `/products/1` must be 503 and reci
 200) and `docker compose config` for every profile. It needs no secrets.
 
 The offline suite covers fashion-less serving in `tests/test_optional_domains.py` (real
-`Settings` over a temporary data folder; CLIP and Qdrant fail the test if touched) and the
-UI's cocktails-only, no-domain and legacy-API cases in `tests/test_ui_cocktails.py`. Books
+`Settings` over a temporary data folder; CLIP and Qdrant fail the test if touched); the web
+app's own behaviour (the stream reader, step trace, approvals, cards, session, filters,
+pantry, Compare and the graph) is covered by its Vitest suites in `web/src`. Books
 have their own offline tests over a ten-book fixture (`tests/conftest.py`): the catalog,
 taxonomy and recommender in `tests/domains/books/`, `scripts.prepare_books` over a miniature
 goodbooks-10k checkout in `tests/test_prepare_books.py`, the agent and its grounding in
-`tests/agents/test_book_agent.py`, loading and endpoints in `tests/test_books_api.py`, and
-the UI in `tests/test_ui_books.py`. CI does not download goodbooks-10k. The outfit builder is
+`tests/agents/test_book_agent.py`, and loading and endpoints in `tests/test_books_api.py`.
+CI does not download goodbooks-10k. The outfit builder is
 covered by planner tests over a 13-product fixture (`tests/test_outfits.py`: plans, budget
 allocation, infeasible budgets, co-purchase and visual preference, swaps), agent tests with
-a scripted model (`tests/agents/test_outfit_agent.py`), API tests in `tests/test_api.py` and
-UI tests in `tests/test_ui_agent.py`.
+a scripted model (`tests/agents/test_outfit_agent.py`) and API tests in `tests/test_api.py`.
 
 ### Releases
 
@@ -996,4 +1101,8 @@ only: `/health` gains `books_enabled` and `book_count`, `/domains` a third entry
 `TurnContext.auto_approve` accepts up to six tools. A client that lists `/domains` and only
 knows fashion and cocktails ignores the new entry. The outfit builder adds fields only:
 `TurnContext.outfit` (optional) and `AssistantReply.outfit` (null unless the turn built or
-changed an outfit), plus the `/outfits` endpoints.
+changed an outfit), plus the `/outfits` endpoints. Version 3.0.0 replaces the Streamlit UI
+with the React app the API serves: the API is unchanged, but the `ui` extra, port 8501 and
+`streamlit run …` are gone, Docker runs one service per stack on port 8000, and
+`scripts/quickstart.sh` takes `CURIO_HOST` and `CURIO_PORT` instead of `UI_HOST`, `UI_PORT`
+and `API_PORT`.

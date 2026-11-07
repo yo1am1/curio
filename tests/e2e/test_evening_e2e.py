@@ -1,4 +1,4 @@
-"""Plan my evening end to end: the real catalogs through the API, the agent and the UI.
+"""Plan my evening end to end: the real catalogs through the API, the agent and the app.
 
 Needs the prepared H&M data and photo index, the books and the cocktails. Writes the real
 plans for several occasions to `evening-plans.json` in the artifacts folder. The quick-start
@@ -6,6 +6,7 @@ case (books and cocktails, no fashion, no LLM) runs on its own API.
 """
 
 import json
+import re
 
 import httpx
 import pytest
@@ -14,7 +15,6 @@ from playwright.sync_api import expect
 from curio.domains.books.taxonomy import EXCLUDED_SHELVES
 from curio.domains.cocktails.recommend import CRUDE_NAMES
 from tests.e2e.conftest import DATA_DIR
-from tests.e2e.test_ui_e2e import visible_photos
 
 pytestmark = pytest.mark.skipif(
     not (DATA_DIR / "books.parquet").exists() or not (DATA_DIR / "cocktails.parquet").exists(),
@@ -145,14 +145,22 @@ def test_real_plans_for_several_occasions(api, artifacts):
     assert all(row["book_ratings"] >= 100_000 for row in table), books
 
 
-def test_a_new_visit_opens_on_plan_my_evening_with_the_engine_brand(ui):
-    ui.open()
-    expect(ui.page.get_by_role("heading", name="Plan my evening", exact=True)).to_be_visible()
-    expect(ui.page.get_by_text("TRUSTWORTHY RECOMMENDATION AGENTS")).to_be_visible()
-    ui.click(ui.page.get_by_test_id("stButtonGroup").first.get_by_text("Books"))
-    expect(ui.page.get_by_role("heading", name="Find your next great read.")).to_be_visible()
-    ui.click(ui.page.get_by_test_id("stButtonGroup").first.get_by_text("Evening"))
-    expect(ui.page.get_by_role("heading", name="Plan my evening", exact=True)).to_be_visible()
+def test_a_new_visit_opens_on_plan_my_evening_with_the_engine_brand(web):
+    web.open("/")
+    expect(web.page).to_have_url(re.compile(r"/evening$"))
+    expect(web.page.get_by_role("heading", name="Plan my evening", level=1)).to_be_visible()
+    expect(web.page.get_by_text("Trustworthy recommendation agents")).to_be_visible()
+    switch = web.page.get_by_role("navigation", name="Catalog")
+    switch.get_by_role("link", name="Books").click()
+    expect(web.page.get_by_role("heading", name="Books", level=1)).to_be_visible()
+    web.page.get_by_role("navigation", name="Books pages").get_by_role(
+        "link", name="Ask Curio"
+    ).click()
+    expect(web.page.get_by_role("heading", name="Find your next great read.")).to_be_visible()
+    # Choosing Evening lands on the planner page, not on its chat.
+    switch.get_by_role("link", name="Evening").click()
+    expect(web.page).to_have_url(re.compile(r"/evening$"))
+    expect(web.page.get_by_role("heading", name="Plan my evening", level=1)).to_be_visible()
 
 
 def test_swaps_on_the_real_data(api):
@@ -175,97 +183,109 @@ def test_swaps_on_the_real_data(api):
     assert free["book"]["book"]["book_id"] == first["book"]["book"]["book_id"]
 
 
-# --- Browser ---------------------------------------------------------------------------------
+# --- Browser (the React app) -------------------------------------------------------------
 
 
-def plan_on_page(ui, occasion_chip: str | None = None, text: str | None = None) -> None:
-    ui.open("evening")
+def plan_on_page(web, occasion_chip: str | None = None, text: str | None = None) -> None:
+    web.open("/evening")
     if occasion_chip:
-        ui.click(ui.key("evening_occasion_chip").locator("button", has_text=occasion_chip))
+        web.page.get_by_role("group", name="Occasions").get_by_role(
+            "button", name=occasion_chip, exact=True
+        ).click()
     if text:
-        box = ui.key("evening_occasion").get_by_role("textbox")
-        box.fill(text)
-        box.press("Enter")
-        ui.settle()
+        web.page.get_by_label("Occasion", exact=True).fill(text)
 
 
-def test_rainy_sunday_in_on_the_planner_page(ui):
-    plan_on_page(ui, "Rainy Sunday in")
-    ui.click(ui.key("evening_plan_button").get_by_role("button"))
-    page = ui.page
+def plan_now(web):
+    web.page.get_by_role("button", name="Plan my evening").click()
+    plan = web.page.get_by_test_id("evening-plan")
+    expect(plan).to_be_visible(timeout=120_000)
+    return plan
+
+
+def test_rainy_sunday_in_on_the_planner_page(web):
+    plan_on_page(web, "Rainy Sunday in")
+    plan = plan_now(web)
     for part in ("outfit", "book", "drink"):
-        expect(ui.key(f"evening_{part}_page")).to_be_visible()
-    expect(page.get_by_text("Why it works", exact=False)).to_be_visible()
-    expect(
-        ui.key("evening_theme_page").locator(".stMarkdownBadge", has_text="Cosy")
-    ).to_be_visible()
-    visible_photos(ui, 5)  # three pieces, the cover and the drink
-    ui.shot("80-evening-rainy-sunday")
-    book = ui.key("evening_book_page").locator('[data-testid="stText"]').first.inner_text()
-    ui.click(ui.key("evening_another_book_page").get_by_role("button"))
-    expect(ui.key("evening_book_page").locator('[data-testid="stText"]').first).not_to_have_text(
-        book
-    )
-    ui.click(ui.key("evening_save_page").get_by_role("button"))
-    dialog = page.get_by_role("dialog")
+        expect(web.page.get_by_test_id(f"evening-{part}")).to_be_visible()
+    expect(plan.get_by_text("Why it works")).to_be_visible()
+    expect(plan.get_by_text("Cosy", exact=True)).to_be_visible()
+    web.shot("evening-01-rainy-sunday", full_page=True)
+    book = web.page.get_by_test_id("evening-book")
+    title = book.locator("p").first.inner_text()
+    book.get_by_role("button", name="Another book").click()
+    expect(book.locator("p").first).not_to_have_text(title, timeout=30_000)
+    web.page.get_by_role("button", name="Save evening").click()
+    dialog = web.page.get_by_role("dialog", name="Save this evening?")
     expect(dialog.get_by_text("→ reading list", exact=False)).to_be_visible()
-    ui.shot("81-evening-save-approval")
-    ui.click(dialog.get_by_role("button", name="Approve"))
-    expect(page.get_by_role("dialog")).to_have_count(0)
+    web.shot("evening-02-save-approval")
+    dialog.get_by_role("button", name="Approve").click()
+    expect(web.page.get_by_role("dialog")).to_have_count(0)
+    session = web.session()
+    assert len(session["readingList"]) == 1 and len(session["cocktailShortlist"]) == 1
+    assert len(session["shortlist"]) >= 2
 
 
-def test_book_club_alcohol_free_on_the_planner_page(ui):
-    plan_on_page(ui, "Book club")
-    ui.click(ui.key("evening_alcohol_free").get_by_text("Alcohol-free"))
-    ui.click(ui.key("evening_plan_button").get_by_role("button"))
-    drink = ui.key("evening_drink_page")
+def test_book_club_alcohol_free_on_the_planner_page(web):
+    plan_on_page(web, "Book club")
+    web.page.get_by_role("switch", name="Alcohol-free").check()
+    plan_now(web)
+    assert web.page.get_by_role("switch", name="Alcohol-free").is_checked()
+    drink = web.page.get_by_test_id("evening-drink")
     expect(drink.get_by_text("Alcohol-free", exact=True).first).to_be_visible()
     expect(drink.get_by_role("button", name="Alcohol-free")).to_be_disabled()
-    visible_photos(ui, 4)
-    ui.shot("82-evening-book-club-alcohol-free")
+    web.shot("evening-03-book-club-alcohol-free", full_page=True)
 
 
-def test_date_night_under_100_in_chat_with_a_swap_and_an_approved_save(ui):
-    ui.ask("Evening")
-    expect(ui.page.get_by_role("heading", name="Plan my evening.")).to_be_visible()
-    ui.send("Plan a date night under €100")
-    card = ui.key("chat_evening_home_1")
+def test_date_night_under_100_in_chat_with_a_swap_and_an_approved_save(web):
+    web.open("/evening")
+    web.page.get_by_role("navigation", name="Evening pages").get_by_role(
+        "link", name="Ask Curio"
+    ).click()
+    expect(web.page.get_by_role("heading", name="Plan my evening.")).to_be_visible()
+    web.send("Plan a date night under €100")
+    turn = web.last_turn()
+    card = turn.get_by_test_id("evening-plan")
     expect(card).to_be_visible()
     expect(card.get_by_text("of €100.00", exact=False)).to_be_visible()
-    expect(card.locator(".stMarkdownBadge", has_text="Romantic")).to_be_visible()
-    expect(ui.page.get_by_text("Prices, titles and drinks checked")).to_be_visible()
-    visible_photos(ui, 5)
-    ui.shot("83-evening-chat-date-night")
-    ui.click(ui.key("evening_cheaper_chat_home_1_shoes").get_by_role("button"))
-    expect(ui.page.get_by_test_id("stChatMessage").last).to_contain_text("A cheaper shoes")
-    ui.send("Save the evening")
-    approval = ui.key("approval_home_5")
-    expect(approval.get_by_text("Needs your approval")).to_be_visible()
-    expect(approval.get_by_role("checkbox")).to_have_count(6)  # 4 pieces, a book, a drink
-    ui.shot("84-evening-chat-save-approval")
-    ui.click(approval.get_by_role("button", name="Approve"))
-    expect(ui.page.get_by_text("each part is saved to its own list")).to_be_visible()
-    expect(ui.key("agent_session").get_by_text("4 pieces · 1 books · 1 drinks")).to_be_visible()
-    ui.shot("85-evening-chat-saved")
+    expect(card.get_by_text("Romantic", exact=True)).to_be_visible()
+    expect(turn.get_by_test_id("grounding-badge")).to_have_text("Prices, titles and drinks checked")
+    web.shot("evening-04-chat-date-night", full_page=True)
+    web.click_and_answer(card.get_by_role("button", name="A cheaper shoes"))
+    expect(web.page.get_by_role("log", name="Conversation")).to_contain_text("Cheaper shoes")
+    expect(web.last_turn()).to_contain_text("A cheaper shoes")
+    web.send("Save the evening")
+    drawer = web.page.get_by_test_id("approval-drawer")
+    expect(drawer.get_by_role("heading", name="Needs your approval")).to_be_visible()
+    expect(drawer.get_by_role("checkbox")).to_have_count(6)  # 4 pieces, a book, a drink
+    web.shot("evening-05-chat-save-approval")
+    drawer.get_by_role("button", name="Approve").click()
+    expect(drawer).to_be_hidden(timeout=120_000)
+    expect(web.page.get_by_text("each part is saved to its own list", exact=False)).to_be_visible()
+    counts = web.page.get_by_test_id("session-panel")
+    for label, value in (("Pieces", "4"), ("Books", "1"), ("Drinks", "1")):
+        expect(counts.locator("dl div", has_text=label).locator("dd")).to_have_text(value)
+    web.shot("evening-06-chat-saved", full_page=True)
 
 
-def test_an_invented_drink_in_an_evening_answer_falls_back(ui):
-    ui.ask("Evening")
-    ui.send("Plan a murder mystery night, surprise me")
-    expect(ui.page.get_by_text("Unverified answer replaced with catalog facts")).to_be_visible()
-    expect(ui.page.get_by_text("from the catalogs:", exact=False)).to_be_visible()
-    expect(ui.page.get_by_text("Negroni", exact=False)).to_have_count(0)
-    ui.shot("86-evening-grounding-fallback")
+def test_an_invented_drink_in_an_evening_answer_falls_back(web):
+    web.open("/ask/evening")
+    web.send("Plan a murder mystery night, surprise me")
+    turn = web.last_turn()
+    expect(turn.get_by_test_id("grounding-badge")).to_have_text(
+        "Unverified answer replaced with catalog facts"
+    )
+    expect(turn.get_by_text("from the catalogs:", exact=False)).to_be_visible()
+    expect(web.page.get_by_text("Negroni", exact=False)).to_have_count(0)
+    web.shot("evening-07-grounding-fallback", full_page=True)
 
 
-def test_evening_on_a_phone(phone):
-    phone.open("evening")
-    phone.click(phone.key("evening_occasion_chip").locator("button", has_text="Date night"))
-    phone.click(phone.key("evening_plan_button").get_by_role("button"))
-    expect(phone.key("evening_drink_page")).to_be_visible()
-    assert phone.no_horizontal_scroll()
-    phone.key("evening_theme_page").scroll_into_view_if_needed()
-    phone.shot("87-phone-evening")
+def test_evening_on_a_phone(web_phone):
+    plan_on_page(web_phone, "Date night")
+    plan_now(web_phone)
+    expect(web_phone.page.get_by_test_id("evening-drink")).to_be_visible()
+    assert web_phone.no_horizontal_scroll()
+    web_phone.shot("evening-08-phone", full_page=True)
 
 
 # --- Quick start without fashion -------------------------------------------------------------
@@ -290,18 +310,20 @@ def test_quick_start_plans_the_book_and_drink_and_says_the_outfit_needs_fashion(
     assert result["why"].endswith("· no outfit yet")
 
 
-def test_quick_start_planner_page_without_fashion(demo_ui):
-    ui = demo_ui.open("evening")
-    page = ui.page
+def test_quick_start_planner_page_without_fashion(demo_web):
+    demo_web.open("/")
+    page = demo_web.page
+    expect(page).to_have_url(re.compile(r"/evening$"))
+    expect(page.get_by_text("The outfit needs the fashion catalogue", exact=False)).to_be_visible()
+    fashion = page.get_by_role("navigation", name="Catalog").get_by_text("Fashion", exact=True)
+    expect(fashion.locator("xpath=..")).to_have_attribute("aria-disabled", "true")
+    page.get_by_role("group", name="Occasions").get_by_role(
+        "button", name="Rainy Sunday in", exact=True
+    ).click()
+    plan_now(demo_web)
     expect(
-        page.get_by_text("The outfit needs the fashion catalogue", exact=False).first
+        page.get_by_test_id("evening-outfit").get_by_text("fashion catalogue", exact=False)
     ).to_be_visible()
-    ui.click(ui.key("evening_occasion_chip").locator("button", has_text="Rainy Sunday in"))
-    ui.click(ui.key("evening_plan_button").get_by_role("button"))
-    expect(
-        ui.key("evening_outfit_page").get_by_text("fashion catalogue", exact=False)
-    ).to_be_visible()
-    expect(ui.key("evening_book_page")).to_be_visible()
-    expect(ui.key("evening_drink_page")).to_be_visible()
-    visible_photos(ui, 2)
-    ui.shot("88-quickstart-evening-no-fashion")
+    expect(page.get_by_test_id("evening-book")).to_be_visible()
+    expect(page.get_by_test_id("evening-drink")).to_be_visible()
+    demo_web.shot("evening-09-quickstart-no-fashion", full_page=True)

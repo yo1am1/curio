@@ -1,0 +1,182 @@
+.trace {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  font-size: 0.875rem;
+}
+
+.live {
+  padding: 0.75rem 0.9rem 0.4rem;
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.liveHead {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.35rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.pulse {
+  position: relative;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.pulse::after {
+  content: "";
+  position: absolute;
+  inset: -0.3rem;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  animation: ping 1.3s var(--ease) infinite;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0 0.85rem;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+}
+
+.toggle:hover {
+  color: var(--accent);
+}
+
+.chevron {
+  display: inline-flex;
+  margin-left: auto;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0.9rem 0.6rem;
+  display: grid;
+}
+
+.live .list {
+  padding: 0.25rem 0 0.2rem;
+}
+
+.step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.6rem 1fr;
+  gap: 0.6rem;
+  padding: 0.35rem 0;
+}
+
+.step:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 0.8rem;
+  top: 1.95rem;
+  bottom: -0.35rem;
+  width: 1px;
+  background: var(--line);
+}
+
+.node {
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface-raised);
+  color: var(--ink-soft);
+}
+
+.step[data-kind="guardrail"] .node {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 40%, transparent);
+  background: var(--green-soft);
+}
+
+.step[data-kind="approval"] .node {
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+
+.step[data-status="error"] .node,
+.step[data-status="blocked"] .node {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+  background: var(--red-soft);
+}
+
+.content {
+  min-width: 0;
+  padding-top: 0.15rem;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.name {
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.status {
+  display: inline-flex;
+  color: var(--green);
+}
+
+.step[data-status="error"] .status,
+.step[data-status="blocked"] .status {
+  color: var(--red);
+}
+
+.step[data-status="pending"] .status {
+  color: var(--accent);
+}
+
+.step[data-status="skipped"] .status {
+  color: var(--ink-muted);
+}
+
+.time {
+  margin-left: auto;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+}
+
+.summary {
+  color: var(--ink-soft);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+@keyframes ping {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  80%,
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}

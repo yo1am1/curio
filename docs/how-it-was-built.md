@@ -11,7 +11,7 @@ reviewed every change before it landed.
   UI; each fix landed with a regression test.
 - **Test gates.** Every change has to pass lint, formatting and the offline suite. The
   suite includes the import-layering test in `tests/test_architecture.py`. A browser suite
-  runs the real API and UI in Chromium on the prepared data, with a scripted LLM, so chat
+  runs the real API and the React app it serves in Chromium on the prepared data, with a scripted LLM, so chat
   runs are reproducible.
 - **Evidence over claims.** Recommender changes were measured on a chronological holdout
   and kept only when the evidence held. The records, including the ideas that did not hold,

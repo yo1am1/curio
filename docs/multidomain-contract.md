@@ -139,7 +139,7 @@ runtimes; `services.fashion` / `services.cocktails` are typed shortcuts. Fashion
 `cocktails.parquet` loads. `ENABLED_DOMAINS` (comma-separated ids) limits what is loaded; an
 unknown id is a startup error. Adding a domain: one `DomainSpec`, its id in
 `app.schemas.Domain`, its endpoints behind a dependency like `FashionDep`, and one `DomainView`
-in `ui.DOMAIN_VIEWS`. Books (`BookServices`) are served when `books.parquet` and
+with its pages in the web app's registry (`web/src/domains/registry.ts`). Books (`BookServices`) are served when `books.parquet` and
 `book_neighbours.parquet` both load; a missing or broken file disables only books.
 
 ## API
@@ -175,16 +175,20 @@ in `ui.DOMAIN_VIEWS`. Books (`BookServices`) are served when `books.parquet` and
 
 ## UI
 
-- A domain switch in the header, stored in `st.session_state["domain"]`, listing the domains
-  the API serves (from `/health` `domains`); it is disabled with one domain, each domain that
-  is not served shows "… is not available" with the server's hint, the app opens on the first
-  served domain, and a setup page replaces the app when none is served. Pages of a domain that
-  is not served are not registered.
-- Navigation per domain. Fashion: Ask Curio, Fashion, Discover, Product connections.
-  Cocktails: Ask Curio, Cocktails (`/cocktails`: search + "What can I make?" pantry + recipe dialog
-  with similar drinks).
-- Chat history, shortlist and memory are kept per domain (`chat_history` stays the fashion key;
-  cocktails use `chat_history_cocktails`, `cocktail_shortlist`, `cocktail_preferences`).
+The UI is the React app in `web/` (served by the API, see the
+[technical guide](technical-guide.md#web-app)).
+
+- A domain switch in the header lists every registered domain from `/domains`: a domain that
+  is not served stays visible but disabled, with "… is not available" and the server's hint.
+  The app opens on Plan my evening when the evening is served, else on the first served
+  domain's main page, and a setup page replaces the app when none is served. Routes of a
+  domain that is not served lead back to the landing.
+- Pages per domain, each with its chat (`/ask/<domain>`) in the sub-navigation. Fashion: For
+  you (`/fashion`), Discover, Product connections. Cocktails: recipe search (`/drinks`: search
+  and a recipe dialog with similar drinks) and "What can I make?" (`/drinks/pantry`).
+- Chat transcripts, shortlists and memory are kept per domain: the session (lists, memory,
+  outfit, evening, approval toggles, linked shopper) in `localStorage` (`curio.session.v1`),
+  transcripts for the browser tab (`curio.chat.v1` in `sessionStorage`).
 - Cocktail pages credit "Recipe data: TheCocktailDB" and say "Please drink responsibly."
   Images load directly from the https image URL.
 
@@ -341,16 +345,13 @@ the reading list or typed), and ratings must match an evidence book's Goodreads 
 
 ### UI
 
-- The header switch lists Books third. Navigation: Ask Curio, Books (`/books`: Search,
-  "Because you liked…" seeded from the reading list, Browse by mood; a book dialog with
-  cover, rating, facts, genres, description, shelves, Save, Ask Curio, a Goodreads link,
-  "Readers also liked" and "More by <author>").
-- Session keys: `chat_history_books`, `book_shortlist` (reading list), `book_preferences`,
-  `chat_queued_books`, `chat_decision_books`. The Books page sends remembered avoidances as
-  exclusions and liked genres as boosts, like the agent.
-- Book pages credit "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.0)" and say ratings
-  are Goodreads averages. Covers load directly from Goodreads (the 318 px variant of the
-  dataset's link on cards and dialogs).
+- The header switch lists Books third. Pages: Search (`/reading`), "Because you liked…"
+  (`/reading/because`, seeded from the reading list) and Browse by mood (`/reading/moods`);
+  a book dialog with cover, rating, facts, genres, description, shelves, Save, Ask Curio, a
+  Goodreads link, "Readers also liked" and "More by <author>".
+- The session holds the reading list (`readingList`) and reading tastes
+  (`bookPreferences`). The Books pages send remembered avoidances as exclusions and liked
+  genres as boosts, like the agent.
 
 ## Fashion outfits
 
@@ -407,7 +408,7 @@ outfit's `amounts()`, for the outfit built this turn and the one the client sent
 
 ### UI
 
-- Session key `chat_outfit`: the latest reply's `outfit.state`, sent as `outfit` with every
+- The session's `outfit`: the latest reply's `outfit.state`, sent as `outfit` with every
   fashion chat request and cleared by "New conversation".
 - A turn with an outfit shows an outfit card (one column per slot with photo, name, price,
   colour and reason; the total against the budget; notes), and product cards only for
@@ -470,13 +471,11 @@ extras.
 
 ### UI
 
-- `pairing_available()` when `/health` reports books and cocktails enabled. The book dialog's
-  "Pair a drink" toggles `pair_open_<book_id>`; each pairing panel keeps
-  `pair_seed_<key>` and `pair_alcohol_free_<key>`. "Recipe" inside a dialog sets
-  `open_drink` and switches to the Cocktails page (`page_routes` holds the registered
-  pages), which opens the recipe dialog.
-- Books page: "Your reading list's cocktail" (`pairing_reading_list`) when the reading list
-  or liked genres are set. Book chat sends `cocktail_preferences`, stores `pairing` on the
+- Pairing controls appear when `/domains` reports books and cocktails served. The book
+  dialog's "Pair a drink" opens a pairing panel with "Alcohol-free only" and "Another
+  pairing" (the next `seed`); "Recipe" opens the drink's recipe in the same dialog, with Back
+  to the book.
+- Books page: "Your reading list's cocktail" when the reading list or liked genres are set. Book chat sends `cocktail_preferences`, stores `pairing` on the
   turn and renders it as a card; the starters add "Pair a cocktail with my reading list".
 
 ## Plan my evening
@@ -561,16 +560,14 @@ separate ranges (`BOOK_KEY`, `DRINK_KEY`).
 
 ### UI
 
-- `DOMAIN_VIEWS["evening"]`: label ":material/bedtime: Evening", the "Plan my evening" page
-  (`/evening`), copy titled "Plan my evening.", approval setting `ask_shortlist` ->
-  `SaveEvening`, session keys `chat_history_evening`, `chat_queued_evening`,
-  `chat_decision_evening`.
-- Session key `chat_evening`: the latest evening reply's `evening.state`, sent as `evening`
-  with every evening chat request (with every domain's tastes and lists) and cleared by "New
-  conversation". `evening_plan` holds the page's plan, `evening_saving` the open save dialog.
-- The plan renders as `evening_cards`: the theme badge and evidence, the "why it works" line
-  (`evening_why_<key>`), three cards in a row (`evening_outfit_<key>`, `evening_book_<key>`,
-  `evening_drink_<key>`) with swap buttons, and Save evening. On the page the buttons call
+- The evening's registry entry (`web/src/domains/registry.ts`): label "Evening", the Plan my
+  evening page (`/evening`, where a visit lands), chat titled "Plan my evening.", approval
+  setting `ask_shortlist` -> `SaveEvening`.
+- The session's `evening`: the latest evening reply's `evening.state`, sent as `evening` with
+  every evening chat request (with every domain's tastes and lists) and cleared by "New
+  conversation". The planner page keeps its plan for the browser tab.
+- The plan shows the theme badge and evidence, the "why it works" line, three cards (outfit,
+  book, drink) with swap buttons, and Save evening. On the page the buttons call
   `/evening/swap` and Save evening opens an approval dialog with a checkbox per part; in chat
   they send "Another top for my evening", "Cheaper shoes", "Another book", "Another drink",
   "Make the drink alcohol-free" and "Save the evening" to the agent. An applied `evening`
