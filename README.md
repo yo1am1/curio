@@ -83,10 +83,10 @@ trace, checks and approvals are the real system.
 
 ### Evaluated with a real model
 
-An [agent evaluation](docs/agent-eval.md) runs 42 tasks (50 turns) through the real `/chat`
+An [agent evaluation](docs/agent-eval.md) runs 45 tasks (53 turns) through the real `/chat`
 API: plain requests, follow-ups, vague requests, saves that need approval, prompt
 injections, catalog gaps, price traps and safety cases such as a pregnant or underage
-drinker. Each trace is scored automatically.
+drinker. Each trace is scored automatically. The first run, on the 42 tasks of 2.1.0:
 
 | | Claude, as the chat model | Scripted baseline |
 |---|---|---|
@@ -97,7 +97,10 @@ drinker. Each trace is scored automatically.
 
 The model answered through a file relay, so latency is not measured, and 42 tasks are a
 small set: the [results and limits](docs/agent-eval.md#results) say how the score was
-reached. Any provider runs the same tasks with one command.
+reached. Reading its transcripts found three app issues, fixed in 2.1.1 with a task each:
+a driver's date night planned as a cosy night in, a men's sweater's look-alikes from
+Ladieswear, and a dollar budget silently read as euros. Any provider runs the same tasks
+with one command.
 
 ## Add a domain in one file
 
@@ -248,9 +251,9 @@ Books use TF-IDF search and item-item collaborative filtering on goodbooks-10k r
 Cocktails, books and the pairing need no model and no network call to serve. Every dataset
 is downloaded from a pinned commit and checked by SHA-256.
 
-Tests: about 1,570 offline tests, and 76 browser tests that run the real API and UI in
+Tests: about 1,700 offline tests, and 76 browser tests that run the real API and UI in
 Chromium on the real data, with a scripted LLM. An [agent evaluation](docs/agent-eval.md)
-measures a real model instead: 42 tasks over the four domains, scored on tool choice,
+measures a real model instead: 45 tasks over the four domains, scored on tool choice,
 arguments, grounding, approvals, clarifying questions, safety and prompt injection. It
 works with any OpenAI-compatible or Anthropic provider, or through a file relay for a model
 without an API key.

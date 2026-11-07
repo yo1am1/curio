@@ -118,7 +118,7 @@ model, decides what a valid call may do.
 |---|---|---|
 | SearchCatalog | read | CLIP text search; keeps budget, audience, type and colour filters |
 | InspectProducts | read | Exact catalog rows for up to five IDs |
-| FindRelated | read | Graph recommender (complement, alternative) or CLIP item-to-item (similar) |
+| FindRelated | read | Graph recommender (complement, alternative) or CLIP item-to-item (similar), kept in the product's audience unless the shopper asks for another (`audience`) |
 | PersonalPicks | read | Learned ranker when deployed, collaborative filtering otherwise, with their reasons |
 | BuildOutfit | read | `OutfitPlanner`: plans 3-4 slots for the occasion and fills each under one total budget; streams a step per slot |
 | SwapOutfitItem | read | Replaces one slot of the current outfit ("other" or "cheaper", optional refining words) within the budget |
@@ -129,6 +129,26 @@ model, decides what a valid call may do.
 `FindRelated` and `PersonalPicks` reach the recommendation system through
 `RecommenderNavigator`. The agent sees ranked IDs plus the same evidence the browsing
 pages show ("3 shoppers who bought … also bought this"), so explanations stay grounded.
+
+`FindRelated` keeps every relation in the source product's audience
+(`toolkit.related_sections`, from the outfit builder's `SECTION_AUDIENCE` and
+`AUDIENCE_SECTIONS`): a Menswear piece gets Menswear, a Ladieswear or Divided piece gets
+Ladieswear and Divided (both womenswear), a Baby/Children piece gets Baby/Children. Sport has
+no audience in the catalog (it is not split by gender), so a Sport piece is not restricted.
+The model passes `audience` only when the shopper asks for another one ("women's pieces like
+this men's sweater"). The look-alike search filters the photo index by section; the graph
+relations read up to 200 neighbours and keep those in the sections, with the same reasons.
+The browsing endpoint `GET /products/{id}/similar` keeps its unfiltered photo neighbours:
+it has no shopper or conversation, and the product page shows it as the photo index's view
+of the piece, so a cross-section look-alike is information there, not a wrong answer.
+
+Prices are euros and Curio has no exchange rates. When the shopper writes an amount in
+dollars or pounds ("under $30", "£80", "150 USD", "50 quid"), a budget is used as a euro
+budget of the same number, never converted (`domains/fashion/currency.py`): it becomes the
+price limit when the intent extractor left it out, and a "Currency" trace step, the session
+prompt and every tool result of the turn carry the note "Prices are in euros; I used 30 as a
+€ budget. You gave it in US dollars, and Curio does not convert currencies.", so the answer
+says it too. An amount that was not used as the budget gets a reminder instead.
 
 #### Outfits: multi-step planning with human approval
 
@@ -434,7 +454,7 @@ actions. Gaps addressed here:
   "Powdered sugar".
 - Feedback stays in memory and resets when the API restarts.
 - Unit and UI tests use scripted models. The [agent evaluation](agent-eval.md) measures a
-  real model on 42 tasks, a small set that shows failure modes rather than precise rates.
+  real model on 45 tasks, a small set that shows failure modes rather than precise rates.
 - Outfit coherence is a CLIP query per slot plus co-purchase and photo similarity; there is
   no colour-harmony or style model, so a dress and earrings can clash. Occasion templates
   are keyword-based and English-only, and the photo index has few men's and children's

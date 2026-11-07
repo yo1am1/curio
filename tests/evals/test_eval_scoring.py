@@ -223,6 +223,17 @@ def test_card_limits():
     assert [c["passed"] for c in checks] == [True, False, False]
 
 
+def test_card_sections():
+    spec = turn(cards={"sections": ["Menswear"]})
+    men = {"product_id": 1, "name": "Rollneck", "price": 19.99, "section": "Menswear"}
+    women = {"product_id": 2, "name": "Polo", "price": 14.99, "section": "Ladieswear"}
+    passed = by_kind(score_turn(spec, trace(reply("x", products=[men]))), "cards")
+    assert [c["passed"] for c in passed] == [True]
+    failed = by_kind(score_turn(spec, trace(reply("x", products=[men, women]))), "cards")
+    assert [c["passed"] for c in failed] == [False]
+    assert "Polo (Ladieswear)" in failed[0]["detail"]
+
+
 def test_errors_fail_the_turn():
     checks = score_turn(turn(status="complete"), trace(None, error={"status": 502, "infra": True}))
     assert [c["kind"] for c in checks] == ["error", "status"]

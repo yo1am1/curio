@@ -1,5 +1,7 @@
 """Semantic product search by text query or example photo."""
 
+from collections.abc import Sequence
+
 from PIL.Image import Image
 
 from curio.domains.fashion.models import Encoder, ProductFilter, ScoredProduct
@@ -23,9 +25,13 @@ class ProductSearch:
         vector = self._encoder.encode_images([image])[0]
         return self._store.search(vector, top_k, product_filter)
 
-    def similar_to(self, product_id: int, top_k: int = 10) -> list[ScoredProduct] | None:
-        """Products whose photos look most like this one's; None if it is not indexed."""
+    def similar_to(
+        self, product_id: int, top_k: int = 10, sections: Sequence[str] = ()
+    ) -> list[ScoredProduct] | None:
+        """Products whose photos look most like this one's, from `sections` when given;
+        None if it is not indexed."""
         vector = self._store.get_vectors([product_id]).get(product_id)
         if vector is None:
             return None
-        return self._store.search(vector, top_k, ProductFilter(exclude_ids=(product_id,)))
+        product_filter = ProductFilter(sections=tuple(sections), exclude_ids=(product_id,))
+        return self._store.search(vector, top_k, product_filter)

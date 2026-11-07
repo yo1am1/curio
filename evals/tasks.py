@@ -84,6 +84,8 @@ class Cards(_Strict):
     max_price: float | None = None  # every product card
     max_pages: int | None = None  # every book card (unknown page counts fail)
     max_outfit_total: float | None = None  # an outfit's or evening outfit's total
+    # Every product card is from one of these sections ("Menswear" for a men's look-alike).
+    sections: list[str] | None = None
 
 
 class Expect(_Strict):

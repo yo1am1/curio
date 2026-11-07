@@ -302,7 +302,9 @@ def load_fashion(settings: Settings, kit: AgentKit | None) -> FashionServices | 
                 search,
                 catalog,
                 # The validated ranker when present; collaborative filtering otherwise.
-                navigator=RecommenderNavigator(graph, search, learned or collaborative),
+                navigator=RecommenderNavigator(
+                    graph, search, learned or collaborative, catalog=catalog
+                ),
                 outfits=OutfitPlanner(search, catalog, vectors=store, links=graph),
                 signer=kit.signer,
                 turn_deadline_seconds=kit.turn_deadline_seconds,

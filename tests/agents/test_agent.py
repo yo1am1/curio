@@ -28,8 +28,9 @@ class FakeNavigator:
     def __init__(self):
         self.calls = []
 
-    def related(self, product_id, relation, top_k):
+    def related(self, product_id, relation, top_k, sections=()):
         self.calls.append(("related", product_id, relation))
+        self.sections = tuple(sections)
         return [Evidence(1, ("Bought together by 3 shoppers.",))]
 
     def personal(self, shopper_id, top_k):

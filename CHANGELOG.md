@@ -6,6 +6,35 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-11-07
+
+### Fixed
+
+Three app issues the first real-model evaluation's transcripts showed, each with unit tests
+and an evaluation task ([docs/agent-eval.md](docs/agent-eval.md#app-issues-found-and-fixed-in-211)):
+
+- Plan my evening: driving, a designated driver, a pregnancy, "sober" and other
+  alcohol-free words only decide the drink; they never choose or change the theme. "Date
+  night, but I'm the one driving us home" was planned as a cosy night in because "home"
+  tied with "date night"; it is now romantic with an alcohol-free drink. Where the car goes
+  ("driving us home", "driving to work") no longer counts as a theme or a work occasion,
+  and "without alcohol" no longer negates the theme word after it. Task
+  `evening-driving-date-night`.
+- Fashion: FindRelated keeps similar, bought-together and alternative pieces in the source
+  product's audience (Menswear stays Menswear; Ladieswear and Divided are womenswear;
+  Baby/Children stays children's; Sport, which the catalog does not split by gender, is not
+  restricted), unless the shopper asks for another `audience`. Look-alikes of a men's
+  rollneck included Ladieswear. Evidence and reasons are unchanged; `GET
+  /products/{id}/similar` keeps its unfiltered photo neighbours. Task
+  `fashion-similar-same-audience`.
+- Budgets in dollars or pounds ("$150", "£80", "150 USD", "80 GBP", "90 dollars", "60
+  pounds") are recognised and used as a euro budget of the same number, never converted
+  with a made-up rate, and a note says so ("Prices are in euros; I used 150 as a € budget.
+  You gave it in US dollars, and Curio does not convert currencies."): on the evening
+  plan, in PlanEvening's and every fashion tool's result, in the fashion trace and session
+  prompt. A dollar budget the fashion intent left out becomes the price limit. Task
+  `fashion-dollar-budget`; the eval scorer gains a `cards.sections` check.
+
 ## [2.1.0] - 2026-11-07
 
 ### Added
@@ -535,7 +564,8 @@ product connections from co-purchases and Shopify categories, offline evaluation
 tool-using shopping assistant with a conversation home and floating panel. How it was
 built is summarised in [docs/how-it-was-built.md](docs/how-it-was-built.md).
 
-[Unreleased]: https://github.com/yo1am1/curio/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/yo1am1/curio/compare/v2.1.1...HEAD
+[2.1.1]: https://github.com/yo1am1/curio/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/yo1am1/curio/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/yo1am1/curio/compare/v1.3.0...v2.0.0
 [1.3.0]: https://github.com/yo1am1/curio/compare/v1.2.1...v1.3.0
