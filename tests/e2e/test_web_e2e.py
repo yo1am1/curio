@@ -11,121 +11,14 @@ build is made with `npm run build` when `web/dist` is missing and `web/node_modu
 otherwise these tests skip.
 """
 
-import json
 import re
-import shutil
-import subprocess
-from collections.abc import Iterator
-from pathlib import Path
 
-import httpx
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import expect
 
-from tests.e2e.conftest import DATA_DIR, ROOT
+from tests.e2e.conftest import DATA_DIR, results
 
-WEB = ROOT / "web"
-DIST = WEB / "dist"
 BOOKS_READY = (DATA_DIR / "books.parquet").exists() and (DATA_DIR / "cocktails.parquet").exists()
-
-
-@pytest.fixture(scope="module")
-def web_url(api_url: str) -> str:
-    if not (DIST / "index.html").exists():
-        npm = shutil.which("npm")
-        if npm is None or not (WEB / "node_modules").exists():
-            pytest.skip("web/dist is not built (run `npm ci && npm run build` in web/)")
-        subprocess.run([npm, "run", "build"], cwd=WEB, check=True)
-    page = httpx.get(f"{api_url}/evening", headers={"accept": "text/html"}, trust_env=False)
-    if page.status_code != 200 or '<div id="root">' not in page.text:
-        pytest.skip("The API does not serve the React app (SERVE_WEB=false?)")
-    return api_url
-
-
-class Web:
-    """A browser page on the React app, with named screenshots and request capture."""
-
-    def __init__(self, page: Page, base: str, artifacts: Path) -> None:
-        self.page = page
-        self.base = base
-        self.artifacts = artifacts
-        self.errors: list[str] = []
-        self.chat_bodies: list[dict] = []
-        page.on("pageerror", lambda error: self.errors.append(str(error)))
-        page.on("request", self._capture)
-
-    def _capture(self, request) -> None:
-        if request.url.endswith("/chat/stream") and request.method == "POST":
-            self.chat_bodies.append(json.loads(request.post_data or "{}"))
-
-    def open(self, path: str = "/") -> "Web":
-        self.page.goto(f"{self.base}{path}")
-        return self
-
-    def send(self, text: str) -> None:
-        turns = self.page.get_by_test_id("assistant-turn").count()
-        box = self.page.get_by_label("Message Curio")
-        box.fill(text)
-        box.press("Enter")
-        expect(self.page.get_by_test_id("assistant-turn")).to_have_count(turns + 1, timeout=120_000)
-
-    def photos(self) -> None:
-        """Wait for the photos in view (lazy photos below the fold load when scrolled to)."""
-        self.page.wait_for_function(
-            """() => [...document.querySelectorAll('img')]
-                .filter(i => {
-                    const box = i.getBoundingClientRect();
-                    return i.offsetParent !== null && box.bottom > 0
-                        && box.top < window.innerHeight;
-                })
-                .every(i => i.complete)""",
-            timeout=60_000,
-        )
-
-    def scroll_through(self) -> None:
-        """Bring every lazy photo into view once, then return to the top."""
-        self.page.evaluate(
-            """async () => {
-                const step = window.innerHeight * 0.8;
-                for (let y = 0; y < document.documentElement.scrollHeight; y += step) {
-                    window.scrollTo(0, y);
-                    await new Promise((r) => setTimeout(r, 150));
-                }
-            }"""
-        )
-        self.photos()
-        self.page.evaluate("window.scrollTo(0, 0)")
-
-    def shot(self, name: str, *, full_page: bool = False) -> None:
-        self.page.wait_for_timeout(600)  # let entrance animations settle
-        if full_page:
-            self.scroll_through()
-        self.photos()
-        self.page.screenshot(path=self.artifacts / f"web-{name}.png", full_page=full_page)
-
-    def session(self) -> dict:
-        return self.page.evaluate("() => JSON.parse(localStorage.getItem('curio.session.v1'))")
-
-    def no_horizontal_scroll(self) -> bool:
-        return self.page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
-
-
-@pytest.fixture
-def web(browser, web_url: str, artifacts: Path) -> Iterator[Web]:
-    context = browser.new_context(viewport={"width": 1440, "height": 1000})
-    driver = Web(context.new_page(), web_url, artifacts)
-    yield driver
-    context.close()
-    assert not driver.errors, f"Browser errors: {driver.errors}"
-
-
-@pytest.fixture
-def web_phone(browser, web_url: str, artifacts: Path) -> Iterator[Web]:
-    context = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2)
-    driver = Web(context.new_page(), web_url, artifacts)
-    yield driver
-    context.close()
-    assert not driver.errors, f"Browser errors: {driver.errors}"
 
 
 @pytest.mark.skipif(not BOOKS_READY, reason="Books or cocktails not prepared")
@@ -318,14 +211,6 @@ def test_phone_layouts_do_not_scroll_sideways(web_phone):
 # --- Browse pages ------------------------------------------------------------------------
 
 
-def results(web: Web, title: str):
-    """The results section headed `title`, once its cards are there."""
-    section = web.page.get_by_role("region", name=title)
-    expect(section).to_be_visible(timeout=60_000)
-    expect(section).to_have_attribute("aria-busy", "false", timeout=60_000)
-    return section
-
-
 def test_fashion_feed_switches_strategy_with_evidence(web):
     with web.page.expect_response(re.compile(r"/users/\d+/recommendations\?strategy=")) as first:
         web.open("/fashion")
@@ -345,6 +230,11 @@ def test_fashion_feed_switches_strategy_with_evidence(web):
     expect(card).to_contain_text("Buy again: last purchased on")
     card.get_by_role("button", name="Why this pick").click()
     expect(card.get_by_text(re.compile(r"Ranking score: -?\d"))).to_be_visible()
+    # Every other strategy fills the feed too.
+    for strategy in ("Similar shoppers", "Purchase connections", "Visual style"):
+        web.page.get_by_role("radio", name=strategy).click()
+        expect(results(web, strategy).get_by_test_id("product-card")).to_have_count(12)
+    web.shot("20b-for-you-visual-style", full_page=True)
     # The explanation, and Model quality linked from it (outside the navigation).
     web.page.get_by_role("button", name="How picks are chosen").click()
     web.page.get_by_role("link", name=re.compile("How each approach scores")).click()

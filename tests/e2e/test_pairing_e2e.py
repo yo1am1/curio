@@ -1,4 +1,4 @@
-"""Book → cocktail pairing end to end: the real catalogs through the API, the agent and the UI.
+"""Book → cocktail pairing end to end: the real catalogs through the API, the agent and the app.
 
 Needs the prepared books (scripts.prepare_books) and cocktails (scripts.prepare_cocktails).
 Writes the real top-3 pairings of famous books to `pairings.json` in the artifacts folder.
@@ -11,8 +11,7 @@ import httpx
 import pytest
 from playwright.sync_api import expect
 
-from tests.e2e.conftest import DATA_DIR
-from tests.e2e.test_ui_e2e import visible_photos
+from tests.e2e.conftest import DATA_DIR, results
 
 pytestmark = pytest.mark.skipif(
     not (DATA_DIR / "books.parquet").exists() or not (DATA_DIR / "cocktails.parquet").exists(),
@@ -171,82 +170,97 @@ def test_an_invented_drink_is_caught_and_replaced_by_the_paired_drinks(api):
     assert all(c["name"] in reply["text"] for c in reply["cocktails"])
 
 
-# --- UI -------------------------------------------------------------------------------------------
+# --- Browser (the React app) ---------------------------------------------------------------------
 
 
-def open_book(ui, title: str, *, reload: bool = True):
-    """Search the Books page for `title` and open its dialog; without `reload` the session
-    (reading list, memory) carries on."""
+def open_book(web, title: str, *, reload: bool = True):
+    """Search the Books page for `title` and open its dialog; without `reload` the page
+    carries on (the session is kept either way)."""
     if reload:
-        ui.open("books")
-    ui.page.get_by_label("Describe a book").fill(title)
-    ui.click(ui.page.get_by_role("button", name="Find books"))
-    card = ui.page.locator('[class*="st-key-book_card_search_"]').filter(has_text=title).first
-    ui.click(card.get_by_role("button", name=f"View {title}"))
-    return ui.page.get_by_role("dialog")
+        web.open("/reading")
+    web.page.get_by_label("Describe a book").fill(title)
+    web.page.get_by_role("button", name="Find books").click()
+    found = results(web, "Matching books")
+    found.get_by_role("button", name=f"View {title}", exact=True).first.click()
+    dialog = web.page.get_by_role("dialog")
+    expect(dialog.get_by_role("heading", name=title, level=2)).to_be_visible()
+    return dialog
 
 
-def test_pair_a_drink_in_the_book_dialog(ui, artifacts):
-    dialog = open_book(ui, "The Great Gatsby")
-    ui.click(dialog.get_by_role("button", name="Pair a drink"))
-    drinks = dialog.locator('[class*="st-key-pairing_drink_book_"]')
-    expect(drinks).to_have_count(3)
-    expect(drinks.get_by_test_id("stText").get_by_text("Gin Rickey", exact=True)).to_be_visible()
+def drink_names(drinks) -> list[str]:
+    return [drink.get_by_role("heading").inner_text() for drink in drinks.all()]
+
+
+def test_pair_a_drink_in_the_book_dialog(web):
+    dialog = open_book(web, "The Great Gatsby")
+    dialog.get_by_role("button", name="Pair a drink").click()
+    drinks = dialog.get_by_test_id("pairing-drink")
+    expect(drinks).to_have_count(3, timeout=60_000)
+    expect(drinks.get_by_role("heading", name="Gin Rickey", exact=True)).to_be_visible()
     expect(dialog.get_by_text(re.compile("Tom Buchanan mixes gin rickeys"))).to_be_visible()
-    visible_photos(ui, 4)
-    dialog.locator(".st-key-book_pairing").scroll_into_view_if_needed()
-    ui.shot("70-pairing-book-dialog")
+    drinks.first.scroll_into_view_if_needed()
+    web.shot("pairing-01-book-dialog")
 
-    first = drinks.first.get_by_test_id("stText").first.inner_text()
-    ui.click(dialog.get_by_role("button", name="Another pairing"))
-    expect(drinks.first.get_by_test_id("stText").first).not_to_have_text(first)
-    ui.click(dialog.get_by_text("Alcohol-free only"))
+    first = drink_names(drinks)[0]
+    dialog.get_by_role("button", name="Another pairing").click()
+    expect(drinks.first.get_by_role("heading")).not_to_have_text(first, timeout=30_000)
+    dialog.get_by_role("switch", name="Alcohol-free only").check()
     expect(dialog.get_by_text(re.compile("Alcohol-free recipes only"))).to_be_visible()
-    badges = drinks.get_by_text(re.compile(r"Alcohol-free$"))
-    expect(badges).to_have_count(drinks.count())
-    ui.shot("71-pairing-alcohol-free")
+    expect(drinks.first.get_by_text("Alcohol-free", exact=True)).to_be_visible()
+    expect(drinks.get_by_text("Alcohol-free", exact=True)).to_have_count(drinks.count())
+    web.shot("pairing-02-alcohol-free")
 
-    # A drink opens on the Cocktails page (a dialog cannot open another dialog).
-    name = drinks.first.get_by_test_id("stText").first.inner_text()
-    ui.click(drinks.first.get_by_role("button", name="Recipe"))
-    recipe = ui.page.get_by_role("dialog")
-    expect(recipe.get_by_role("heading", name=name)).to_be_visible()
-    expect(recipe.get_by_text("Ingredients")).to_be_visible()
-    assert "/cocktails" in ui.page.url
+    # A drink's recipe opens in the dialog, with a way back to the book.
+    name = drink_names(drinks)[0]
+    drinks.first.get_by_role("button", name=f"Open the {name} recipe").click()
+    expect(dialog.get_by_role("heading", name=name, level=2)).to_be_visible()
+    expect(dialog.get_by_role("heading", name="Ingredients")).to_be_visible()
+    dialog.get_by_role("button", name="Back").click()
+    expect(dialog.get_by_role("heading", name="The Great Gatsby", level=2)).to_be_visible()
 
 
-def test_reading_list_cocktail_card_and_chat_starter(ui):
-    ui.open("books")
+def test_reading_list_cocktail_card_and_chat_starter(web):
+    web.open("/reading")
     for title in ("The Big Sleep", "The Maltese Falcon"):
-        dialog = open_book(ui, title, reload=False)
-        ui.click(dialog.get_by_role("button", name="Save to reading list"))
+        dialog = open_book(web, title, reload=False)
+        dialog.get_by_role("button", name="Save to reading list").click()
         expect(dialog.get_by_role("button", name="On your reading list")).to_be_visible()
-        ui.click(dialog.get_by_label("Close"))
-    # Closing a dialog does not rerun the page; the next interaction shows the new list.
-    ui.click(ui.page.get_by_role("button", name="Find books"))
-    card = ui.key("pairing_reading_list")
-    expect(card.get_by_role("heading", name="Your reading list's cocktail")).to_be_visible()
-    expect(card.locator('[class*="st-key-pairing_drink_reading_list_"]')).to_have_count(3)
+        dialog.get_by_role("button", name="Close").click()
+        expect(dialog).to_have_count(0)
+    card = web.page.get_by_test_id("reading-list-pairing")
+    expect(card.get_by_text("Your reading list's cocktail")).to_be_visible()
+    expect(card).to_contain_text("Paired with 2 books")
+    expect(card.get_by_test_id("pairing-drink")).to_have_count(3, timeout=60_000)
     expect(card).to_contain_text("Your reading list (2 books) leans Mystery and noir")
     expect(card).to_contain_text("Your reading list leans Mystery and noir (2 of 2 books)")
     card.scroll_into_view_if_needed()
-    visible_photos(ui, 3)
-    ui.shot("72-pairing-reading-list-card")
+    web.shot("pairing-03-reading-list-card")
 
-    ui.click(ui.page.get_by_role("link", name="Ask Curio"))
-    ui.click(ui.page.get_by_role("button", name="Pair a cocktail with my reading list"))
-    pairing = ui.page.locator('[class*="st-key-chat_pairing_home_"]').last
-    expect(pairing.locator('[class*="st-key-pairing_drink_chat_home_"]')).to_have_count(3)
-    expect(ui.page.get_by_text("Titles and ratings checked against the catalog")).to_be_visible()
-    ui.click(ui.page.get_by_role("button", name="Another pairing"))
-    expect(ui.page.locator('[class*="st-key-chat_pairing_home_"]')).to_have_count(2)
-    ui.shot("73-pairing-chat", full_page=True)
+    web.page.get_by_role("navigation", name="Books pages").get_by_role(
+        "link", name="Ask Curio"
+    ).click()
+    web.click_and_answer(
+        web.page.get_by_role("button", name="Pair a cocktail with my reading list")
+    )
+    turn = web.last_turn()
+    expect(turn.get_by_test_id("pairing-drink")).to_have_count(3)
+    expect(turn.get_by_test_id("grounding-badge")).to_have_text(
+        "Titles and ratings checked against the catalog"
+    )
+    first = drink_names(turn.get_by_test_id("pairing-drink"))
+    assert web.chat_bodies[-1]["book_shortlist"]
+    web.click_and_answer(turn.get_by_role("button", name=re.compile("Another pairing")))
+    second = web.last_turn().get_by_test_id("pairing-drink")
+    expect(second).to_have_count(3)
+    assert drink_names(second) != first
+    web.shot("pairing-04-chat", full_page=True)
 
 
-def test_phone_pairing_dialog_fits_the_screen(phone):
-    dialog = open_book(phone, "Dracula")
-    phone.click(dialog.get_by_role("button", name="Pair a drink"))
-    expect(dialog.locator('[class*="st-key-pairing_drink_book_"]')).to_have_count(3)
-    assert phone.no_horizontal_scroll()
-    dialog.locator(".st-key-book_pairing").scroll_into_view_if_needed()
-    phone.shot("74-phone-pairing")
+def test_phone_pairing_dialog_fits_the_screen(web_phone):
+    dialog = open_book(web_phone, "Dracula")
+    dialog.get_by_role("button", name="Pair a drink").click()
+    drinks = dialog.get_by_test_id("pairing-drink")
+    expect(drinks).to_have_count(3, timeout=60_000)
+    assert web_phone.no_horizontal_scroll()
+    drinks.first.scroll_into_view_if_needed()
+    web_phone.shot("pairing-05-phone")

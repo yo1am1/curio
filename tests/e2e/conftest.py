@@ -1,15 +1,20 @@
-"""End-to-end fixtures: the real API, the real Streamlit UI, a browser and a scripted LLM.
+"""End-to-end fixtures: the real API serving the React app, a browser and a scripted LLM.
 
-The suite needs prepared data (H&M sample, product photos, the Qdrant image index and the
-cocktail catalog) and runs only on request:
+The suite needs prepared data (H&M sample, product photos, the Qdrant image index, the
+cocktail catalog and the books) and runs only on request:
 
     uv run pytest -m e2e tests/e2e
+
+The API serves the built app (`web/dist`, see `curio.app.web`) on its own port, so every
+browser test opens the API's URL. The build is made with `npm run build` when `web/dist` is
+missing and `web/node_modules` exists; otherwise the browser tests skip.
 
 Environment: E2E_DATA_DIR (default `data`), E2E_QDRANT_PATH (default `.qdrant`),
 E2E_ARTIFACTS (screenshot folder, default `e2e-artifacts`), E2E_CHROMIUM (browser binary).
 Embedded Qdrant allows one process, so stop any other API using the same index first.
 """
 
+import json
 import os
 import shutil
 import socket
@@ -22,6 +27,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from playwright.sync_api import expect
 
 from tests.e2e.llm_stub import serve
 
@@ -29,10 +35,8 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = Path(os.environ.get("E2E_DATA_DIR", ROOT / "data"))
 QDRANT_PATH = Path(os.environ.get("E2E_QDRANT_PATH", ROOT / ".qdrant"))
 ARTIFACTS = Path(os.environ.get("E2E_ARTIFACTS", ROOT / "e2e-artifacts"))
-# A finished Streamlit rerun: no stale elements and no running indicator.
-SETTLED = """() =>
-    !document.querySelector('[data-stale="true"]') &&
-    !document.querySelector('[data-testid="stStatusWidgetRunningIcon"]')"""
+WEB = ROOT / "web"
+DIST = WEB / "dist"
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
@@ -80,7 +84,12 @@ def _api(env: dict[str, str], log: Path, cwd: Path = ROOT) -> Iterator[str]:
     """The real API (`uvicorn ... --factory`) on a free port, configured by `env` (and by a
     `.env` file in `cwd`, as in production)."""
     port = _free_port()
-    env = {**os.environ, "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"} | env
+    env = {
+        **os.environ,
+        "NO_PROXY": "127.0.0.1,localhost",
+        "no_proxy": "127.0.0.1,localhost",
+        "WEB_DIST": str(DIST),
+    } | env
     with log.open("w") as out:
         process = subprocess.Popen(
             [
@@ -108,40 +117,6 @@ def _api(env: dict[str, str], log: Path, cwd: Path = ROOT) -> Iterator[str]:
         process.wait(30)
 
 
-@contextmanager
-def _streamlit(api_url: str, log: Path) -> Iterator[str]:
-    """The real Streamlit UI on a free port, talking to `api_url`."""
-    port = _free_port()
-    env = {**os.environ, "API_URL": api_url, "NO_PROXY": "127.0.0.1,localhost"}
-    with log.open("w") as out:
-        process = subprocess.Popen(
-            [
-                sys.executable,
-                "-m",
-                "streamlit",
-                "run",
-                "src/curio/app/ui/main.py",
-                "--server.headless",
-                "true",
-                "--server.port",
-                str(port),
-                "--browser.gatherUsageStats",
-                "false",
-            ],
-            cwd=ROOT,
-            env=env,
-            stdout=out,
-            stderr=subprocess.STDOUT,
-        )
-    url = f"http://127.0.0.1:{port}"
-    try:
-        _wait(f"{url}/_stcore/health", 120, process, log)
-        yield url
-    finally:
-        process.terminate()
-        process.wait(30)
-
-
 @pytest.fixture(scope="session")
 def api_url(llm_stub: str, artifacts: Path) -> Iterator[str]:
     required = [DATA_DIR / "products.parquet", DATA_DIR / "cocktails.parquet", QDRANT_PATH]
@@ -159,12 +134,6 @@ def api_url(llm_stub: str, artifacts: Path) -> Iterator[str]:
         "AGENT_SIGNING_KEY": "e2e-signing-key-0123456789abcdef",
     }
     with _api(env, artifacts / "api.log") as url:
-        yield url
-
-
-@pytest.fixture(scope="session")
-def ui_url(api_url: str, artifacts: Path) -> Iterator[str]:
-    with _streamlit(api_url, artifacts / "ui.log") as url:
         yield url
 
 
@@ -192,12 +161,6 @@ def quickstart_api_url(artifacts: Path, tmp_path_factory) -> Iterator[str]:
 
 
 @pytest.fixture(scope="session")
-def quickstart_ui_url(quickstart_api_url: str, artifacts: Path) -> Iterator[str]:
-    with _streamlit(quickstart_api_url, artifacts / "quickstart-ui.log") as url:
-        yield url
-
-
-@pytest.fixture(scope="session")
 def demo_api_url(artifacts: Path, tmp_path_factory) -> Iterator[str]:
     """The quick-start demo (books on by default): recipes and books, no H&M data, no
     image index and no LLM. It opens no Qdrant index, so it runs beside the full-data API."""
@@ -219,12 +182,6 @@ def demo_api_url(artifacts: Path, tmp_path_factory) -> Iterator[str]:
 
 
 @pytest.fixture(scope="session")
-def demo_ui_url(demo_api_url: str, artifacts: Path) -> Iterator[str]:
-    with _streamlit(demo_api_url, artifacts / "demo-ui.log") as url:
-        yield url
-
-
-@pytest.fixture(scope="session")
 def browser():
     sync_api = pytest.importorskip("playwright.sync_api")
     executable = os.environ.get("E2E_CHROMIUM") or (
@@ -236,89 +193,163 @@ def browser():
         browser.close()
 
 
-class Driver:
-    """A browser page with Streamlit-aware waits, chat helpers and named screenshots."""
+@pytest.fixture(scope="session")
+def web_dist() -> Path:
+    """The built React app, built once when it is missing and the dependencies are there."""
+    if not (DIST / "index.html").exists():
+        npm = shutil.which("npm")
+        if npm is None or not (WEB / "node_modules").exists():
+            pytest.skip("web/dist is not built (run `npm ci && npm run build` in web/)")
+        subprocess.run([npm, "run", "build"], cwd=WEB, check=True)
+    return DIST
+
+
+def _serves_web(url: str) -> str:
+    page = httpx.get(f"{url}/evening", headers={"accept": "text/html"}, trust_env=False)
+    if page.status_code != 200 or '<div id="root">' not in page.text:
+        pytest.skip("The API does not serve the React app (SERVE_WEB=false?)")
+    return url
+
+
+@pytest.fixture(scope="session")
+def web_url(web_dist: Path, api_url: str) -> str:
+    return _serves_web(api_url)
+
+
+@pytest.fixture(scope="session")
+def quickstart_web_url(web_dist: Path, quickstart_api_url: str) -> str:
+    return _serves_web(quickstart_api_url)
+
+
+@pytest.fixture(scope="session")
+def demo_web_url(web_dist: Path, demo_api_url: str) -> str:
+    return _serves_web(demo_api_url)
+
+
+class Web:
+    """A browser page on the React app, with named screenshots and request capture."""
 
     def __init__(self, page, base: str, artifacts: Path) -> None:
         self.page = page
         self.base = base
         self.artifacts = artifacts
         self.errors: list[str] = []
+        self.chat_bodies: list[dict] = []
         page.on("pageerror", lambda error: self.errors.append(str(error)))
+        page.on("request", self._capture)
 
-    def open(self, path: str = "") -> "Driver":
-        self.page.goto(f"{self.base}/{path}")
-        self.settle()
+    def _capture(self, request) -> None:
+        if request.url.endswith("/chat/stream") and request.method == "POST":
+            self.chat_bodies.append(json.loads(request.post_data or "{}"))
+
+    def open(self, path: str = "/") -> "Web":
+        self.page.goto(f"{self.base}{path}")
         return self
 
-    def ask(self, domain: str) -> "Driver":
-        """A new visit, on `domain`'s chat (Ask Curio): a visit opens on Plan my evening, so
-        Evening's chat is one menu click away, and another domain's one switch away."""
-        self.open()
-        if domain == "Evening":
-            self.click(self.page.get_by_role("link", name="Ask Curio"))
-        else:
-            self.click(self.page.get_by_test_id("stButtonGroup").first.get_by_text(domain))
-        return self
+    def turns(self):
+        return self.page.get_by_test_id("assistant-turn")
 
-    def settle(self, timeout: float = 120_000) -> None:
-        self.page.wait_for_timeout(600)  # reruns start asynchronously after an interaction
-        self.page.wait_for_function(SETTLED, timeout=timeout)
-        self.page.wait_for_timeout(400)
+    def last_turn(self):
+        return self.turns().last
 
-    def key(self, key: str):
-        """The element Streamlit renders for widget/container `key`."""
-        return self.page.locator(f".st-key-{key}")
-
-    def click(self, locator) -> None:
-        locator.first.click()
-        self.settle()
+    def wait_for_turns(self, count: int) -> None:
+        expect(self.turns()).to_have_count(count, timeout=120_000)
+        expect(self.page.get_by_test_id("running-turn")).to_have_count(0, timeout=120_000)
 
     def send(self, text: str) -> None:
-        box = self.page.get_by_test_id("stChatInputTextArea").first
+        """Send `text` in the chat and wait for its answer."""
+        turns = self.turns().count()
+        box = self.page.get_by_label("Message Curio")
         box.fill(text)
         box.press("Enter")
-        self.settle()
+        self.wait_for_turns(turns + 1)
 
-    def shot(self, name: str, *, full_page: bool = False) -> Path:
-        path = self.artifacts / f"{name}.png"
-        self.page.screenshot(path=path, full_page=full_page)
-        return path
+    def click_and_answer(self, locator) -> None:
+        """Click a control that sends a chat message, and wait for the answer."""
+        turns = self.turns().count()
+        locator.click()
+        self.wait_for_turns(turns + 1)
+
+    def photos(self) -> None:
+        """Wait for the photos in view (lazy photos below the fold load when scrolled to)."""
+        self.page.wait_for_function(
+            """() => [...document.querySelectorAll('img')]
+                .filter(i => {
+                    const box = i.getBoundingClientRect();
+                    return i.offsetParent !== null && box.bottom > 0
+                        && box.top < window.innerHeight;
+                })
+                .every(i => i.complete)""",
+            timeout=60_000,
+        )
+
+    def scroll_through(self) -> None:
+        """Bring every lazy photo into view once, then return to the top."""
+        self.page.evaluate(
+            """async () => {
+                const step = window.innerHeight * 0.8;
+                for (let y = 0; y < document.documentElement.scrollHeight; y += step) {
+                    window.scrollTo(0, y);
+                    await new Promise((r) => setTimeout(r, 150));
+                }
+            }"""
+        )
+        self.photos()
+        self.page.evaluate("window.scrollTo(0, 0)")
+
+    def shot(self, name: str, *, full_page: bool = False) -> None:
+        self.page.wait_for_timeout(600)  # let entrance animations settle
+        if full_page:
+            self.scroll_through()
+        self.photos()
+        self.page.screenshot(path=self.artifacts / f"web-{name}.png", full_page=full_page)
+
+    def session(self) -> dict:
+        return self.page.evaluate("() => JSON.parse(localStorage.getItem('curio.session.v1'))")
 
     def no_horizontal_scroll(self) -> bool:
         return self.page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
 
 
-@pytest.fixture
-def ui(browser, ui_url: str, artifacts: Path) -> Iterator[Driver]:
-    context = browser.new_context(viewport={"width": 1440, "height": 1100})
-    driver = Driver(context.new_page(), ui_url, artifacts)
+def results(web: Web, title: str):
+    """The results section headed `title`, once its cards are there."""
+    section = web.page.get_by_role("region", name=title)
+    expect(section).to_be_visible(timeout=60_000)
+    expect(section).to_have_attribute("aria-busy", "false", timeout=60_000)
+    return section
+
+
+@contextmanager
+def _driver(browser, url: str, artifacts: Path, **context) -> Iterator[Web]:
+    context = browser.new_context(**({"viewport": {"width": 1440, "height": 1000}} | context))
+    driver = Web(context.new_page(), url, artifacts)
     yield driver
     context.close()
     assert not driver.errors, f"Browser errors: {driver.errors}"
 
 
-@pytest.fixture
-def quickstart_ui(browser, quickstart_ui_url: str, artifacts: Path) -> Iterator[Driver]:
-    context = browser.new_context(viewport={"width": 1440, "height": 1100})
-    driver = Driver(context.new_page(), quickstart_ui_url, artifacts)
-    yield driver
-    context.close()
-    assert not driver.errors, f"Browser errors: {driver.errors}"
+PHONE = {"viewport": {"width": 390, "height": 844}, "device_scale_factor": 2}
 
 
 @pytest.fixture
-def demo_ui(browser, demo_ui_url: str, artifacts: Path) -> Iterator[Driver]:
-    context = browser.new_context(viewport={"width": 1440, "height": 1100})
-    driver = Driver(context.new_page(), demo_ui_url, artifacts)
-    yield driver
-    context.close()
-    assert not driver.errors, f"Browser errors: {driver.errors}"
+def web(browser, web_url: str, artifacts: Path) -> Iterator[Web]:
+    with _driver(browser, web_url, artifacts) as driver:
+        yield driver
 
 
 @pytest.fixture
-def phone(browser, ui_url: str, artifacts: Path) -> Iterator[Driver]:
-    context = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2)
-    driver = Driver(context.new_page(), ui_url, artifacts)
-    yield driver
-    context.close()
+def web_phone(browser, web_url: str, artifacts: Path) -> Iterator[Web]:
+    with _driver(browser, web_url, artifacts, **PHONE) as driver:
+        yield driver
+
+
+@pytest.fixture
+def quickstart_web(browser, quickstart_web_url: str, artifacts: Path) -> Iterator[Web]:
+    with _driver(browser, quickstart_web_url, artifacts) as driver:
+        yield driver
+
+
+@pytest.fixture
+def demo_web(browser, demo_web_url: str, artifacts: Path) -> Iterator[Web]:
+    with _driver(browser, demo_web_url, artifacts) as driver:
+        yield driver
