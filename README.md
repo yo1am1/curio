@@ -67,9 +67,10 @@ The second and third domains forced the engine to generalise:
   and alcohol labels are checked too, a number the shopper typed counts only as their own
   budget or limit, and allergen, health, stock and foreign-currency claims are reported.
   Clarifying questions are checked like answers. A failed check gets one self-correction,
-  then a deterministic fallback built from catalog facts. On a labelled corpus of 212
-  answers the check catches 63 of 66 false ones and flags 1 of 146 correct ones; colours,
-  genres and descriptions are not checked ([details](docs/agent-architecture.md#grounding-guardrail)).
+  then a deterministic fallback built from catalog facts. On the last blind held-out set
+  (100 answers) it caught 46 of 51 false answers and flagged 9 of 49 correct ones; a third
+  blind set is being written for the current version. Genres and descriptions are not
+  checked ([details](docs/agent-architecture.md#grounding-guardrail)).
 - **Budgets and streaming.** A turn allows five tool calls and 90 seconds. Every step
   streams to the web app as NDJSON, so you see what the agent did.
 - **Stateless server.** The client holds the shortlist, memory and outfit. Client-held text

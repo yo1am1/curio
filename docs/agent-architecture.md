@@ -336,9 +336,9 @@ evidence). The fact must then match *that* item:
 | Recipe amount | cocktails, pairings, evening | An amount in that drink's recipe ("1 1/2 oz"). |
 | Percentage | fashion, evening | Must appear in that product's description ("100% cotton"). |
 | Colour | fashion, evening | A colour word within a few words of a product in its sentence ("**Tambov** – navy", "the **Paris Trench** (beige)", "the navy **Tambov**", or a "Colour:" line under it) must fit its catalog colour. A plain word covers the catalog's shades ("beige" for Light Beige, "white" for Off White), but a shade must be the catalog's ("light grey" is not Grey); "navy" is Dark Blue, "gray" grey, "golden" gold. Colours in a hedged or negated clause ("if you'd like black", "not navy"), about the shopper ("your white sneakers"), across a turn ("black, but the **Waverly hoodie**"), of a part or another thing ("a gold buckle", "a white shirt") or of food ("orange juice") are not read. |
-| Ingredient | cocktails, pairings, evening | An ingredient said to be in a drink must be in its recipe: the sentence names the drink and a recipe word ties them ("uses", "made with", "is", a colon, dash or table cell before the list), or it is "<ingredient>-based", or its sentence or bullet lists amounts or only ingredients ("- 8 oz ginger beer" under the drink). A name may be more or less precise than the recipe's ("rum" for Light rum, "lime juice" for Lime), and a few synonyms count (white/light rum, Cointreau/triple sec). The shopper's own ("your ginger beer"), hedged or negated mentions ("if you want ginger beer", "not ginger beer"), substitutes ("swap in"), ingredients in drink or glass names and tool text the answer repeats are not read; nor are ice and water. |
-| Author | books, evening | "<title> by <name>" must name one of that book's authors. |
-| Alcohol label | cocktails, pairings, evening | "Alcohol-free", "non-alcoholic", "mocktail" only for a drink marked non-alcoholic; "contains alcohol" for one with alcohol or alcohol optional; "alcohol optional" only for an optional one. Negated labels flip ("not alcohol-free"). A plural label with no drink in its sentence ("All of these are alcohol-free:") covers the list after it. |
+| Ingredient | cocktails, pairings, evening | An ingredient said to be in a drink must be in its recipe: the sentence names the drink and a recipe word ties them ("uses", "made with", "is", a colon, dash or table cell before the list), or it is "<ingredient>-based", or its sentence or bullet lists amounts or only ingredients ("- 8 oz ginger beer" under the drink). A name may be more or less precise than the recipe's ("rum" for Light rum, "lime juice" for Lime), singular or plural ("cherries" for Maraschino cherry), the end of a compound ("berries" for Blackberries), a word of the recipe's measure ("orange" for a carbonated soft drink measured as ", orange") or a word describing the next ingredient ("an orange carbonated soft drink"), and a few synonyms count (white/light rum, Cointreau/triple sec). An ingredient said to be missing ("the Long Island has no tequila") must not be in the recipe. The shopper's own ("your ginger beer"), hedged or negated mentions ("if you want ginger beer", "not ginger beer"), substitutes ("swap in"), ingredients in drink or glass names and tool text the answer repeats are not read; nor are ice and water. |
+| Author | books, evening | "<title> by <name>" must name one of that book's authors, and so must every co-author ("by A and B", "by A together with B", "co-written with B"). The byline may follow a verb ("**Scarlet** was written by", "is by") or open the next sentence ("It was written by"). |
+| Alcohol label | cocktails, pairings, evening | "Alcohol-free", "non-alcoholic", "mocktail" only for a drink marked non-alcoholic; "contains alcohol" for one with alcohol or alcohol optional; "alcoholic" (always) only for one with alcohol, not an optional one; "alcohol optional" and "with or without alcohol" only for an optional one. Negated labels flip ("not alcohol-free"). A plural label with no drink in its sentence ("All of these are alcohol-free:") covers the list after it; a plural subject ("Both are non-alcoholic versions here") covers the drinks just named. |
 
 A number bound to no item is allowed only if it equals a value the tools stated without an
 item: an outfit's or evening's total, its budget, what is left, the cheapest option of a
@@ -361,13 +361,34 @@ anywhere in the sentence is a discount claim, so the audit's "€5 off" probe is
 A price stated for one item stays that item's price even in a sentence that says "cheaper"
 ("the cheaper option at €19.99" is checked against that product). When a sentence names n
 items and then lists n facts of one kind joined only by "and", commas or "respectively"
-("rated 4.53 and 4.46 respectively"), the k-th fact binds to the k-th item.
+("rated 4.53 and 4.46 respectively"), the k-th fact binds to the k-th item. A value right
+before "for the <item>" binds to that item ("€24.99 against €39.99 for the **Eva
+trousers**"), and "the former", "the latter", "the first" and "the second" stand for the
+last two items named.
+
+**Derived numbers: the permissive rule (v2.2).** Held-out v2 showed that correct
+arithmetic comes in more wordings than any list of framing words covers ("=", "+", "bring
+you to", "you're at", "fewer", "by 68 pages", "between them"). So a price or page count is
+also accepted, whatever its wording, when it equals the sum of the values of any two or
+three items the answer names (or of all of them), the difference of two, or a figure the
+shopper or the tools gave minus one value or such a sum ("€20 left", "35 pages over your
+~600"). It must match to the cent (a whole number to its rounding). It is not accepted when
+its sentence frames a discount or sale, or when it is stated as one item's own value: right
+after the item's name with only punctuation, a figure-free parenthesis, table cells, a short
+descriptor or a copula between ("the **Seth sweater** is €49.76", "| **Hanky skirt** |
+Purple | €17.99 |", "– Grey, €14.99"), after a singular pronoun ("it's €54.98"), or before
+"for the <item>". "Under €20" is never a sum. **The trade-off, chosen on purpose:** a wrong
+total or difference is caught only when it matches no plausible combination of the named
+items' values, so an invented figure that happens to equal one passes. A false alarm costs
+a correct answer (it is rewritten, then replaced by catalog facts); a missed arithmetic
+slip of this kind costs less.
 
 **What the shopper typed is not evidence.** A number the shopper typed may appear only as
 their own figure: in a budget or limit ("under €30", "your €100 budget", "within €40", "a
 €50 limit"), attributed to them ("the €4.99 your friend saw", "you mentioned €4.99"),
 contradicted ("€8.99, not €4.99", "isn't rated 4.5"), or compared against in a clause that
-names no item and is not about a single one ("the last two are over €50"). "Yes, it's
+names no item and is not about a single one ("the last two are over €50"), or framed as
+their money ("with €15 for two", "a budget of around €20", "you have €40"). "Yes, it's
 €4.99" or "Yes, the dress is under €20" for an €8.99 dress binds the figure to the dress
 and is reported. A question
 or quick reply may suggest a budget ("Something under €20?"). Names the shopper typed may
@@ -390,12 +411,20 @@ name. So a book, drink or brand outside the catalog ("**Paper Plane**", "**Nike 
 ("nut-free", "hypoallergenic", "gentle on sensitive skin", "safe for kids", "suitable for
 children", "fine for 8-year-olds", "ages 8 and up") are reported in every domain; drinks
 add dietary and health promises ("vegan", "caffeine-free", "healthy", "safe during
-pregnancy"). Stock, size, delivery and discount promises ("in stock", "ships tomorrow",
+pregnancy"). Health benefits are reported in every domain: a remedy, cure or help for an
+ailment ("a good remedy for a sore throat", "good for a cold", "settles an upset stomach",
+"boosts immunity", "medicinal"). Stock, size, delivery and discount promises ("in stock", "ships tomorrow",
 "20% off") are reported in fashion, book and evening answers, and a book answer's prices
 and formats too ("€9.99 in paperback", "available in hardcover"): books carry none. Each is
 reported unless the clause before negates or hedges it ("I can't guarantee it's nut-free",
 "check whether it's gluten-free"), or, for safety, the rest of the sentence hedges it ("...
-but check the label"), or the product's own description says it. A reader's own figure may
+but check the label"), or the product's own description says it. Reasoning from the data
+is allowed when the answer names the data as its source and the data bears it out: "dairy-free
+going by the ingredient list", "contains no egg according to the recipe" pass for drinks
+whose recipes list no dairy (milk, cream, yoghurt, butter, sherbet, Irish cream...) or no
+egg, and "nut-free" likewise for nuts (amaretto, orgeat, Frangelico...). Only dairy, egg and
+nuts can be read off a recipe; "gluten-free going by the recipe" is still reported, and so
+is any unhedged guarantee. A reader's own figure may
 be repeated as theirs in a book answer ("I can't filter by your €15 budget"). Amounts in
 dollars, pounds or yen are reported in fashion, book and evening answers, even the
 shopper's own figure: the answer should say how the budget was read in euros.
@@ -442,7 +471,8 @@ prepared catalogs, and the euro figures the tools stated without an item), by
 | Real-model texts of the first evaluation run (39 answers, 4 questions) | | | 43 | 0 |
 | Scripted end-to-end model, eval dry run plus its e2e scenarios | 4 (its deliberate inventions) | 4 | 68 | 1 |
 | Written for this corpus, on the evidence of real turns | 49 | 47 | 35 | 0 |
-| **Total** | **66** | **64 (recall 0.970)** | **146** | **1 (false-alarm rate 0.007)** |
+| New phrasings after held-out v2 (the overfitting check below), on catalog rows | 50 | 50 | 47 | 0 |
+| **Total** | **116** | **114 (recall 0.983)** | **193** | **1 (false-alarm rate 0.005)** |
 
 The two misses are kept on purpose and are misses by design: a wrong glass and a wrong
 genre ("Gone Girl is a gentle cosy mystery"). Glasses, genres, descriptions, plot and
@@ -450,38 +480,86 @@ shelves are not checked. (Before v2.1 the wrong colour, "The **Primo slacks** co
 was a third; colours are checked now.) The false alarm is the scripted model's
 evening answer for "budget $150", whose "why it works" line repeats the shopper's "$150":
 nothing in it is false, but every non-euro amount is reported, so it is rewritten (the
-evaluation's dollar-budget task wants no "$" in the answer either). On the same corpus the previous check
-(v1) caught 17 of the 66 false answers (0.258), none of the 13 probes, and flagged 3 of the
-146 correct texts (two of them questions, which v1 did not check in production).
+evaluation's dollar-budget task wants no "$" in the answer either). On the corpus as it stood before the new
+phrasings, the previous check (v1) caught 17 of the 66 false answers (0.258), none of the 13
+probes, and flagged 3 of the 146 correct texts (two of them questions, which v1 did not
+check in production).
 
 Read these numbers with their limits. The written cases were written by the same person who
 wrote the check, after it existed, and the heading and binding rules were calibrated on the
 relay and stub texts, so the corpus is not a held-out test: it shows the check catches the
-listed failure classes and flags only one of these 146 texts, not how it does on a new model's
+listed failure classes and flags only one of these 193 texts, not how it does on a new model's
 answers. The real-model sample is one run of 39 answers.
 
 ### Held-out sets
 
 A held-out set is written blind: by someone who has not seen the check, after it was
-frozen, on the evidence of real catalog items. `tests/agents/grounding_heldout/v1.json` (laid
-out like the corpus by `grounding_heldout/build.py`) holds the first: 80 answers in fashion,
-cocktails and books, 39 false and 41 correct.
+frozen, on the evidence of real catalog items, and laid out like the corpus by
+`grounding_heldout/build.py`. Each is measured blind once; after that it is development
+data and only a regression floor (`test_grounding_heldout.py`).
 
-| Held-out v1 | False answers caught | Correct answers flagged |
+| Held-out set | False answers caught | Correct answers flagged |
 |---|---|---|
-| Blind, grounding v2 before the fixes | 33 of 39 (recall 0.846) | 7 of 41 (false-alarm rate 0.171) |
-| Grounding v2.1, after using it for development, no longer blind | 39 of 39 (recall 1.000) | 0 of 41 (false-alarm rate 0.000) |
+| v1 (80 answers), blind, grounding v2 | 33 of 39 (recall 0.846) | 7 of 41 (false-alarm rate 0.171) |
+| v1, grounding v2.1, after development use, no longer blind | 39 of 39 (1.000) | 0 of 41 (0.000) |
+| **v2 (100 answers), blind, grounding v2.1** | **46 of 51 (recall 0.902)** | **9 of 49 (false-alarm rate 0.184)** |
+| v2, grounding v2.2, after development use, no longer blind | 51 of 51 (1.000) | 0 of 49 (0.000) |
+| v1, grounding v2.2 (no longer blind) | 39 of 39 (1.000) | 0 of 41 (0.000) |
 
-The blind result was far below the corpus's in-sample numbers (0.955 and 0.007). The seven
-false alarms were all arithmetic (a total, a difference or the shopper's "over €50"
-reported as an item's wrong price); the six misses were a colour, a hypoallergenic claim,
-an ingredient ("ginger beer" for a recipe with ginger ale), a book's age suitability, a
-book's price and shipping, and another book's rating, which slipped through because a bare
-rating before the next bullet's dash was not read. Each was fixed by category (the rules
-above), never by string, and the corpus gate still holds. The second row is a regression
-floor (`test_grounding_heldout.py`), not an estimate: the set shaped the fixes, so it can no
-longer say how the check does on answers it has not seen. A second blind set (v2), written
-after these fixes, follows, and its numbers are the ones to quote.
+**v1.** The seven false alarms were all arithmetic (a total, a difference or the shopper's
+"over €50" reported as an item's wrong price); the six misses were a colour, a
+hypoallergenic claim, an ingredient, a book's age suitability, a book's price and shipping,
+and another book's rating behind a bullet's dash. Each was fixed by category.
+
+**v2: the overfitting gap.** v2.1 scored 1.0 / 0.0 on v1, the set it was tuned on, and 0.902
+/ 0.184 on v2. Seven of the nine false alarms were again correct arithmetic or the
+shopper's own figure, in wordings the framing list did not cover ("=", "bring you to", "by
+68 pages", "587 pages fewer", "35 pages over your ~600", "budget of around €20", "with €15
+for two") or misread ("Off White" as a discount); the other two were a recipe measure ("orange" for a soft drink measured as
+", orange"), and "dairy-free going by the ingredient list", true by the recipe. The five
+misses were a co-author ("written by Ben Aaronovitch together with David Baldacci"), a wrong
+author after "was written by", a health benefit ("a good remedy for a sore throat"), an
+alcohol-optional drink called alcoholic, and "Both are non-alcoholic versions here". v2.2
+answers the arithmetic with the permissive rule above instead of more framing words, and
+fixes the rest by category. No v1 case was lost, so the v1 floor stays at 1.0 / 0.0; the v2
+floor is set at the final 1.0 / 0.0. Neither row after development is an estimate.
+
+**Overfitting check: new phrasings.** After v2.2 was tuned on v2, its author wrote new
+answers in wordings found in neither held-out set, on catalog rows mostly outside both
+(`tests/agents/grounding_corpus/phrasings.py`, now part of the corpus). They are not blind,
+since their author knew the rules, so they bound the gap from below rather than measure it.
+
+| New phrasings | False answers caught | Correct answers flagged |
+|---|---|---|
+| Batch 1 (71), measured once on v2.2 as tuned on v2 | 35 of 37 (0.946) | 3 of 34 (0.088) |
+| Batch 2 (26), written after the batch 1 fixes, measured once | 11 of 13 (0.846) | 1 of 13 (0.077) |
+| Both, after their fixes (no longer a check) | 50 of 50 | 0 of 47 |
+
+Batch 1 found a value before "for the <item>" bound to the item before it, a sum after a
+parenthesis that held another figure, ingredients assigned by "the first … the second", an
+author after "is by", and a missing-ingredient claim ("has no tequila") that was never read.
+Batch 2 found "add up to 1,237 pages" read as a limit ("up to"), "with or without alcohol"
+read as alcohol-free, and "settles an upset stomach". Each was fixed by category. Even
+written by someone who knew the rules, fresh wordings missed 5–15% of false answers and
+flagged 8–9% of correct ones, so the published figure must come from a set the check has not
+seen: **a third blind set (v3) is being written, and its blind result is the number to
+quote.**
+
+### Trade-offs chosen in v2.2
+
+- **Derived numbers are judged permissively.** Any sum of two or three named items (or all
+  of them), any difference of two, and the shopper's or the tools' figure minus one value or
+  such a sum is accepted unless framed as a discount or as one item's own value. A wrong
+  total that equals some other plausible combination passes.
+- **Reasoning from the recipe is allowed when attributed and true.** "Dairy-free going by
+  the ingredient list" passes when the recipe lists no dairy; unhedged guarantees and claims
+  a recipe cannot settle (gluten, vegan, sugar) stay reported. The dairy, egg and nut word
+  lists are finite, so a recipe with an unlisted dairy ingredient could let an attributed
+  "dairy-free" pass.
+- **"Alcoholic" means always.** A drink whose alcohol is optional is not "alcoholic" (it
+  still "contains alcohol"), so an answer that calls the Gluehwein alcoholic is rewritten.
+- **Health benefits need an ailment.** "A remedy for a sore throat" is reported; "the
+  perfect remedy for a grey afternoon" is not.
 
 ### Limits
 
@@ -496,9 +574,10 @@ after these fixes, follows, and its numbers are the ones to quote.
   fits the request. Colours are read only next to a product and in the base words the
   catalog uses ("cream", "charcoal" or "olive" are not read); ingredients only where the
   answer ties them to a named drink.
-- A total, difference or multiple is accepted when it adds up for some of the items the
-  answer names, so a sum that happens to equal the wrong subset passes; one that names its
-  items by pronoun ("both Dune books" with one named) may be reported.
+- A total, difference or remainder is accepted when it equals any plausible combination of
+  the values of the items the answer names (see the trade-offs above), so a wrong figure
+  that happens to equal another combination passes. One stated right after a single item's
+  name as its value is checked as that item's value.
 - A drink called alcohol-free in a sentence that names no drink, without a list after it,
   is not checked.
 - The checks read English phrasing; another language passes unchecked.

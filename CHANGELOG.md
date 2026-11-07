@@ -64,6 +64,28 @@ All notable changes to Curio are recorded here. The format follows
   another book's rating, passed), and a name ending in a period ("Curvy Jegging HW.") ended
   its sentence. After using it for development (no longer blind) v1 scores 39/39 and 0/41;
   the corpus 64/66 (0.970) and 1/146 (0.007). A second blind set (v2) follows.
+- **Grounding v2.2: the second blind held-out set, false alarms first.** On 100 answers
+  written blind (`tests/agents/grounding_heldout/v2.json`) v2.1, which scored 1.0 / 0.0 on
+  v1, caught 46 of 51 false answers (recall 0.902) and flagged 9 of 49 correct ones
+  (0.184). Derived numbers are now judged permissively: a price or page count equal to the
+  sum of any two or three named items (or all), the difference of two, or a budget minus
+  one value or such a sum is accepted whatever its wording ("=", "bring you to", "by 68
+  pages", "€20 left"), unless framed as a discount or as one item's own value; a wrong
+  total is caught only when it matches no plausible combination. "Off White" is no longer
+  read as a discount, "adds up to" no longer as a limit, and "with €15 for two" or "a
+  budget of around €20" are the shopper's own figures. Drinks: "dairy-free going by the
+  ingredient list" or "contains no egg according to the recipe" pass when the recipe bears
+  them out (dairy, egg and nuts only); health benefits ("a good remedy for a sore throat",
+  "boosts immunity") are reported in every domain; "alcoholic" is wrong for an
+  alcohol-optional drink and "with or without alcohol" means optional; "Both are
+  non-alcoholic" covers the drinks just named; ingredients match plurals, compounds, a
+  recipe measure's words ("orange" for a soft drink measured as ", orange") and modifiers,
+  and "has no tequila" is checked. Books: co-authors ("by A and B", "together with B",
+  "co-written with B") and bylines after "was written by", "is by" or "It was written by"
+  are checked. After development use (no longer blind) v2 scores 51/51 and 0/49, v1 stays
+  39/39 and 0/41, and the corpus, with 97 new phrasings written as an overfitting check
+  (first measured at 46 of 50 caught and 4 of 47 flagged), 114/116 (0.983) and 1/193
+  (0.005). A third blind set (v3) is being written for the published figure.
 - Clarifying questions and their quick replies are grounded like answers: an unverified
   question goes back to the model once, then becomes a general question without quick
   replies.
