@@ -6,22 +6,66 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-11-07
+
+Curio's UI is now a React app that the API serves on its own port: one process, or one
+container, is the whole app.
+
+### Breaking
+
+- The Streamlit UI is removed (`src/curio/app/ui`, `.streamlit/`). The UI is the React app
+  at the API's URL (http://localhost:8000 by default); port 8501 and `streamlit run
+  src/curio/app/ui/main.py` are gone.
+- The `ui` extra and the `streamlit` dependency are removed (and with them the `starlette`
+  pin Streamlit needed). `uv sync --extra ui` fails; use `uv sync` or `--all-extras`.
+- Docker: the `demo` and `fashion` profiles run one service each (`demo-api`, `api`) on port
+  8000; `demo-ui` and `ui` are gone. The image builds the web app in a `node:22` stage and
+  exposes only port 8000.
+- `scripts/quickstart.sh` starts one server and takes `CURIO_HOST` and `CURIO_PORT` instead
+  of `UI_HOST`, `UI_PORT` and `API_PORT`; it still binds 127.0.0.1 unless told otherwise.
+- The unused `API_URL` setting is gone (an `.env` that sets it still loads).
+
 ### Added
 
-- A React web app in `web/` (stage 1 of the move from Streamlit): Vite, React 19 and
-  TypeScript, with the app shell and domain switch from `/domains`, Plan my evening (plan,
-  swaps and Save evening through an approval), chat for every domain over `/chat/stream`
-  with a live step trace, grounding badges, item cards, quick replies and an approval drawer
-  that narrows proposals, the client-held session in localStorage with a session panel, and
-  product, recipe and book dialogs (with "Pair a drink"). Light and dark themes follow the
-  system. The Streamlit UI is unchanged and still the default.
-- The API serves the built app when `web/dist` holds a build (`WEB_DIST`, `SERVE_WEB`):
-  `/assets/*`, top-level files, and `index.html` for page navigations that match no API
-  route. API paths, 404s and 405s are unchanged.
-- `scripts.export_openapi` writes the OpenAPI schema without starting a server; the web
-  app's TypeScript types are generated from it (`npm run gen:api`), and a test keeps the
-  committed `web/openapi.json` current.
-- CI runs the web app's lint, typecheck, unit tests and build in a `web` job.
+- A React web app in `web/` (Vite, React 19, TypeScript, `motion`, hand-written CSS
+  modules), with every page the Streamlit UI had: the shell and domain switch from
+  `/domains` (unserved domains disabled with their hint), Plan my evening (plan, swaps and
+  Save evening through an approval), chat for every domain over `/chat/stream` with a live
+  step trace, grounding badges, item, outfit and pairing cards, quick replies and an approval
+  drawer that narrows proposals; the fashion feed with every strategy and its evidence,
+  Discover (description and photo search), Product connections (a hand-drawn SVG graph),
+  Model quality; recipe search and "What can I make?"; book search, "Because you liked…",
+  browse by mood and the reading list's cocktail; product, recipe and book dialogs (with
+  "Pair a drink"), Compare for pieces and drinks, and the client-held session in
+  localStorage. Light and dark themes follow the system; fonts are bundled.
+- The API serves the built app (`WEB_DIST`, `SERVE_WEB`): `/assets/*`, top-level files, and
+  `index.html` for page navigations that match no API route, so deep links work. API paths,
+  404s and 405s are unchanged.
+- `scripts.export_openapi` writes the OpenAPI schema without a server; the web app's types
+  are generated from it (`npm run gen:api`), and a test keeps `web/openapi.json` current.
+- `scripts/quickstart.sh` builds the web app with npm when `web/dist` is missing or older
+  than its sources (`CURIO_WEB_BUILD=0` skips it) and prints the one URL to open.
+- CI: a `web` job (lint, typecheck, Vitest, build) and an `e2e-quickstart` job that runs the
+  quick start's browser tests in Chromium on the built app. The release smoke test checks
+  that the image holds `web/dist/index.html`.
+- A Vitest suite for the web app (63 tests) and Playwright tests for every page, ported from
+  the Streamlit browser tests one for one, plus the product connections graph in the README.
+
+### Changed
+
+- Every end-to-end browser test drives the React app served by the real API; the
+  quick-start tests check that the app lands on the cocktail pages and shows fashion as
+  unavailable with its hint.
+- `scripts.capture_readme` and `scripts.record_overview` drive the React routes (`--url`),
+  and every README image and the overview tour were recaptured.
+- The README, the technical guide, the architecture diagram and the other docs describe the
+  React app and the single-server setup.
+
+### Fixed
+
+- Approving a proposal whose arguments hold a whole number as a float (a remembered budget
+  of 40.0) failed from a JavaScript client, which sends it back as `40`: the signature now
+  treats whole floats as integers, and any changed value still fails.
 
 ## [2.1.1] - 2026-11-07
 
@@ -581,7 +625,8 @@ product connections from co-purchases and Shopify categories, offline evaluation
 tool-using shopping assistant with a conversation home and floating panel. How it was
 built is summarised in [docs/how-it-was-built.md](docs/how-it-was-built.md).
 
-[Unreleased]: https://github.com/yo1am1/curio/compare/v2.1.1...HEAD
+[Unreleased]: https://github.com/yo1am1/curio/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/yo1am1/curio/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/yo1am1/curio/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/yo1am1/curio/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/yo1am1/curio/compare/v1.3.0...v2.0.0
