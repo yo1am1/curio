@@ -1,9 +1,19 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MotionConfig } from "motion/react";
 import { useState, type ReactNode } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router";
 
 import { useServed } from "./api/queries";
+import type { Domain } from "./api/types";
+import { BecausePage } from "./components/books/BecausePage";
+import { BookSearchPage } from "./components/books/BookSearchPage";
+import { MoodsPage } from "./components/books/MoodsPage";
+import { CocktailSearchPage } from "./components/cocktails/CocktailSearchPage";
+import { PantryPage } from "./components/cocktails/PantryPage";
+import { ConnectionsPage } from "./components/fashion/ConnectionsPage";
+import { DiscoverPage } from "./components/fashion/DiscoverPage";
+import { ForYouPage } from "./components/fashion/ForYouPage";
+import { QualityPage } from "./components/fashion/QualityPage";
 import { ChatRoute } from "./components/chat/ChatPage";
 import { DetailsProvider } from "./components/details/DetailsProvider";
 import { EveningPage } from "./components/evening/EveningPage";
@@ -26,10 +36,11 @@ function Landing() {
   return <Navigate to={landingPath(first)} replace />;
 }
 
-function EveningRoute() {
+/** A domain's pages, when the server serves the domain; else the landing. */
+function DomainRoute({ domain }: { domain: Domain }) {
   const served = useServed();
-  if (!served.get("evening")?.enabled) return <Navigate to="/" replace />;
-  return <EveningPage />;
+  if (!served.get(domain)?.enabled) return <Navigate to="/" replace />;
+  return <Outlet />;
 }
 
 export function AppRoutes() {
@@ -37,7 +48,25 @@ export function AppRoutes() {
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<Landing />} />
-        <Route path="evening" element={<EveningRoute />} />
+        <Route path="evening" element={<DomainRoute domain="evening" />}>
+          <Route index element={<EveningPage />} />
+        </Route>
+        {/* Page paths never sit under an API path (see DOMAIN_PAGES). */}
+        <Route path="fashion" element={<DomainRoute domain="fashion" />}>
+          <Route index element={<ForYouPage />} />
+          <Route path="discover" element={<DiscoverPage />} />
+          <Route path="connections" element={<ConnectionsPage />} />
+          <Route path="quality" element={<QualityPage />} />
+        </Route>
+        <Route path="drinks" element={<DomainRoute domain="cocktails" />}>
+          <Route index element={<CocktailSearchPage />} />
+          <Route path="pantry" element={<PantryPage />} />
+        </Route>
+        <Route path="reading" element={<DomainRoute domain="books" />}>
+          <Route index element={<BookSearchPage />} />
+          <Route path="because" element={<BecausePage />} />
+          <Route path="moods" element={<MoodsPage />} />
+        </Route>
         <Route path="ask/:domain" element={<ChatRoute />} />
         <Route path="*" element={<NotFound />} />
       </Route>

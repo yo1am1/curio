@@ -8,7 +8,7 @@
 
 .productGrid,
 .bookGrid {
-  grid-template-columns: repeat(auto-fill, minmax(min(9.5rem, 44%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(10.5rem, 44%), 1fr));
 }
 
 .cocktailGrid {
@@ -24,6 +24,9 @@
 
 .view {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
   align-content: start;
   gap: 0.15rem;
   padding: 0;
@@ -89,6 +92,7 @@
 }
 
 .glass {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -107,6 +111,8 @@
 }
 
 .extra {
+  display: grid;
+  gap: 0.35rem;
   margin-top: 0.35rem;
 }
 
@@ -157,4 +163,26 @@
 
 .cover {
   border-radius: var(--radius-xs);
+}
+
+.price {
+  flex-basis: 100%;
+  font-size: 0.95rem;
+}
+
+.evidence {
+  margin-top: 0.15rem;
+}
+
+.evidenceList {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunk);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.45;
 }

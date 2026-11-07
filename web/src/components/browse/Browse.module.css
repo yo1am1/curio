@@ -1,0 +1,141 @@
+.page {
+  display: grid;
+  gap: 1.75rem;
+  min-width: 0;
+}
+
+.panel {
+  display: grid;
+  gap: 1.1rem;
+  padding: 1.4rem 1.5rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+
+.panelHead {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.panelTitle {
+  font-size: 1.35rem;
+}
+
+.panelIntro {
+  color: var(--ink-muted);
+  font-size: 0.925rem;
+}
+
+.row {
+  display: grid;
+  gap: 1rem;
+  align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+}
+
+.wide {
+  grid-column: span 2;
+}
+
+.searchRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: end;
+}
+
+.control {
+  display: grid;
+  gap: 0.4rem;
+  align-content: start;
+  min-width: 0;
+}
+
+.controlLabel {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.examplesLabel {
+  margin-right: 0.25rem;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.note svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.results {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  transition: opacity 200ms var(--ease);
+}
+
+.results[data-stale="true"] {
+  opacity: 0.5;
+}
+
+.resultsHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+}
+
+.resultsTitle {
+  font-size: 1.45rem;
+}
+
+.count {
+  color: var(--ink-muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.caption {
+  color: var(--ink-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .panel {
+    padding: 1.1rem;
+  }
+
+  .wide {
+    grid-column: auto;
+  }
+
+  .searchRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .searchRow button {
+    width: 100%;
+  }
+}

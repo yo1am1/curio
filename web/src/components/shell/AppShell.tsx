@@ -1,11 +1,12 @@
-import { RefreshCw } from "lucide-react";
+import { MessageCircle, RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 
 import { useDomains, useHealth } from "../../api/queries";
 import type { Domain } from "../../api/types";
-import { DOMAINS, askPath } from "../../domains/registry";
+import { DOMAINS, DOMAIN_PAGES, askPath } from "../../domains/registry";
 import { Button } from "../../ui/Button";
+import { SessionSheet } from "../session/SessionSheet";
 import { DomainSwitch } from "./DomainSwitch";
 import styles from "./AppShell.module.css";
 import { SetupScreen } from "./SetupScreen";
@@ -20,30 +21,31 @@ function Brand() {
   );
 }
 
-/** The current domain's pages. Stage 1: Evening has Plan my evening and its chat; the other
- * domains have their chat (their browse pages come next). */
+/** The current domain's pages and its chat, with the session's saved list on the browse
+ * pages. The row scrolls sideways on a phone instead of the page. */
 function DomainPages({ domain }: { domain: Domain }) {
-  const pages =
-    domain === "evening"
-      ? [
-          { to: "/evening", label: "Plan my evening" },
-          { to: askPath("evening"), label: "Ask Curio" },
-        ]
-      : [{ to: askPath(domain), label: "Ask Curio" }];
-  if (pages.length < 2) return null;
+  const location = useLocation();
+  const pages = [...DOMAIN_PAGES[domain], { to: askPath(domain), label: "Ask Curio" }];
+  const onChat = location.pathname.startsWith("/ask/");
   return (
-    <nav className={styles.pages} aria-label={`${DOMAINS[domain].label} pages`}>
-      {pages.map((page) => (
-        <NavLink
-          key={page.to}
-          to={page.to}
-          end
-          className={({ isActive }) => `${styles.page} ${isActive ? styles.pageActive : ""}`}
-        >
-          {page.label}
-        </NavLink>
-      ))}
-    </nav>
+    <div className={styles.pagesRow}>
+      <nav className={styles.pages} aria-label={`${DOMAINS[domain].label} pages`}>
+        {pages.map((page) => (
+          <NavLink
+            key={page.to}
+            to={page.to}
+            end
+            className={({ isActive }) => `${styles.page} ${isActive ? styles.pageActive : ""}`}
+          >
+            {page.to === askPath(domain) ? (
+              <MessageCircle size={15} aria-hidden="true" className={styles.pageIcon} />
+            ) : null}
+            {page.label}
+          </NavLink>
+        ))}
+      </nav>
+      {onChat || domain === "evening" ? null : <SessionSheet domain={domain} />}
+    </div>
   );
 }
 

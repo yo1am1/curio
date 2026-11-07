@@ -221,9 +221,50 @@ export function isDomain(value: string | undefined): value is Domain {
   return value !== undefined && (DOMAIN_ORDER as readonly string[]).includes(value);
 }
 
-/** Where a domain opens: Evening on Plan my evening, the others on their chat (stage 1). */
+/** A page of a domain, in its sub-navigation. */
+export interface DomainPage {
+  to: string;
+  label: string;
+}
+
+/**
+ * Each domain's pages; the first is where the domain opens. Their paths never sit under an
+ * API path (`/books/…`, `/cocktails/…`, `/products/…`, `/search/…`, `/evaluation`…), which
+ * the API answers itself: cocktails live under `/drinks` and books under `/reading`.
+ */
+export const DOMAIN_PAGES: Record<Domain, readonly DomainPage[]> = {
+  fashion: [
+    { to: "/fashion", label: "For you" },
+    { to: "/fashion/discover", label: "Discover" },
+    { to: "/fashion/connections", label: "Product connections" },
+  ],
+  cocktails: [
+    { to: "/drinks", label: "Search recipes" },
+    { to: "/drinks/pantry", label: "What can I make?" },
+  ],
+  books: [
+    { to: "/reading", label: "Search" },
+    { to: "/reading/because", label: "Because you liked…" },
+    { to: "/reading/moods", label: "Browse by mood" },
+  ],
+  evening: [{ to: "/evening", label: "Plan my evening" }],
+};
+
+/** Model quality: routable, but outside the navigation (as in the Streamlit client). */
+export const QUALITY_PATH = "/fashion/quality";
+
+/** The first path segment of each domain's pages. */
+export const PAGE_ROOTS: Readonly<Record<string, Domain>> = {
+  fashion: "fashion",
+  drinks: "cocktails",
+  reading: "books",
+  evening: "evening",
+};
+
+/** Where a domain opens: its first page (For you, recipe search, book search, Plan my
+ * evening). */
 export function landingPath(domain: Domain): string {
-  return domain === "evening" ? "/evening" : askPath(domain);
+  return DOMAIN_PAGES[domain][0]?.to ?? askPath(domain);
 }
 
 export function askPath(domain: Domain): string {

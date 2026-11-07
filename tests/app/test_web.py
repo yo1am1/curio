@@ -35,7 +35,17 @@ def client(dist: Path) -> Iterator[TestClient]:
 
 
 def test_page_navigations_get_index_html(client: TestClient) -> None:
-    for path in ("/", "/evening", "/ask/books", "/ask/fashion"):
+    for path in (
+        "/",
+        "/evening",
+        "/ask/books",
+        "/ask/fashion",
+        "/fashion",
+        "/fashion/connections",
+        "/fashion/quality",
+        "/drinks/pantry",
+        "/reading/because",
+    ):
         response = client.get(path, headers=HTML)
         assert response.status_code == 200, path
         assert response.text == INDEX

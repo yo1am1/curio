@@ -1,0 +1,229 @@
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  justify-self: start;
+  margin-bottom: -0.75rem;
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--accent);
+}
+
+.loading {
+  display: grid;
+  gap: 1rem;
+}
+
+.scope {
+  display: block;
+  margin-bottom: -1rem;
+  font-size: 1.05rem;
+}
+
+.role {
+  display: block;
+  color: var(--orange);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.best {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.4rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.kicker {
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.bestName {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: 1rem;
+  margin: 0.25rem 0 0;
+}
+
+.metric {
+  display: grid;
+  gap: 0.15rem;
+  padding-left: 0.9rem;
+  border-left: 2px solid var(--accent-line);
+}
+
+.metric dt {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.metric dd {
+  margin: 0;
+  font: 600 1.85rem/1.15 var(--font-serif);
+  letter-spacing: -0.02em;
+}
+
+.figure {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.chart {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.chart svg {
+  display: block;
+  overflow: visible;
+}
+
+.grid {
+  stroke: var(--line-soft);
+  stroke-width: 1;
+}
+
+.tick {
+  fill: var(--ink-muted);
+  font: 500 11px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.hitArea {
+  fill: transparent;
+}
+
+.barRow {
+  transition: opacity 160ms var(--ease);
+}
+
+.name {
+  fill: var(--ink);
+  font: 600 13px var(--font-sans);
+}
+
+.bar {
+  fill: var(--accent);
+}
+
+.value {
+  fill: var(--ink-soft);
+  font: 600 12px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+.rule {
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+  opacity: 0.7;
+}
+
+.ruleKey {
+  display: inline-block;
+  width: 1.2rem;
+  border-top: 1.5px dashed var(--ink-soft);
+  vertical-align: middle;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  gap: 0.1rem;
+  min-width: 11rem;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow);
+  font-size: 0.82rem;
+  pointer-events: none;
+  translate: 0 -100%;
+}
+
+.caption {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th,
+.table td {
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.table th[scope="row"],
+.table thead th:first-child {
+  text-align: left;
+}
+
+.table thead th {
+  background: var(--bg-sunk);
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.table tbody th {
+  font-weight: 600;
+}
+
+.table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.protocol {
+  display: grid;
+  gap: 0.6rem;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.json {
+  margin: 0;
+  padding: 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunk);
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chart svg {
+  max-width: 100%;
+}

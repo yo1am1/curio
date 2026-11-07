@@ -1,11 +1,9 @@
-import { Bookmark, ExternalLink, MessageCircle, RefreshCw, Star, Wine } from "lucide-react";
+import { Bookmark, ExternalLink, MessageCircle, Star, Wine } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
-import { postJson } from "../../api/client";
 import { useBook, useBooksByAuthor, useServed, useSimilarBooks } from "../../api/queries";
-import type { BookHit, BookPairing, PairingRequest } from "../../api/types";
+import type { BookHit } from "../../api/types";
 import { BOOK_CREDIT } from "../../domains/registry";
 import {
   OPEN_LIBRARY_BOOK,
@@ -19,9 +17,8 @@ import { useSession } from "../../state/stores";
 import { useSessionActions } from "../../state/actions";
 import { Badge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
-import { Toggle } from "../../ui/Toggle";
 import { BookCover } from "../cards/ItemCards";
-import { PairingCard } from "../cards/PairingCard";
+import { PairingPanel } from "../cards/PairingPanel";
 import { useDetails } from "./DetailsContext";
 import styles from "./Details.module.css";
 import { DetailError, DetailSkeleton } from "./states";
@@ -169,7 +166,7 @@ export function BookDetails({
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             style={{ overflow: "hidden" }}
           >
-            <PairingPanel bookId={id} />
+            <PairingPanel request={{ book_id: id }} title="Pour me something to read with" />
           </motion.section>
         ) : null}
       </AnimatePresence>
@@ -190,69 +187,6 @@ export function BookDetails({
         {BOOK_CREDIT}
       </p>
     </>
-  );
-}
-
-function PairingPanel({ bookId }: { bookId: number }) {
-  const [alcoholFree, setAlcoholFree] = useState(false);
-  const [seed, setSeed] = useState(0);
-  const avoided = useSession((s) => s.bookPreferences.avoided_genres);
-  const tastes = useSession((s) => s.cocktailPreferences);
-  const body: PairingRequest = {
-    book_id: bookId,
-    alcohol_free: alcoholFree,
-    seed,
-    ...(avoided.length ? { avoided_genres: avoided } : {}),
-    ...(tastes.alcohol_free || tastes.liked_ingredients.length || tastes.avoided_ingredients.length
-      ? {
-          cocktail_preferences: Object.fromEntries(
-            Object.entries(tastes).filter(([, v]) => (Array.isArray(v) ? v.length : v)),
-          ),
-        }
-      : {}),
-  } as PairingRequest;
-  const { data, error, isPending, isFetching } = useQuery({
-    queryKey: ["pairing", body],
-    queryFn: ({ signal }) => postJson<BookPairing>("/pairings/book-cocktail", body, signal),
-    staleTime: 5 * 60_000,
-    placeholderData: (previous) => previous,
-  });
-  const sets = data?.sets ?? 1;
-  return (
-    <div style={{ display: "grid", gap: "0.85rem" }} aria-busy={isFetching}>
-      <div
-        style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem 1.5rem", alignItems: "center" }}
-      >
-        <h3 className={styles.sectionTitle} style={{ marginRight: "auto" }}>
-          <Wine size={16} aria-hidden="true" style={{ verticalAlign: "-2px", marginRight: 6 }} />
-          Pour me something to read with
-        </h3>
-        <Toggle
-          checked={alcoholFree}
-          onChange={(value) => {
-            setAlcoholFree(value);
-            setSeed(0);
-          }}
-        >
-          Alcohol-free only
-        </Toggle>
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<RefreshCw />}
-          disabled={sets < 2 || isFetching}
-          title="Another set of drinks for the same profile"
-          onClick={() => {
-            setSeed((seed + 1) % Math.max(sets, 1));
-          }}
-        >
-          Another pairing
-        </Button>
-      </div>
-      {isPending ? <div className={styles.skeleton} style={{ height: "12rem" }} /> : null}
-      {error ? <DetailError error={error} /> : null}
-      {data ? <PairingCard result={data} /> : null}
-    </div>
   );
 }
 

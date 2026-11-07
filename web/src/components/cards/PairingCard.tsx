@@ -14,14 +14,20 @@ import styles from "./PairingCard.module.css";
 
 /** Drinks paired with a book (or a reading list): photo, alcohol status, the pairer's
  * reasons, the recipe and Save. */
-export function PairingCard({ result }: { result: BookPairing }) {
+export function PairingCard({
+  result,
+  compact = false,
+}: {
+  result: BookPairing;
+  compact?: boolean;
+}) {
   const shortlist = useSession((s) => s.cocktailShortlist);
   const saved = new Set(shortlist.map((c) => c.drink_id));
   const { saveCocktail } = useSessionActions();
   const details = useDetails();
   const free = result.profile.alcohol_free;
   return (
-    <div className={styles.pairing}>
+    <div className={`${styles.pairing} ${compact ? styles.compact : ""}`}>
       <p className={styles.summary}>{result.profile.summary}</p>
       {result.pairings.length === 0 ? (
         <p className={styles.empty}>

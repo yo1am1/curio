@@ -16,6 +16,7 @@ import {
 import { useSession } from "../../state/stores";
 import { useSessionActions } from "../../state/actions";
 import { Badge } from "../../ui/Badge";
+import { Disclosure } from "../../ui/Disclosure";
 import { Photo } from "../../ui/Photo";
 import { useDetails } from "../details/DetailsContext";
 import styles from "./ItemCards.module.css";
@@ -110,11 +111,50 @@ function Card({
   );
 }
 
-export function ProductCard({ product, reason }: { product: Product; reason?: string }) {
+/** A recommendation's evidence: the ranking score and every distinct reason the API gave. */
+function Evidence({ evidence, score }: { evidence: string[]; score?: number }) {
+  const lines = [...new Set(evidence)];
+  if (!lines.length && score === undefined) return null;
+  return (
+    <Disclosure summary="Why this pick" size="sm" className={styles.evidence}>
+      <ul className={styles.evidenceList}>
+        {score !== undefined ? (
+          <li className="tabular">Ranking score: {score.toFixed(3)}</li>
+        ) : null}
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </Disclosure>
+  );
+}
+
+export function ProductCard({
+  product,
+  reason,
+  evidence,
+  score,
+  detailed = false,
+}: {
+  product: Product;
+  reason?: string | null;
+  /** A recommendation's raw evidence, shown on request with its `score`. */
+  evidence?: string[];
+  score?: number;
+  /** The product type beside the colour (browse pages). */
+  detailed?: boolean;
+}) {
   const saved = useSession((s) => s.shortlist.some((p) => p.product_id === product.product_id));
   const { saveProduct } = useSessionActions();
   const details = useDetails();
   const name = productName(product);
+  const extra =
+    reason || evidence ? (
+      <>
+        {reason ? <p className={styles.reason}>{reason}</p> : null}
+        {evidence ? <Evidence evidence={evidence} score={score} /> : null}
+      </>
+    ) : undefined;
   return (
     <Card
       testId="product-card"
@@ -123,11 +163,20 @@ export function ProductCard({ product, reason }: { product: Product; reason?: st
       }
       title={name}
       meta={
-        <>
-          <strong className="tabular">{euro(product.price)}</strong> · {product.colour}
-        </>
+        detailed ? (
+          <>
+            <strong className={`tabular ${styles.price}`}>{euro(product.price)}</strong>
+            <span>
+              {product.product_type} · {product.colour}
+            </span>
+          </>
+        ) : (
+          <>
+            <strong className="tabular">{euro(product.price)}</strong> · {product.colour}
+          </>
+        )
       }
-      extra={reason ? <p className={styles.reason}>{reason}</p> : undefined}
+      extra={extra}
       viewLabel={`View ${name}`}
       onView={() => {
         details.open({ kind: "product", id: product.product_id });
@@ -151,7 +200,19 @@ export function AlcoholBadge({ cocktail }: { cocktail: Pick<Cocktail, "alcoholic
   return <Badge tone={tone}>{label}</Badge>;
 }
 
-export function CocktailCard({ cocktail, reason }: { cocktail: Cocktail; reason?: string }) {
+export function CocktailCard({
+  cocktail,
+  reason,
+  extra,
+  detailed = false,
+}: {
+  cocktail: Cocktail;
+  reason?: string | null;
+  /** More under the card (the pantry's coverage). */
+  extra?: ReactNode;
+  /** The category beside the glass (browse pages). */
+  detailed?: boolean;
+}) {
   const saved = useSession((s) =>
     s.cocktailShortlist.some((c) => c.drink_id === cocktail.drink_id),
   );
@@ -165,10 +226,19 @@ export function CocktailCard({ cocktail, reason }: { cocktail: Cocktail; reason?
       meta={
         <>
           <AlcoholBadge cocktail={cocktail} />{" "}
-          <span className={styles.glass}>{cocktail.glass}</span>
+          <span className={styles.glass}>
+            {detailed ? `${cocktail.category} · ${cocktail.glass}` : cocktail.glass}
+          </span>
         </>
       }
-      extra={reason ? <p className={styles.reason}>{reason}</p> : undefined}
+      extra={
+        reason || extra ? (
+          <>
+            {reason ? <p className={styles.reason}>{reason}</p> : null}
+            {extra}
+          </>
+        ) : undefined
+      }
       viewLabel={`View ${cocktail.name}`}
       onView={() => {
         details.open({ kind: "cocktail", id: cocktail.drink_id });
@@ -200,7 +270,7 @@ export function BookCover({ book, large = false }: { book: Book; large?: boolean
   );
 }
 
-export function BookCard({ book, reason }: { book: Book; reason?: string }) {
+export function BookCard({ book, reason }: { book: Book; reason?: string | null }) {
   const saved = useSession((s) => s.readingList.some((b) => b.book_id === book.book_id));
   const { saveBook } = useSessionActions();
   const details = useDetails();
