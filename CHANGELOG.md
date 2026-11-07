@@ -6,6 +6,23 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- CI: a "Docker image" workflow builds and smoke-tests the image on pull requests that can
+  change it (Dockerfile, dependencies, base images), so those bumps are proven before merge.
+- Dependabot skips TypeScript major versions in `web/` until typescript-eslint supports
+  TypeScript 7.
+- `GET /users/{id}`: `user` is now `{"user_id": ...}` only; the shopper's **`age` is no
+  longer served**. No page used it, and these are real (pseudonymous) H&M shoppers. The
+  purchase history is unchanged. docs/data-and-licences.md says what the sample is.
+
+### Removed
+
+- `GET /chat/feedback` (now 405). It returned other users' messages, answers and comments
+  to anyone. Nothing in the repository read it: the web app only posts ratings.
+  `POST /chat/feedback` is unchanged on the wire (204) but no longer keeps the texts in
+  memory; it logs the rating and tool names only.
+
 ### Security
 
 - `docker compose` publishes port 8000 on `127.0.0.1` only, as `scripts/quickstart.sh`
@@ -59,26 +76,6 @@ All notable changes to Curio are recorded here. The format follows
   `0.11`, now the same uv as CI).
 - The web build no longer writes source maps, so the image and the API stop serving
   `/assets/*.js.map`.
-
-### Changed (wire)
-
-- `GET /users/{id}`: `user` is now `{"user_id": ...}` only; the shopper's **`age` is no
-  longer served**. No page used it, and these are real (pseudonymous) H&M shoppers. The
-  purchase history is unchanged. docs/data-and-licences.md says what the sample is.
-
-### Removed
-
-- `GET /chat/feedback` (now 405). It returned other users' messages, answers and comments
-  to anyone. Nothing in the repository read it: the web app only posts ratings.
-  `POST /chat/feedback` is unchanged on the wire (204) but no longer keeps the texts in
-  memory; it logs the rating and tool names only.
-
-### Changed
-
-- CI: a "Docker image" workflow builds and smoke-tests the image on pull requests that can
-  change it (Dockerfile, dependencies, base images), so those bumps are proven before merge.
-- Dependabot skips TypeScript major versions in `web/` until typescript-eslint supports
-  TypeScript 7.
 
 ## [3.0.0] - 2026-11-07
 
