@@ -5118,6 +5118,20 @@
         "title": "SearchIntent",
         "description": "A product search request: a visual description plus metadata constraints."
       },
+      "Shopper": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "Shopper",
+        "description": "A shopper as the API shows one: the anonymous id only. The H&M data also has an\nage, which no page needs, so it is not served."
+      },
       "ShopperPreferences": {
         "properties": {
           "sections": {
@@ -5323,35 +5337,10 @@
         "title": "ThemeWeight",
         "description": "One flavour theme of a profile: what the books say and what it pours."
       },
-      "User": {
-        "properties": {
-          "user_id": {
-            "type": "integer",
-            "title": "User Id"
-          },
-          "age": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Age"
-          }
-        },
-        "type": "object",
-        "required": [
-          "user_id",
-          "age"
-        ],
-        "title": "User"
-      },
       "UserProfile": {
         "properties": {
           "user": {
-            "$ref": "#/components/schemas/User"
+            "$ref": "#/components/schemas/Shopper"
           },
           "purchases": {
             "items": {
@@ -5366,7 +5355,8 @@
           "user",
           "purchases"
         ],
-        "title": "UserProfile"
+        "title": "UserProfile",
+        "description": "A sampled H&M shopper's purchases (pseudonymous, re-keyed ids; see\ndocs/data-and-licences.md)."
       },
       "ValidationError": {
         "properties": {

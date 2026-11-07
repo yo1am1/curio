@@ -467,3 +467,17 @@ def test_several_workers_without_a_signing_key_refuse_to_start(tmp_path, caplog)
         build_services(settings(**chat, agent_signing_key="k" * 32)).close()
     assert "once per worker" in caplog.text
     build_services(settings(**{**chat, "web_concurrency": 1})).close()  # one worker: fine
+
+
+# --- Shopper privacy -----------------------------------------------------------------------
+
+
+def test_shopper_profiles_leave_out_the_age(services) -> None:
+    """The H&M sample has each shopper's age; no page uses it, so the API does not serve it.
+    Purchases (product and date) stay: the For you page lists them."""
+    with TestClient(create_app(services, settings=settings())) as client:
+        profile = client.get("/users/2").json()
+        assert profile["user"] == {"user_id": 2}
+        dates = [p["purchase_date"] for p in profile["purchases"]]
+        assert dates == ["2020-09-04", "2020-09-03"]
+        assert client.get("/users/1").json()["user"] == {"user_id": 1}

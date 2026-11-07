@@ -58,6 +58,12 @@ All notable changes to Curio are recorded here. The format follows
   `python:3.13.17-slim` (was the floating `3.13-slim`) and `uv:0.11.32` (was the floating
   `0.11`, now the same uv as CI).
 
+### Changed (wire)
+
+- `GET /users/{id}`: `user` is now `{"user_id": ...}` only; the shopper's **`age` is no
+  longer served**. No page used it, and these are real (pseudonymous) H&M shoppers. The
+  purchase history is unchanged. docs/data-and-licences.md says what the sample is.
+
 ### Removed
 
 - `GET /chat/feedback` (now 405). It returned other users' messages, answers and comments

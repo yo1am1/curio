@@ -813,7 +813,7 @@ take minutes per request.
 | POST | `/search/text` | `{"query": "red floral dress", "top_k": 10, "section": "Ladieswear"}` (section optional) |
 | POST | `/search/image` | Multipart image upload |
 | GET | `/search/examples`, `/search/examples/{id}/image` | Example query photos of garments outside the catalog |
-| GET | `/users`, `/users/{id}` | User ids; profile with purchase history |
+| GET | `/users`, `/users/{id}` | Sampled shopper ids; a shopper's id and purchase history (products and dates; no age). These are real, pseudonymous H&M shoppers: see [data and licences](data-and-licences.md) |
 | GET | `/demo/customers` | Up to ten descriptive customer examples and starting products |
 | GET | `/users/{id}/recommendations?strategy=learned\|repeat\|collaborative\|graph\|content` | Personalised recommendations; learned, repeat, collaborative and graph hits include reasons |
 | GET | `/cocktails/ingredients`, `/cocktails/categories` | Distinct ingredient names (catalog spelling) and categories |

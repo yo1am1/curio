@@ -70,7 +70,7 @@ from curio.domains.cocktails.models import (
 )
 from curio.domains.evening.models import EveningPlan, EveningRequest, EveningSwap
 from curio.domains.evening.planner import EveningError
-from curio.domains.fashion.models import Product, ProductFilter, ScoredProduct, User
+from curio.domains.fashion.models import Product, ProductFilter, ScoredProduct
 from curio.domains.fashion.outfits import (
     MAX_SLOTS,
     Audience,
@@ -217,8 +217,18 @@ class PurchasedProduct(BaseModel):
     product: Product
 
 
+class Shopper(BaseModel):
+    """A shopper as the API shows one: the anonymous id only. The H&M data also has an
+    age, which no page needs, so it is not served."""
+
+    user_id: int
+
+
 class UserProfile(BaseModel):
-    user: User
+    """A sampled H&M shopper's purchases (pseudonymous, re-keyed ids; see
+    docs/data-and-licences.md)."""
+
+    user: Shopper
     purchases: list[PurchasedProduct]
 
 
@@ -733,7 +743,7 @@ def create_app(
             for p in fashion.customers.purchases_for(user_id)
             if (product := fashion.catalog.get(p.product_id)) is not None
         ]
-        return UserProfile(user=user, purchases=purchases)
+        return UserProfile(user=Shopper(user_id=user.user_id), purchases=purchases)
 
     @app.get("/users/{user_id}/recommendations")
     def recommend(

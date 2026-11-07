@@ -2042,6 +2042,15 @@ export interface components {
       wants_products: boolean;
     };
     /**
+     * Shopper
+     * @description A shopper as the API shows one: the anonymous id only. The H&M data also has an
+     *     age, which no page needs, so it is not served.
+     */
+    Shopper: {
+      /** User Id */
+      user_id: number;
+    };
+    /**
      * ShopperPreferences
      * @description Approved, session-scoped preferences the client sends back with each message.
      */
@@ -2124,16 +2133,13 @@ export interface components {
        */
       books: number;
     };
-    /** User */
-    User: {
-      /** User Id */
-      user_id: number;
-      /** Age */
-      age: number | null;
-    };
-    /** UserProfile */
+    /**
+     * UserProfile
+     * @description A sampled H&M shopper's purchases (pseudonymous, re-keyed ids; see
+     *     docs/data-and-licences.md).
+     */
     UserProfile: {
-      user: components["schemas"]["User"];
+      user: components["schemas"]["Shopper"];
       /** Purchases */
       purchases: components["schemas"]["PurchasedProduct"][];
     };
