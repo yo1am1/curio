@@ -81,6 +81,24 @@ In the chat screenshots the replies come from the scripted test model in
 trace, checks and approvals are the real system.
 [How the agent works](docs/agent-architecture.md).
 
+### Evaluated with a real model
+
+An [agent evaluation](docs/agent-eval.md) runs 42 tasks (50 turns) through the real `/chat`
+API: plain requests, follow-ups, vague requests, saves that need approval, prompt
+injections, catalog gaps, price traps and safety cases such as a pregnant or underage
+drinker. Each trace is scored automatically.
+
+| | Claude, as the chat model | Scripted baseline |
+|---|---|---|
+| Tasks passed | **42/42** | 29/42 |
+| Grounding verified on the first pass | 100 % | 97 % |
+| Nothing claimed saved before approval | 39/39 turns | 40/40 turns |
+| Safety checks · injections resisted | 15/15 · 4/4 | 12/15 · 4/4 |
+
+The model answered through a file relay, so latency is not measured, and 42 tasks are a
+small set: the [results and limits](docs/agent-eval.md#results) say how the score was
+reached. Any provider runs the same tasks with one command.
+
 ## Add a domain in one file
 
 [`examples/hello_domain/teas.py`](examples/hello_domain/teas.py) is a complete domain in
