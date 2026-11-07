@@ -1,7 +1,10 @@
-"""`scripts/quickstart.sh` with a recording `uv`: where it binds the UI and the API.
+"""`scripts/quickstart.sh` with a recording `uv` and `npm`: where it binds the one server, when
+it builds the web app, and what it prepares.
 
-The real servers are never started; the fake `uv` logs each call, answers the health check
-and lets the script's own inline Python run, so the test stays offline and takes a second.
+The script runs from a copy of the repository layout in a temporary folder (the script and a
+miniature `web/`), so building or not building never touches the real `web/dist`. The real
+server is never started; the fake `uv` logs each call, answers the health check and lets the
+script's own inline Python run, so the test stays offline and takes a second.
 """
 
 import os
@@ -23,8 +26,7 @@ printf '%s\\n' "$*" >> "$UV_LOG"
 shift
 [[ "$1" == --no-sync ]] && shift
 case "$1" in
-    uvicorn) exec sleep 30 ;;
-    streamlit) exit 0 ;;
+    uvicorn) exec sleep 1 ;;
     python)
         shift
         [[ "$1" == -m ]] && exit 0
@@ -32,20 +34,60 @@ case "$1" in
         exec "{sys.executable}" "$@" ;;
 esac
 """
+FAKE_NPM = """#!/usr/bin/env bash
+printf 'npm %s (in %s)\\n' "$*" "$(basename "$PWD")" >> "$UV_LOG"
+if [[ "$1" == run && "$2" == build ]]; then
+    mkdir -p dist && echo '<div id="root">' > dist/index.html
+fi
+"""
 
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None, reason="needs bash")
 
 
-def run_quickstart(tmp_path: Path, **env: str | None) -> tuple[list[str], str]:
+def checkout(tmp_path: Path, *, built: bool = True) -> Path:
+    """The script and a miniature web app in `tmp_path/repo`; `built` adds a current build."""
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    shutil.copy(ROOT / "scripts" / "quickstart.sh", repo / "scripts" / "quickstart.sh")
+    (repo / "web" / "src").mkdir(parents=True)
+    for name in ("package.json", "package-lock.json", "index.html", "vite.config.ts"):
+        (repo / "web" / name).write_text("{}")
+    (repo / "web" / "src" / "main.tsx").write_text("")
+    if built:
+        (repo / "web" / "dist").mkdir()
+        index = repo / "web" / "dist" / "index.html"
+        index.write_text('<div id="root">')
+        later = index.stat().st_mtime + 60
+        os.utime(index, (later, later))
+    return repo
+
+
+def run_quickstart(
+    tmp_path: Path,
+    *,
+    repo: Path | None = None,
+    npm: bool = True,
+    status: int = 0,
+    **env: str | None,
+) -> tuple[list[str], str]:
     """Run the script with `env` on top of a test environment; None unsets a variable."""
-    fake = tmp_path / "bin" / "uv"
-    fake.parent.mkdir()
-    fake.write_text(FAKE_UV)
-    fake.chmod(0o755)
+    repo = repo or checkout(tmp_path)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    for name, script in (("uv", FAKE_UV), ("npm", FAKE_NPM)):
+        fake = bin_dir / name
+        if name == "npm" and not npm:
+            continue
+        fake.write_text(script)
+        fake.chmod(0o755)
     log = tmp_path / "uv.log"
+    log.touch()
+    # Only the fake tools and the basics: a real npm on PATH must never run.
+    tools = ("bash", "find", "seq", "sleep", "dirname", "basename", "mkdir", "cat")
+    basics = {Path(shutil.which(tool)).parent for tool in tools}
     environ = {
-        **{k: v for k, v in os.environ.items() if k not in ("UI_HOST", "UI_PORT", "API_PORT")},
-        "PATH": f"{fake.parent}{os.pathsep}{os.environ['PATH']}",
+        **{k: v for k, v in os.environ.items() if not k.startswith(("CURIO_", "UI_", "API_"))},
+        "PATH": os.pathsep.join([str(bin_dir), *map(str, basics)]),
         "UV_LOG": str(log),
         "CURIO_BOOKS": "0",
         "DATA_DIR": str(tmp_path / "data"),
@@ -53,14 +95,15 @@ def run_quickstart(tmp_path: Path, **env: str | None) -> tuple[list[str], str]:
     }
     environ = {k: v for k, v in environ.items() if v is not None}
     done = subprocess.run(
-        ["bash", str(ROOT / "scripts" / "quickstart.sh")],
+        ["bash", str(repo / "scripts" / "quickstart.sh")],
         env=environ,
         capture_output=True,
         text=True,
         timeout=60,
-        check=True,
     )
-    return log.read_text().splitlines(), done.stdout + done.stderr
+    output = done.stdout + done.stderr
+    assert done.returncode == status, output
+    return log.read_text().splitlines(), output
 
 
 def command(calls: list[str], program: str) -> list[str]:
@@ -71,22 +114,69 @@ def option(args: list[str], name: str) -> str:
     return args[args.index(name) + 1]
 
 
-def test_both_servers_listen_on_this_computer_only_by_default(tmp_path):
+def test_one_server_listens_on_this_computer_only_by_default(tmp_path):
     calls, output = run_quickstart(tmp_path)
-    assert option(command(calls, "streamlit"), "--server.address") == "127.0.0.1"
-    assert option(command(calls, "uvicorn"), "--host") == "127.0.0.1"
-    assert "open http://127.0.0.1:8501" in output
+    uvicorn = command(calls, "uvicorn")
+    assert option(uvicorn, "--host") == "127.0.0.1"
+    assert option(uvicorn, "--port") == "8000"
+    assert "open http://127.0.0.1:8000" in output
+    assert not any("streamlit" in call for call in calls)
     assert "Warning" not in output
 
 
-def test_the_ui_opens_to_the_network_only_on_request_and_says_so(tmp_path):
-    calls, output = run_quickstart(tmp_path, UI_HOST="0.0.0.0", UI_PORT="18501")
-    streamlit = command(calls, "streamlit")
-    assert option(streamlit, "--server.address") == "0.0.0.0"
-    assert option(streamlit, "--server.port") == "18501"
-    assert option(command(calls, "uvicorn"), "--host") == "127.0.0.1"  # the API never moves
-    assert "Warning: UI_HOST=0.0.0.0 serves the UI beyond this computer" in output
+def test_the_server_opens_to_the_network_only_on_request_and_says_so(tmp_path):
+    calls, output = run_quickstart(tmp_path, CURIO_HOST="0.0.0.0", CURIO_PORT="18000")
+    uvicorn = command(calls, "uvicorn")
+    assert option(uvicorn, "--host") == "0.0.0.0"
+    assert option(uvicorn, "--port") == "18000"
+    assert "open http://127.0.0.1:18000" in output
+    assert "Warning: CURIO_HOST=0.0.0.0 serves Curio beyond this computer" in output
     assert "LLM key" in output
+
+
+def test_the_web_app_is_built_when_missing_or_stale_and_reused_when_current(tmp_path):
+    (tmp_path / "missing").mkdir()
+    repo = checkout(tmp_path / "missing", built=False)
+    calls, output = run_quickstart(tmp_path / "missing", repo=repo)
+    assert "npm ci --no-audit --no-fund --loglevel=error (in web)" in calls
+    assert "npm run build --silent (in web)" in calls
+    assert "Building the web app" in output
+    assert calls.index("npm run build --silent (in web)") < calls.index(
+        next(call for call in calls if "uvicorn" in call)
+    )
+
+    (tmp_path / "current").mkdir()
+    calls, output = run_quickstart(tmp_path / "current")
+    assert not any(call.startswith("npm") for call in calls)
+
+    (tmp_path / "stale").mkdir()
+    repo = checkout(tmp_path / "stale")
+    source = repo / "web" / "src" / "main.tsx"
+    later = (repo / "web" / "dist" / "index.html").stat().st_mtime + 60
+    os.utime(source, (later, later))
+    calls, _ = run_quickstart(tmp_path / "stale", repo=repo)
+    assert "npm run build --silent (in web)" in calls
+
+    (tmp_path / "off").mkdir()
+    repo = checkout(tmp_path / "off", built=False)
+    calls, _ = run_quickstart(tmp_path / "off", repo=repo, CURIO_WEB_BUILD="0")
+    assert not any(call.startswith("npm") for call in calls)
+
+
+def test_without_npm_a_missing_build_explains_what_to_do(tmp_path):
+    repo = checkout(tmp_path, built=False)
+    calls, output = run_quickstart(tmp_path, repo=repo, npm=False, status=1)
+    assert "npm is not installed" in output
+    assert "docker compose --profile demo up --build" in output
+    assert not any("uvicorn" in call for call in calls)
+    # A build made before is served as it is, even when its sources changed since.
+    (tmp_path / "built").mkdir()
+    repo = checkout(tmp_path / "built")
+    later = (repo / "web" / "dist" / "index.html").stat().st_mtime + 60
+    os.utime(repo / "web" / "src" / "main.tsx", (later, later))
+    calls, output = run_quickstart(tmp_path / "built", repo=repo, npm=False)
+    assert "serving the web app built before" in output
+    assert any("uvicorn" in call for call in calls)
 
 
 def test_books_are_prepared_by_default_with_an_opt_out(tmp_path):
@@ -106,3 +196,11 @@ def test_the_docker_demo_prepares_books_by_default_with_an_opt_out():
     compose = (ROOT / "docker-compose.yml").read_text()
     assert "DEMO_BOOKS: ${DEMO_BOOKS:-1}" in compose
     assert 'if [ "$$DEMO_BOOKS" = 1 ]' in compose
+
+
+def test_one_container_serves_the_api_and_the_app():
+    compose = (ROOT / "docker-compose.yml").read_text()
+    assert "streamlit" not in compose and "8501" not in compose
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    assert "COPY --from=web /web/dist ./web/dist" in dockerfile
+    assert "EXPOSE 8000\n" in dockerfile
