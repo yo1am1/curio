@@ -270,22 +270,40 @@ and approval policy live on the client and are sent with each request (`TurnCont
 1. When the agent calls an approval tool, the server validates the arguments against
    the catalog and returns `status="needs_approval"` with a `pending_action`.
 2. The proposal is HMAC-SHA256 signed over its ID, tool, arguments, originating
-   request, the proposing turn's search filters (`intent`) and issue time. It expires
-   after 30 minutes. On resume the engine rebuilds the turn from those filters.
-3. The client answers with `decision: {action, approved, edited_args}`. Edits may only
-   remove values (a subset of product IDs, dropped preferences). A forged, modified,
-   widened or expired proposal is rejected with HTTP 409.
-4. On approval the server returns an `applied` effect for the client to store, merges it
+   request, the proposing turn's search filters (`intent`), issue time and the client's
+   `session_id` (a random id the web app keeps per tab and sends in every request). It
+   expires after 30 minutes. On resume the engine rebuilds the turn from those filters.
+3. The client answers with `decision: {action, approved, edited_args}` and the same
+   `session_id`. Edits may only remove values (a subset of product IDs, dropped
+   preferences). A forged, modified, widened or expired proposal, or one sent from another
+   session, is rejected with HTTP 409.
+4. Each proposal is answered once. The signer's `NonceStore` records an answered proposal
+   until it expires, so approving or declining it again gets HTTP 409 ("already
+   answered"). A refused edit does not count as an answer, and when the turn fails before
+   its reply reaches the client (a provider error, a dropped connection), the proposal is
+   released so the shopper can answer it again.
+5. On approval the server returns an `applied` effect for the client to store, merges it
    into the turn's context the way the UI does, and the agent continues the turn to
    confirm. Later searches in that turn use the approved change. An effect that touches
    no items (remembering preferences) leaves the shown cards in place. A resumed turn
    cannot pause for another proposal or question.
 
 Shoppers can opt into auto-approval per tool in the session panel. Auto-approved
-actions still run through the same validation and appear in the trace.
+actions still run through the same validation and appear in the trace. `auto_approve` is a
+user preference held by the client, like the shortlist: the server takes it as sent. The
+signature therefore protects against the model approving its own proposals and against
+forged, widened, replayed or moved proposals; it does not, and cannot, protect the server
+from its own client, which may opt into auto-approval. Effects are only returned to the
+client, so this is fine for Curio; a server-side effect (an order, an email) would need a
+server-held policy per user instead.
 
-`AGENT_SIGNING_KEY` sets the signing key. Without it, a random per-process key is used,
-so pending proposals expire on restart. Set it when running several API workers.
+`AGENT_SIGNING_KEY` sets the signing key (at least 32 bytes). Without it, a random
+per-process key is used, so pending proposals expire on restart. With several API workers
+(`WEB_CONCURRENCY` above 1) the API refuses to start without it. The default nonce store
+(`InMemoryNonceStore`) lives in one process, so with several workers a proposal could be
+answered once per worker; pass `ActionSigner(..., nonces=<a shared store>)` that implements
+the two-method `NonceStore` protocol (`claim`, `release`) over Redis or a database, or run
+one worker.
 
 ## Grounding guardrail
 

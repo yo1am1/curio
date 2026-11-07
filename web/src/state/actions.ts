@@ -100,7 +100,7 @@ export function useSessionActions() {
 
 /** The chat of one domain: send a message, answer a proposal, start over. */
 export function useChatActions(domain: Domain) {
-  const { chats, session } = useStores();
+  const { chats, session, chatSession } = useStores();
   const actions = useSessionActions();
   const controller = useRef<AbortController | null>(null);
 
@@ -196,7 +196,7 @@ export function useChatActions(domain: Domain) {
         const message = text.trim().slice(0, 2000);
         const chat = chats.get()[domain];
         if (!message || chat.running) return;
-        const payload = messagePayload(domain, message, chat.entries, session.get());
+        const payload = messagePayload(domain, message, chat.entries, session.get(), chatSession);
         void run(payload, { id: entryId(), role: "user", content: message });
       },
       decide: (index: number, approved: boolean, edits: Record<string, unknown> | null) => {
@@ -210,6 +210,7 @@ export function useChatActions(domain: Domain) {
           action,
           approved,
           approved ? edits : null,
+          chatSession,
         );
         const user: ChatEntry = {
           id: entryId(),
@@ -228,6 +229,6 @@ export function useChatActions(domain: Domain) {
         update((chat) => ({ ...chat, failed: null }));
       },
     }),
-    [chats, domain, run, session, update],
+    [chatSession, chats, domain, run, session, update],
   );
 }

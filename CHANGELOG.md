@@ -39,6 +39,15 @@ All notable changes to Curio are recorded here. The format follows
   `swagger-ui-dist@5` script from jsDelivr, without SRI, on the app's origin. `API_DOCS=true`
   serves `/docs` with swagger-ui-dist 5.33.3 pinned by SRI hash and no inline script;
   `/redoc` is gone. `/openapi.json` is unchanged.
+- Approvals are single-use and session-bound. `TurnContext` (and so `ChatRequest`) has a new
+  optional field **`session_id`** (16-128 characters of `A-Za-z0-9_-`); proposals are signed
+  over it and answer only in the same session. A proposal answered once (approved or
+  declined) gets **409 "This proposal was already answered. Please ask again."** when sent
+  again, on `/chat` and as an `error` event on `/chat/stream`; it used to be applied every
+  time within its 30 minutes. The record is an in-memory `NonceStore` per process, with a
+  documented interface for a shared store. The web app sends a random per-tab session id.
+- `AGENT_SIGNING_KEY` must be at least 32 bytes (shorter keys stop the API at startup), and
+  with `WEB_CONCURRENCY` above 1 and chat on, the API refuses to start without it.
 
 ### Removed
 

@@ -2324,6 +2324,20 @@
             "maxItems": 7,
             "title": "Auto Approve"
           },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 16,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
           "preferences": {
             "$ref": "#/components/schemas/ShopperPreferences"
           },

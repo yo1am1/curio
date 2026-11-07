@@ -375,3 +375,95 @@ def test_the_opt_in_docs_ui_loads_pinned_assets_with_sri(cocktail_catalog) -> No
     policy = page.headers["content-security-policy"]
     assert "script-src 'self' https://cdn.jsdelivr.net" in policy
     assert "frame-ancestors 'none'" in policy
+
+
+# --- Single-use, session-bound approvals over HTTP -------------------------------------------
+
+
+def _replay_app(cocktail_catalog, *replies):
+    from langchain_core.messages import AIMessage
+
+    from curio.app.assistants import CocktailAssistant
+    from curio.engine import ActionSigner
+    from tests.agents.conftest import FakeToolCallingChatModel
+
+    model = FakeToolCallingChatModel(messages=iter([AIMessage(**reply) for reply in replies]))
+    assistant = CocktailAssistant(
+        model,
+        cocktail_catalog,
+        CocktailRecommender(cocktail_catalog),
+        signer=ActionSigner(b"k" * 32),
+    )
+    return _app(cocktail_catalog, assistant)
+
+
+SAVE = {
+    "content": "",
+    "tool_calls": [{"name": "SaveCocktails", "args": {"drink_ids": [1]}, "id": "t"}],
+}
+SESSION_ID = "s" * 32
+
+
+def test_the_audit_replay_probe_now_gets_409(cocktail_catalog) -> None:
+    """`work/security/replay.py`: the same signed proposal resumed three times. It used to be
+    applied each time; now the first answer applies and every later one is a 409."""
+    app = _replay_app(cocktail_catalog, SAVE, {"content": "Saved."}, {"content": "Saved again."})
+    base = {"domain": "cocktails", "session_id": SESSION_ID}
+    with TestClient(app) as client:
+        reply = client.post("/chat", json={**base, "message": "save it"}).json()
+        decision = {"action": reply["pending_action"], "approved": True}
+        first = client.post("/chat", json={**base, "decision": decision})
+        assert first.status_code == 200
+        assert first.json()["applied"][0]["drink_ids"] == [1]
+        for path in ("/chat", "/chat/stream"):
+            again = client.post(path, json={**base, "decision": decision})
+            if path == "/chat":
+                assert again.status_code == 409
+                assert again.json()["detail"] == (
+                    "This proposal was already answered. Please ask again."
+                )
+            else:
+                assert '"status": 409' in again.text and "already answered" in again.text
+
+
+def test_a_proposal_cannot_be_answered_from_another_session(cocktail_catalog) -> None:
+    app = _replay_app(cocktail_catalog, SAVE, {"content": "Saved."})
+    with TestClient(app) as client:
+        reply = client.post(
+            "/chat", json={"domain": "cocktails", "message": "save it", "session_id": SESSION_ID}
+        ).json()
+        decision = {"action": reply["pending_action"], "approved": True}
+        for other in ({"session_id": "t" * 32}, {}):
+            stolen = client.post(
+                "/chat", json={"domain": "cocktails", "decision": decision, **other}
+            )
+            assert stolen.status_code == 409
+        own = {"domain": "cocktails", "decision": decision, "session_id": SESSION_ID}
+        assert client.post("/chat", json=own).status_code == 200
+
+
+@pytest.mark.parametrize("session_id", ["short", "x" * 129, "has space" * 4, "ü" * 20])
+def test_session_ids_are_validated(cocktail_catalog, session_id) -> None:
+    with TestClient(_app(cocktail_catalog, SlowAssistant())) as client:
+        body = {**CHAT, "session_id": session_id}
+        assert client.post("/chat", json=body).status_code == 422
+
+
+def test_a_short_signing_key_is_refused(monkeypatch) -> None:
+    monkeypatch.setenv("AGENT_SIGNING_KEY", "too-short")
+    with pytest.raises(ValueError, match="at least 32 bytes"):
+        Settings(_env_file=None)
+    monkeypatch.setenv("AGENT_SIGNING_KEY", "k" * 32)
+    assert Settings(_env_file=None).agent_signing_key is not None
+
+
+def test_several_workers_without_a_signing_key_refuse_to_start(tmp_path, caplog) -> None:
+    from curio.app.services import build_services
+
+    chat = {"data_dir": tmp_path, "llm_model": "m", "llm_api_key": "x", "web_concurrency": 2}
+    with pytest.raises(RuntimeError, match="AGENT_SIGNING_KEY is not set"):
+        build_services(settings(**chat))
+    with caplog.at_level("WARNING"):
+        build_services(settings(**chat, agent_signing_key="k" * 32)).close()
+    assert "once per worker" in caplog.text
+    build_services(settings(**{**chat, "web_concurrency": 1})).close()  # one worker: fine

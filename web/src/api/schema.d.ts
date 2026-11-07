@@ -1000,6 +1000,8 @@ export interface components {
         | "RememberReadingTastes"
         | "SaveEvening"
       )[];
+      /** Session Id */
+      session_id?: string | null;
       preferences?: components["schemas"]["ShopperPreferences"];
       /** Shopper Id */
       shopper_id?: number | null;

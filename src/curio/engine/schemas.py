@@ -65,8 +65,16 @@ class TurnContext(BaseModel):
     Domains add their own fields (shortlists, remembered tastes).
     """
 
-    # Human-in-the-loop policy: approval tools listed here run without asking.
+    # Human-in-the-loop policy: approval tools listed here run without asking. This is the
+    # shopper's own preference, held and sent by their client like the rest of this state;
+    # nothing on the server can (or tries to) stop a client from setting it.
     auto_approve: list[str] = Field(default_factory=list, max_length=20)
+    # A random id the client keeps for its conversation. Proposals are signed over it and
+    # answer only in the session they were made for. Without one, a proposal is bound to
+    # "no session" and stays single-use.
+    session_id: str | None = Field(
+        default=None, min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"
+    )
 
 
 class PendingAction(BaseModel):

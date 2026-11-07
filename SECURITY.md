@@ -29,5 +29,13 @@ with credit to you unless you ask otherwise.
   send data to another host. `/docs` is off unless `API_DOCS=true`.
 - LLM keys come from the environment (`.env`) and are never written to logs, traces or
   replies. Never commit a `.env` file.
-- Agent approvals are HMAC-signed with `AGENT_SIGNING_KEY`. Left empty, each process uses a
-  random key; set your own long random value when several API workers must share approvals.
+- Agent approvals are HMAC-signed with `AGENT_SIGNING_KEY` (at least 32 bytes; left empty,
+  each process uses a random key). Each proposal is bound to the client's session id and
+  can be answered once: the signer records answered proposals in memory until they expire.
+  That record is per process, so with several workers (`WEB_CONCURRENCY` > 1, which also
+  requires `AGENT_SIGNING_KEY`) a proposal could be answered once per worker unless you plug
+  in a shared `NonceStore` (see `curio.engine.signing`).
+- `auto_approve` is the shopper's own preference and is held by their client. The signature
+  stops the model from approving its own proposals and stops forged, widened, replayed or
+  moved proposals; it does not protect the server against its client, which may opt into
+  auto-approval. Approved effects only go back to that client.

@@ -7,6 +7,8 @@ from typing import Annotated
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from curio.engine.signing import MIN_KEY_BYTES
+
 
 class Settings(BaseSettings):
     # env_ignore_empty: `LLM_MODEL=` in a copied .env.example must mean "not set", not "".
@@ -41,9 +43,13 @@ class Settings(BaseSettings):
     # Wall-clock budget of one agent turn, checked before every model call. Raise it only for
     # slow models (a relayed model in `evals/`); the default matches `TURN_DEADLINE_SECONDS`.
     agent_turn_deadline_seconds: float = Field(default=90.0, gt=0)
-    # Signs the agent's approval proposals. Unset: a random per-process key, so pending
-    # proposals expire on restart. Set it when running several API workers.
+    # Signs the agent's approval proposals; at least 32 bytes. Unset: a random per-process
+    # key, so pending proposals expire on restart. Required with several API workers.
     agent_signing_key: SecretStr | None = None
+    # API worker processes (uvicorn and gunicorn read the same variable for their default
+    # worker count). Above 1 with chat on, AGENT_SIGNING_KEY is required, and each worker
+    # remembers answered proposals on its own (see SECURITY.md).
+    web_concurrency: int = Field(default=1, ge=1)
     # Agent turns running at once, across /chat and /chat/stream. A turn over the cap gets
     # 503 with Retry-After. Keep it well below AnyIO's 40 worker threads, which every route
     # shares, so search and /health stay responsive while turns wait on a slow model.
@@ -68,6 +74,16 @@ class Settings(BaseSettings):
     # whenever the folder holds a build; SERVE_WEB=false turns that off.
     web_dist: Path = Path("web/dist")
     serve_web: bool = True
+
+    @field_validator("agent_signing_key")
+    @classmethod
+    def _long_enough(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value().encode()) < MIN_KEY_BYTES:
+            raise ValueError(
+                f"AGENT_SIGNING_KEY must be at least {MIN_KEY_BYTES} bytes; generate one with "
+                '`python -c "import secrets; print(secrets.token_hex(32))"`.'
+            )
+        return value
 
     @field_validator("allowed_hosts", mode="before")
     @classmethod

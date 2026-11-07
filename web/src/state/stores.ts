@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 
 import type { EveningPlan } from "../api/types";
-import { type ChatState, loadChats, saveChats } from "./chat";
+import { type ChatState, loadChatSession, loadChats, saveChats } from "./chat";
 import { loadSession, saveSession, type Session } from "./session";
 import {
   browserStorage,
@@ -19,6 +19,8 @@ export interface AppStores {
   chats: Store<ChatState>;
   /** The Plan my evening page's current plan (the API's reply). */
   plan: Store<EveningPlan | null>;
+  /** This tab's chat session id, sent with every chat request (`session_id`). */
+  chatSession: string;
 }
 
 export function createAppStores(
@@ -35,6 +37,7 @@ export function createAppStores(
     plan: createStore((readStorage(tab, PLAN_KEY) as EveningPlan | null) ?? null, (plan) => {
       writeStorage(tab, PLAN_KEY, plan);
     }),
+    chatSession: loadChatSession(tab),
   };
 }
 

@@ -13,9 +13,11 @@ One turn runs as a generator of observable events:
 Everything domain-specific (tools, prompts, evidence, grounding, suggestions) lives behind the
 `Toolkit` protocol; budgets, the trace, approvals and resume are shared by every domain.
 
-The server is stateless: shortlists, preferences and pending proposals live on the client.
-Proposals are HMAC-signed over their tool name and arguments, so a resumed decision can approve
-or narrow exactly what this agent proposed, never forge, widen or replay it in another domain.
+The server keeps no session state: shortlists, preferences and pending proposals live on
+the client. Proposals are HMAC-signed over their tool name, arguments and the client's session
+id, so a resumed decision can approve or narrow exactly what this agent proposed in that
+session, never forge, widen or move it to another domain or session. The signer's nonce store
+remembers answered proposals until they expire, so none is answered twice.
 """
 
 import logging
@@ -140,7 +142,7 @@ class AgentEngine[T]:
         context: TurnContext,
     ) -> Iterator[AgentEvent]:
         started = self._clock()
-        action = self._signer.verify(decision.action)
+        action = self._signer.verify(decision.action, context.session_id)
         schema = self._approval_schema(action)
         # The proposing turn's signed filters, so a follow-up search keeps them.
         intent = action.intent or self._schemas.intent(query=action.request)
@@ -149,6 +151,9 @@ class AgentEngine[T]:
         if decision.approved:
             args = narrow_args(decision)
             effect, items, outcome = self._apply_decision(schema, args)
+            # Single use: from here the decision counts, even if it is sent again. An edit
+            # refused above leaves the proposal open, so the shopper can answer it again.
+            self._signer.claim(action)
             self._applied(turn, effect)
             if items:
                 turn.show(items)
@@ -157,6 +162,7 @@ class AgentEngine[T]:
             )
             note = f"The shopper approved your proposal. {outcome} Confirm briefly."
         else:
+            self._signer.claim(action)
             turn.show(self._toolkit.proposed(action.args))
             step = AgentStep(
                 kind="approval",
@@ -169,9 +175,19 @@ class AgentEngine[T]:
                 "The shopper declined your proposal; nothing was changed. Acknowledge briefly "
                 "and offer one alternative. Do not propose the same change again."
             )
-        yield self._record(turn, step, started)
-        messages = self._toolkit.prompt(turn, f"[Decision on your proposal] {note}", history)
-        yield from self._loop(turn, messages)
+        replied = False
+        try:
+            yield self._record(turn, step, started)
+            messages = self._toolkit.prompt(turn, f"[Decision on your proposal] {note}", history)
+            for event in self._loop(turn, messages):
+                replied = replied or isinstance(event, ReplyEvent)
+                yield event
+        except BaseException:
+            # The reply (and with it the effect) never reached the client: the model failed
+            # or the client went away. Let the shopper answer the proposal again.
+            if not replied:
+                self._signer.release(action)
+            raise
 
     def _approval_schema(self, action: PendingAction) -> type[BaseModel]:
         """The schema of a signed proposal, if it belongs to this assistant's domain."""
@@ -353,6 +369,7 @@ class AgentEngine[T]:
             _canonical_args(action),
             turn.message,
             intent=turn.intent,
+            session=turn.context.session_id,
             action_type=self._schemas.pending_action,
             summary=f"Proposed: {outcome}",
             **self._toolkit.pending_display(items),

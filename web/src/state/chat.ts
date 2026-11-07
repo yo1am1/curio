@@ -11,6 +11,11 @@ import { autoApprove, buildContext, type Session } from "./session";
 import { readStorage, writeStorage } from "./store";
 
 export const CHAT_KEY = "curio.chat.v1";
+/** This tab's conversation id. The server signs every proposal over it, so a proposal can
+ * only be answered from the tab (session) it was made in. Kept beside the transcripts, in
+ * tab storage. */
+export const CHAT_SESSION_KEY = "curio.chat-session.v1";
+const SESSION_ID = /^[A-Za-z0-9_-]{16,128}$/;
 const HISTORY_TURNS = 10;
 const CONTENT_LIMIT = 4000;
 const CARD_IDS = 5;
@@ -64,6 +69,22 @@ export function saveChats(storage: Storage | undefined, chats: ChatState): void 
   writeStorage(storage, CHAT_KEY, kept);
 }
 
+/** A random 128-bit id, as 32 hex characters. */
+export function newSessionId(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/** This tab's session id: the stored one, or a new one that is stored for next time. */
+export function loadChatSession(storage: Storage | undefined): string {
+  const stored = readStorage(storage, CHAT_SESSION_KEY);
+  if (typeof stored === "string" && SESSION_ID.test(stored)) return stored;
+  const id = newSessionId();
+  writeStorage(storage, CHAT_SESSION_KEY, id);
+  return id;
+}
+
 let counter = 0;
 export function entryId(): string {
   counter += 1;
@@ -86,16 +107,19 @@ export function historyItem(entry: ChatEntry): ChatTurn {
   return item;
 }
 
-/** Recent turns plus the client-held session state for `domain`. */
+/** Recent turns plus the client-held session state for `domain`, and this tab's session
+ * id, which binds any proposal the turn makes to this tab. */
 export function chatPayload(
   domain: Domain,
   entries: ChatEntry[],
   session: Session,
+  sessionId?: string,
 ): Partial<ChatRequest> {
   const payload: Partial<ChatRequest> = {
     history: entries.slice(-HISTORY_TURNS).map(historyItem),
     ...buildContext(domain, session),
   };
+  if (sessionId) payload.session_id = sessionId;
   const policy = autoApprove(domain, session);
   if (policy.length) payload.auto_approve = policy;
   return payload;
@@ -106,8 +130,9 @@ export function messagePayload(
   message: string,
   entries: ChatEntry[],
   session: Session,
+  sessionId?: string,
 ): Partial<ChatRequest> {
-  return { message, ...chatPayload(domain, entries, session) };
+  return { message, ...chatPayload(domain, entries, session, sessionId) };
 }
 
 export function decisionPayload(
@@ -117,9 +142,10 @@ export function decisionPayload(
   action: PendingAction,
   approved: boolean,
   editedArgs: Record<string, unknown> | null,
+  sessionId?: string,
 ): Partial<ChatRequest> {
   return {
-    ...chatPayload(domain, entries, session),
+    ...chatPayload(domain, entries, session, sessionId),
     decision: { action, approved, edited_args: editedArgs },
   };
 }

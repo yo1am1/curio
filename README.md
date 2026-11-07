@@ -56,8 +56,11 @@ The second and third domains forced the engine to generalise:
 - **Plan → act → verify.** `AgentEngine` runs every turn. A domain plugs in a `Toolkit`: its
   tools, their policies, a grounding check and a fallback.
 - **Policy-gated tools.** A tool is READ (runs), ASK (pauses with a question) or APPROVE
-  (only proposes). Proposals are HMAC-signed and bound to the tool, arguments, domain and
-  time. You can approve or narrow one. You cannot widen or replay it.
+  (only proposes). Proposals are HMAC-signed and bound to the tool, arguments, domain,
+  the client's session and time, and each can be answered once. You can approve or narrow
+  one. You cannot widen it, move it to another domain or session, or answer it twice.
+  Auto-approval is the shopper's own setting, held by their client: the signature stops the
+  model from approving itself, not the client from opting in.
 - **Grounding.** Every price, ID, rating, title and drink name in an answer is checked
   against what the tools returned. A failed check gets one self-correction, then a
   deterministic fallback built from catalog facts.

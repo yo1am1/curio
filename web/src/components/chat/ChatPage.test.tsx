@@ -76,6 +76,9 @@ describe("ChatPage", () => {
     await userEvent.type(box, "Save the first two{Enter}");
     const drawer = await screen.findByTestId("approval-drawer");
     expect(bodies[0]).toMatchObject({ message: "Save the first two", history: [] });
+    // The tab's session id goes with every turn; the proposal is signed over it.
+    expect(bodies[0]?.session_id).toBe(stores.chatSession);
+    expect(stores.chatSession).toMatch(/^[0-9a-f]{32}$/);
     await userEvent.click(within(drawer).getByRole("checkbox", { name: "Piece 1 · €19.99" }));
     await userEvent.click(within(drawer).getByRole("button", { name: "Approve" }));
     await screen.findByText("Done: it is saved.");
@@ -87,6 +90,7 @@ describe("ChatPage", () => {
       ],
     });
     expect(bodies[1]).not.toHaveProperty("message");
+    expect(bodies[1]?.session_id).toBe(stores.chatSession);
     await waitFor(() => {
       expect(stores.session.get().shortlist.map((p) => p.product_id)).toEqual([2]);
     });
