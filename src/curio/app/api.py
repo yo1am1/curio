@@ -12,12 +12,12 @@ from contextlib import asynccontextmanager
 from datetime import date
 from importlib.metadata import version
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from PIL import Image, UnidentifiedImageError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from curio.app.config import get_settings
 from curio.app.demo import DemoCustomer
@@ -104,6 +104,93 @@ class QueryPhoto(BaseModel):
     name: str
     product_type: str
     colour: str
+
+
+class GraphNode(BaseModel):
+    """A node of a product neighborhood: a product, a catalog attribute or a category."""
+
+    id: str
+    label: str
+    kind: Literal["product", "attribute", "taxonomy"]
+    product_id: int | None = None
+
+
+class GraphEdge(BaseModel):
+    source: str
+    target: str
+    relation: Literal["has_attribute", "in_category", "co_purchased"]
+    weight: float
+
+
+class ProductGraph(BaseModel):
+    """A bounded one-hop neighborhood of a product (`/products/{id}/graph`)."""
+
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+
+
+# `/evaluation` serves the file `scripts.evaluate --output` wrote, as written: these models
+# describe its fields for clients, keep any others (extra="allow") and leave out the ones a
+# file does not have (the route excludes unset fields), so the JSON is unchanged.
+Metric = int | float
+
+
+class _EvaluationPart(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+
+class HoldoutMetrics(_EvaluationPart):
+    users_evaluated: int | None = None
+    map_at_12: Metric | None = None
+    hit_rate: Metric | None = None
+    recall_at_12: Metric | None = None
+
+
+class StrategyResult(_EvaluationPart):
+    full_holdout: HoldoutMetrics
+    novel_item_holdout: HoldoutMetrics | None = None
+    catalog_coverage: Metric | None = None
+    recommendation_fill: Metric | None = None
+
+
+class PairedGain(_EvaluationPart):
+    """The learned ranker's MAP@12 gain over buy-again, with a paired bootstrap interval."""
+
+    mean_delta: Metric
+    lower_95: Metric
+    upper_95: Metric
+    paired_customers: int | None = None
+    bootstrap_resamples: int | None = None
+    scope: str | None = None
+
+
+class ContentIndex(_EvaluationPart):
+    indexed_products: int
+    collection: str | None = None
+
+
+class SampleScope(_EvaluationPart):
+    prepared_users: int | None = None
+    catalog_products: int | None = None
+    holdout_purchases: int | None = None
+    training_purchases: int | None = None
+
+
+class Evaluation(_EvaluationPart):
+    """Offline evaluation results (`scripts.evaluate --output`)."""
+
+    top_k: int | None = None
+    users_evaluated: int | None = None
+    cutoff: str | None = None
+    holdout_end: str | None = None
+    holdout_days: int | None = None
+    evaluation_role: str | None = None
+    sample_scope: SampleScope | None = None
+    repeat_purchase_limitation: dict[str, Any] | None = None
+    content_index: ContentIndex | None = None
+    ranker: dict[str, Any] | None = None
+    results: dict[str, StrategyResult] = Field(default_factory=dict)
+    learned_vs_repeat: PairedGain | None = None
 
 
 class PurchasedProduct(BaseModel):
@@ -520,9 +607,9 @@ def create_app(services: Services | None = None, *, web_dist: Path | None = None
         return _to_hits(fashion, similar)
 
     @app.get("/products/{product_id}/graph")
-    def product_graph(product_id: int, fashion: FashionDep, top_k: TopK = 12) -> dict:
+    def product_graph(product_id: int, fashion: FashionDep, top_k: TopK = 12) -> ProductGraph:
         get_product(product_id, fashion)
-        return fashion.graph.neighborhood(product_id, top_k)
+        return ProductGraph.model_validate(fashion.graph.neighborhood(product_id, top_k))
 
     @app.post("/outfits")
     def build_outfit(query: OutfitQuery, fashion: FashionDep) -> Outfit:
@@ -631,8 +718,8 @@ def create_app(services: Services | None = None, *, web_dist: Path | None = None
                 hit.reasons = explainer.reasons(user_id, hit.product.product_id)
         return hits
 
-    @app.get("/evaluation")
-    def evaluation(fashion: FashionDep) -> dict:
+    @app.get("/evaluation", response_model_exclude_unset=True)
+    def evaluation(fashion: FashionDep) -> Evaluation:
         """Offline evaluation results written by `scripts.evaluate --output`."""
         path = fashion.evaluation_path
         if path is None or not path.is_file():
@@ -642,7 +729,7 @@ def create_app(services: Services | None = None, *, web_dist: Path | None = None
                 "`uv run python -m scripts.evaluate --qdrant-path .qdrant --output "
                 "data/evaluation.json`.",
             )
-        return json.loads(path.read_text())
+        return Evaluation.model_validate(json.loads(path.read_text()))
 
     def assistant_for(services: Services, domain: Domain) -> AgentEngine:
         spec = domain_spec(domain)

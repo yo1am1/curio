@@ -942,9 +942,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Product Graph Products  Product Id  Graph Get"
+                  "$ref": "#/components/schemas/ProductGraph"
                 }
               }
             }
@@ -1379,9 +1377,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Evaluation Evaluation Get"
+                  "$ref": "#/components/schemas/Evaluation"
                 }
               }
             }
@@ -2732,6 +2728,31 @@
         "type": "object",
         "title": "CocktailQuery"
       },
+      "ContentIndex": {
+        "properties": {
+          "indexed_products": {
+            "type": "integer",
+            "title": "Indexed Products"
+          },
+          "collection": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "indexed_products"
+        ],
+        "title": "ContentIndex"
+      },
       "DemoCustomer": {
         "properties": {
           "user_id": {
@@ -2900,6 +2921,141 @@
         ],
         "title": "EmptySlot",
         "description": "A slot the outfit could not fill, as the server reported it. Client-supplied on the\nway back, so the issue and the cheapest price are only ever shown again."
+      },
+      "Evaluation": {
+        "properties": {
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          },
+          "users_evaluated": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Users Evaluated"
+          },
+          "cutoff": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cutoff"
+          },
+          "holdout_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdout End"
+          },
+          "holdout_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdout Days"
+          },
+          "evaluation_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation Role"
+          },
+          "sample_scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SampleScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repeat_purchase_limitation": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repeat Purchase Limitation"
+          },
+          "content_index": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContentIndex"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ranker": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranker"
+          },
+          "results": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/StrategyResult"
+            },
+            "type": "object",
+            "title": "Results"
+          },
+          "learned_vs_repeat": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PairedGain"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Evaluation",
+        "description": "Offline evaluation results (`scripts.evaluate --output`)."
       },
       "EveningEffect": {
         "properties": {
@@ -3446,6 +3602,79 @@
         ],
         "title": "FlavourProfile"
       },
+      "GraphEdge": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "relation": {
+            "type": "string",
+            "enum": [
+              "has_attribute",
+              "in_category",
+              "co_purchased"
+            ],
+            "title": "Relation"
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "relation",
+          "weight"
+        ],
+        "title": "GraphEdge"
+      },
+      "GraphNode": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "product",
+              "attribute",
+              "taxonomy"
+            ],
+            "title": "Kind"
+          },
+          "product_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "kind"
+        ],
+        "title": "GraphNode",
+        "description": "A node of a product neighborhood: a product, a catalog attribute or a category."
+      },
       "GroundingReport": {
         "properties": {
           "status": {
@@ -3563,6 +3792,66 @@
         ],
         "title": "Health",
         "description": "Service status. The flat fashion and cocktail fields predate `domains` and stay for\nexisting clients; they read 0/False when that domain is not served."
+      },
+      "HoldoutMetrics": {
+        "properties": {
+          "users_evaluated": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Users Evaluated"
+          },
+          "map_at_12": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map At 12"
+          },
+          "hit_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hit Rate"
+          },
+          "recall_at_12": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recall At 12"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "HoldoutMetrics"
       },
       "Ingredient": {
         "properties": {
@@ -4053,6 +4342,85 @@
           "slot"
         ],
         "title": "OutfitSwap"
+      },
+      "PairedGain": {
+        "properties": {
+          "mean_delta": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Mean Delta"
+          },
+          "lower_95": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Lower 95"
+          },
+          "upper_95": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Upper 95"
+          },
+          "paired_customers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paired Customers"
+          },
+          "bootstrap_resamples": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bootstrap Resamples"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "mean_delta",
+          "lower_95",
+          "upper_95"
+        ],
+        "title": "PairedGain",
+        "description": "The learned ranker's MAP@12 gain over buy-again, with a paired bootstrap interval."
       },
       "Pairing": {
         "properties": {
@@ -4555,6 +4923,31 @@
         ],
         "title": "Product"
       },
+      "ProductGraph": {
+        "properties": {
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/GraphNode"
+            },
+            "type": "array",
+            "title": "Nodes"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/GraphEdge"
+            },
+            "type": "array",
+            "title": "Edges"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nodes",
+          "edges"
+        ],
+        "title": "ProductGraph",
+        "description": "A bounded one-hop neighborhood of a product (`/products/{id}/graph`)."
+      },
       "ProductHit": {
         "properties": {
           "product": {
@@ -4625,6 +5018,57 @@
         ],
         "title": "QueryPhoto",
         "description": "A photo of an H&M garment outside the catalog, to try image search with."
+      },
+      "SampleScope": {
+        "properties": {
+          "prepared_users": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared Users"
+          },
+          "catalog_products": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Products"
+          },
+          "holdout_purchases": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdout Purchases"
+          },
+          "training_purchases": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Purchases"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "SampleScope"
       },
       "SearchIntent": {
         "properties": {
@@ -4730,6 +5174,57 @@
         "type": "object",
         "title": "ShopperPreferences",
         "description": "Approved, session-scoped preferences the client sends back with each message."
+      },
+      "StrategyResult": {
+        "properties": {
+          "full_holdout": {
+            "$ref": "#/components/schemas/HoldoutMetrics"
+          },
+          "novel_item_holdout": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HoldoutMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "catalog_coverage": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog Coverage"
+          },
+          "recommendation_fill": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation Fill"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "full_holdout"
+        ],
+        "title": "StrategyResult"
       },
       "TextSearchRequest": {
         "properties": {

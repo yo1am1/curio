@@ -298,6 +298,33 @@ def test_evaluation_is_served_when_present(services, tmp_path) -> None:
         assert "scripts.evaluate" in missing.json()["detail"]
         path.write_text(json.dumps({"top_k": 12, "results": {}}))
         assert client.get("/evaluation").json() == {"top_k": 12, "results": {}}
+        # The typed response keeps a full file as written: unknown fields, nulls,
+        # integer metrics and fields a file leaves out.
+        full = {
+            "cutoff": "2020-09-16",
+            "holdout_end": "2020-09-22",
+            "holdout_days": 7,
+            "top_k": 12,
+            "users_evaluated": 819,
+            "ranker": None,
+            "content_index": {"indexed_products": 14280, "path": "/x/.qdrant", "limitation": "?"},
+            "sample_scope": {"prepared_users": 5000, "catalog_products": 14300, "selection": "all"},
+            "repeat_purchase_limitation": {"description": "d", "full_holdout_unique_user_items": 3},
+            "results": {
+                "repeat": {
+                    "full_holdout": {"hit_rate": 0.1, "map_at_12": 0.02, "users_evaluated": 819},
+                    "novel_item_holdout": {"map_at_12": None, "users_evaluated": 0},
+                    "catalog_coverage": 0,
+                    "recommendation_fill": 1.0,
+                    "note": "kept",
+                }
+            },
+            "learned_vs_repeat": {"mean_delta": 0.01, "lower_95": -0.002, "upper_95": 0.02},
+            "future_field": [1, 2],
+        }
+        path.write_text(json.dumps(full))
+        response = client.get("/evaluation")
+        assert response.json() == full
 
 
 def test_repeat_strategy_includes_purchase_and_grounded_reason(client):

@@ -1137,6 +1137,15 @@ export interface components {
        */
       top_k: number;
     };
+    /** ContentIndex */
+    ContentIndex: {
+      /** Indexed Products */
+      indexed_products: number;
+      /** Collection */
+      collection?: string | null;
+    } & {
+      [key: string]: unknown;
+    };
     /** DemoCustomer */
     DemoCustomer: {
       /** User Id */
@@ -1201,6 +1210,41 @@ export interface components {
       issue: string;
       /** Cheapest */
       cheapest?: number | null;
+    };
+    /**
+     * Evaluation
+     * @description Offline evaluation results (`scripts.evaluate --output`).
+     */
+    Evaluation: {
+      /** Top K */
+      top_k?: number | null;
+      /** Users Evaluated */
+      users_evaluated?: number | null;
+      /** Cutoff */
+      cutoff?: string | null;
+      /** Holdout End */
+      holdout_end?: string | null;
+      /** Holdout Days */
+      holdout_days?: number | null;
+      /** Evaluation Role */
+      evaluation_role?: string | null;
+      sample_scope?: components["schemas"]["SampleScope"] | null;
+      /** Repeat Purchase Limitation */
+      repeat_purchase_limitation?: {
+        [key: string]: unknown;
+      } | null;
+      content_index?: components["schemas"]["ContentIndex"] | null;
+      /** Ranker */
+      ranker?: {
+        [key: string]: unknown;
+      } | null;
+      /** Results */
+      results?: {
+        [key: string]: components["schemas"]["StrategyResult"];
+      };
+      learned_vs_repeat?: components["schemas"]["PairedGain"] | null;
+    } & {
+      [key: string]: unknown;
     };
     /**
      * EveningEffect
@@ -1385,6 +1429,37 @@ export interface components {
       /** Book Ids */
       book_ids?: number[];
     };
+    /** GraphEdge */
+    GraphEdge: {
+      /** Source */
+      source: string;
+      /** Target */
+      target: string;
+      /**
+       * Relation
+       * @enum {string}
+       */
+      relation: "has_attribute" | "in_category" | "co_purchased";
+      /** Weight */
+      weight: number;
+    };
+    /**
+     * GraphNode
+     * @description A node of a product neighborhood: a product, a catalog attribute or a category.
+     */
+    GraphNode: {
+      /** Id */
+      id: string;
+      /** Label */
+      label: string;
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind: "product" | "attribute" | "taxonomy";
+      /** Product Id */
+      product_id?: number | null;
+    };
     /**
      * GroundingReport
      * @description Result of checking the final answer's claims against tool evidence.
@@ -1448,6 +1523,19 @@ export interface components {
       llm_configured: boolean;
       /** Domains */
       domains: components["schemas"]["DomainInfo"][];
+    };
+    /** HoldoutMetrics */
+    HoldoutMetrics: {
+      /** Users Evaluated */
+      users_evaluated?: number | null;
+      /** Map At 12 */
+      map_at_12?: number | null;
+      /** Hit Rate */
+      hit_rate?: number | null;
+      /** Recall At 12 */
+      recall_at_12?: number | null;
+    } & {
+      [key: string]: unknown;
     };
     /** Ingredient */
     Ingredient: {
@@ -1610,6 +1698,26 @@ export interface components {
        * @default
        */
       refine: string;
+    };
+    /**
+     * PairedGain
+     * @description The learned ranker's MAP@12 gain over buy-again, with a paired bootstrap interval.
+     */
+    PairedGain: {
+      /** Mean Delta */
+      mean_delta: number;
+      /** Lower 95 */
+      lower_95: number;
+      /** Upper 95 */
+      upper_95: number;
+      /** Paired Customers */
+      paired_customers?: number | null;
+      /** Bootstrap Resamples */
+      bootstrap_resamples?: number | null;
+      /** Scope */
+      scope?: string | null;
+    } & {
+      [key: string]: unknown;
     };
     /** Pairing */
     Pairing: {
@@ -1841,6 +1949,16 @@ export interface components {
        */
       readonly display_name: string;
     };
+    /**
+     * ProductGraph
+     * @description A bounded one-hop neighborhood of a product (`/products/{id}/graph`).
+     */
+    ProductGraph: {
+      /** Nodes */
+      nodes: components["schemas"]["GraphNode"][];
+      /** Edges */
+      edges: components["schemas"]["GraphEdge"][];
+    };
     /** ProductHit */
     ProductHit: {
       product: components["schemas"]["Product-Output"];
@@ -1871,6 +1989,19 @@ export interface components {
       product_type: string;
       /** Colour */
       colour: string;
+    };
+    /** SampleScope */
+    SampleScope: {
+      /** Prepared Users */
+      prepared_users?: number | null;
+      /** Catalog Products */
+      catalog_products?: number | null;
+      /** Holdout Purchases */
+      holdout_purchases?: number | null;
+      /** Training Purchases */
+      training_purchases?: number | null;
+    } & {
+      [key: string]: unknown;
     };
     /**
      * SearchIntent
@@ -1925,6 +2056,17 @@ export interface components {
       colours?: string[];
       /** Max Price */
       max_price?: number | null;
+    };
+    /** StrategyResult */
+    StrategyResult: {
+      full_holdout: components["schemas"]["HoldoutMetrics"];
+      novel_item_holdout?: components["schemas"]["HoldoutMetrics"] | null;
+      /** Catalog Coverage */
+      catalog_coverage?: number | null;
+      /** Recommendation Fill */
+      recommendation_fill?: number | null;
+    } & {
+      [key: string]: unknown;
     };
     /** TextSearchRequest */
     TextSearchRequest: {
@@ -2701,9 +2843,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            [key: string]: unknown;
-          };
+          "application/json": components["schemas"]["ProductGraph"];
         };
       };
       /** @description Validation Error */
@@ -3040,9 +3180,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          "application/json": {
-            [key: string]: unknown;
-          };
+          "application/json": components["schemas"]["Evaluation"];
         };
       };
     };
