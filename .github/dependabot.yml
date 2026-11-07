@@ -30,3 +30,16 @@ updates:
       interval: monthly
     commit-message:
       prefix: build
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      web:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
