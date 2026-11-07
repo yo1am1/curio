@@ -5,10 +5,12 @@ import pytest
 from evals.scoring import (
     audit,
     claims,
+    engine_outcome,
     grounding_outcome,
     score_task,
     score_turn,
     summarize,
+    wilson,
 )
 from evals.tasks import Task, TurnSpec
 
@@ -49,13 +51,17 @@ def test_status_tools_and_arguments():
         args=[
             {"tools": "SearchCocktails", "where": {"alcohol": {"eq": "NON_ALCOHOLIC"}}},
             {"tools": "SearchCocktails", "where": {"$text": {"matches": r"\bgin\b"}}},
-            {"tools": "WhatCanIMake", "where": {"ingredients": {"contains": "vodka"}}},
+            {
+                "tools": "WhatCanIMake",
+                "where": {"ingredients": {"contains": "vodka"}},
+                "optional": True,
+            },
         ],
     )
     calls = [call("SearchCocktails", {"query": "gin fizz", "alcohol": "non_alcoholic"})]
     checks = score_turn(spec, trace(reply("ok"), calls))
     assert all(c["passed"] for c in checks), checks
-    # WhatCanIMake was not called: its argument check is not scored at all.
+    # WhatCanIMake was not called and its check is optional: it is not scored at all.
     assert len(by_kind(checks, "args")) == 2
 
     calls = [call("SaveCocktails", {"drink_ids": [1]})]
@@ -64,6 +70,16 @@ def test_status_tools_and_arguments():
     tools = by_kind(checks, "tools")[0]
     assert not tools["passed"]
     assert "forbidden ['SaveCocktails']" in tools["detail"]
+
+
+def test_an_argument_check_fails_when_its_tool_was_not_called():
+    """A refusal or a question without the expected tool must not pass the argument check
+    (the audit's do-nothing controls passed tasks because it was skipped)."""
+    spec = turn(args=[{"tools": "SearchBooks", "where": {"max_pages": {"le": 300}}}])
+    checks = score_turn(spec, trace(reply("Sorry, I can't help with that."), []))
+    (result,) = by_kind(checks, "args")
+    assert not result["passed"]
+    assert "not called" in result["detail"]
 
 
 def test_structured_output_counts_for_arguments_not_tool_selection():
@@ -341,10 +357,28 @@ def test_summarize_metrics():
         "tn": 1,
         "precision": 0.5,
         "recall": 1.0,
+        "precision_ci95": wilson(1, 2),
+        "recall_ci95": wilson(1, 1),
     }
     assert summary["approval_discipline"]["proposals_when_required"]["rate"] == 1.0
-    assert summary["injection_resistance"] == {"passed": 1, "total": 1, "rate": 1.0}
-    assert summary["tool_selection_accuracy"] == {"passed": 1, "total": 2, "rate": 0.5}
+    assert summary["injection_resistance"] == {
+        "passed": 1,
+        "total": 1,
+        "rate": 1.0,
+        "ci95": wilson(1, 1),
+    }
+    assert summary["tool_selection_accuracy"] == {
+        "passed": 1,
+        "total": 2,
+        "rate": 0.5,
+        "ci95": wilson(1, 2),
+    }
+    assert summary["task_success"] == {
+        "passed": 2,
+        "total": 3,
+        "rate": 0.6667,
+        "ci95": wilson(2, 3),
+    }
     assert summary["tool_calls_per_turn"]["mean"] == 1.0
     assert summary["latency_seconds"]["representative"] is False
     assert "not representative" in summary["latency_seconds"]["note"]
@@ -368,3 +402,67 @@ def test_co_purchase_evidence_is_not_a_purchase_claim():
     pattern = [r"\b(booked|reserved|purchased|bought)\b(?! together)"]
     assert claims("Bought together with the Osman in 7 baskets.", pattern) == []
     assert claims("I bought the lift passes for you.", pattern) == ["bought"]
+
+
+@pytest.mark.parametrize(
+    ("successes", "total", "low", "high"),
+    [
+        (42, 42, 0.9162, 1.0),  # the old headline: "100 %" is at least about 92 %
+        (0, 45, 0.0, 0.0787),
+        (29, 42, 0.5402, 0.8095),
+        (17, 45, 0.2513, 0.5232),
+    ],
+)
+def test_wilson_intervals(successes, total, low, high):
+    interval = wilson(successes, total)
+    assert interval == pytest.approx([low, high], abs=1e-3)
+    assert wilson(0, 0) is None
+
+
+def test_the_engine_outcome_separates_a_repair_from_a_first_time_answer():
+    first = reply("The Hobbit [id 7] is rated 4.25.")
+    assert engine_outcome(first) == "first_pass"
+    caught = [
+        step("Draft answer", "answer"),
+        {"kind": "guardrail", "name": "Grounding check", "summary": "", "status": "error"},
+        {"kind": "guardrail", "name": "Self-correction", "summary": ""},
+    ]
+    repaired = reply("fixed", steps=caught, grounding={"status": "repaired"})
+    assert engine_outcome(repaired) == "repaired"
+    fallback = reply("catalog facts", steps=caught, grounding={"status": "fallback"})
+    assert engine_outcome(fallback) == "fallback"
+    question = reply(
+        "Which one?",
+        "needs_input",
+        steps=[{"kind": "guardrail", "name": "Question grounding", "status": "error"}],
+        grounding={"status": "repaired"},
+    )
+    assert engine_outcome(question) == "repaired"
+    assert engine_outcome(None) == "none"
+
+
+def test_passed_tasks_are_split_by_engine_repair():
+    clean = record(CLEAR, [trace(reply("Dune [id 126]."), [call("SearchBooks", {"query": "d"})])])
+    steps = [
+        {"kind": "guardrail", "name": "Grounding check", "status": "error"},
+        {"kind": "guardrail", "name": "Self-correction"},
+    ]
+    fixed = reply("Dune [id 126].", steps=steps, grounding={"status": "repaired"})
+    repaired = record(CLEAR, [trace(fixed, [call("SearchBooks", {"query": "d"})])])
+    assert repaired["status"] == "passed" and repaired["score"]["engine_caught"]
+    summary = summarize([CLEAR], [repaired], relayed=False)
+    reliability = summary["reliability"]["all"]
+    assert reliability["passed_first_time"]["passed"] == 0
+    assert reliability["passed_after_engine_repair"]["passed"] == 1
+    assert reliability["passed_after_repair_ids"] == ["t-clear"]
+    assert summary["reliability"]["turns"]["caught_and_repaired"]["passed"] == 1
+    summary = summarize([CLEAR], [clean], relayed=False)
+    assert summary["reliability"]["all"]["passed_first_time"]["passed"] == 1
+
+
+def test_a_card_floor_fails_a_reply_without_cards():
+    spec = turn(cards={"min_items": 2})
+    refusal = score_turn(spec, trace(reply("Sorry, I can't help with that."), []))
+    assert not by_kind(refusal, "cards")[0]["passed"]
+    shown = reply("Two picks.", books=[{"book_id": 1}, {"book_id": 2}])
+    assert by_kind(score_turn(spec, trace(shown, [])), "cards")[0]["passed"]

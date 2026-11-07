@@ -223,9 +223,23 @@ def test_a_whole_run_through_the_relay(tmp_path, isolated_process_state, monkeyp
     assert "| Task success | " in report
     assert "not representative" in report
     assert queue.pending() == []
+    assert summary["run"]["scorer"]["files"]["tasks.yaml"]  # outside the repo: the name
+    assert summary["run"]["frozen"] is False
+    assert "- Scorer: scorer " in report
     # Rescoring the saved traces needs no API and gives the same verdicts.
     assert main([*common, "--rescore"]) == 0
     assert json.loads((run / "summary.json").read_text())["tasks"] == summary["tasks"]
+    # A changed task file or scorer needs a recorded note before verdicts change.
+    tasks.write_text(TASKS_YAML + "# a later edit\n")
+    assert main([*common, "--rescore"]) == 2
+    assert main([*common, "--resume"]) == 2  # would mix verdicts of two scorers
+    assert main([*common, "--rescore", "--rescore-note", "typo in a task"]) == 0
+    rescored = json.loads((run / "run.json").read_text())
+    assert [e["changed"] for e in rescored["rescores"]] == [False, True]
+    assert rescored["rescores"][-1]["note"] == "typo in a task"
+    assert "typo in a task" in (run / "report.md").read_text()
+    # This task file is not the frozen one.
+    assert main([*common, "--rescore", "--frozen"]) == 2
 
 
 def test_a_relay_token_is_sent_as_the_api_key(monkeypatch, isolated_process_state):
