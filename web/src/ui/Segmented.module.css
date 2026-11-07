@@ -67,3 +67,22 @@
   padding: 0 0.75rem;
   font-size: 0.875rem;
 }
+
+/* Many or long options: separate pills that wrap onto more lines. */
+.wrap {
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.wrap .option {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+}
+
+.wrap .option[data-active="true"] {
+  border-color: transparent;
+}

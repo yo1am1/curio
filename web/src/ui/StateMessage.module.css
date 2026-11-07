@@ -1,0 +1,63 @@
+.state {
+  display: flex;
+  gap: 0.8rem;
+  align-items: flex-start;
+  padding: 1rem 1.15rem;
+  border-radius: var(--radius);
+  border: 1px dashed var(--line);
+  background: var(--surface);
+  color: var(--ink-soft);
+}
+
+.error {
+  border: 1px solid color-mix(in srgb, var(--red) 30%, transparent);
+  background: var(--red-soft);
+}
+
+.hint {
+  border-style: solid;
+  border-color: transparent;
+  background: var(--bg-sunk);
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50%;
+  background: var(--bg-sunk);
+  color: var(--ink-muted);
+}
+
+.error .icon {
+  background: color-mix(in srgb, var(--red) 14%, transparent);
+  color: var(--red);
+}
+
+.hint .icon {
+  background: var(--surface);
+  color: var(--accent);
+}
+
+.text {
+  display: grid;
+  gap: 0.25rem;
+  padding-top: 0.3rem;
+  min-width: 0;
+}
+
+.title {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.body {
+  font-size: 0.925rem;
+  line-height: 1.5;
+}
+
+.action {
+  margin-top: 0.4rem;
+}

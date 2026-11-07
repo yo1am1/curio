@@ -1,0 +1,43 @@
+.disclosure {
+  min-width: 0;
+}
+
+.summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sm .summary {
+  font-size: 0.8rem;
+  color: var(--ink-muted);
+}
+
+.summary:hover {
+  color: var(--accent);
+}
+
+.chevron {
+  flex: none;
+  transition: rotate 200ms var(--ease);
+}
+
+.chevron[data-open="true"] {
+  rotate: 90deg;
+}
+
+.content {
+  overflow: hidden;
+}
+
+.inner {
+  padding-top: 0.5rem;
+}

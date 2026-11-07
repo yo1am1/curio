@@ -19,6 +19,7 @@ export function Segmented<T extends string>({
   onChange,
   size = "md",
   allowNone = false,
+  wrap = false,
 }: {
   label: string;
   options: readonly SegmentOption<T>[];
@@ -27,10 +28,16 @@ export function Segmented<T extends string>({
   size?: "sm" | "md";
   /** Clicking the chosen option again clears it (onChange gets the same value). */
   allowNone?: boolean;
+  /** Options wrap onto more lines when they do not fit (long or many options). */
+  wrap?: boolean;
 }) {
   const group = useId();
   return (
-    <div className={`${styles.group} ${styles[size]}`} role="radiogroup" aria-label={label}>
+    <div
+      className={`${styles.group} ${styles[size]} ${wrap ? styles.wrap : ""}`}
+      role="radiogroup"
+      aria-label={label}
+    >
       {options.map((option) => {
         const active = option.value === value;
         return (
