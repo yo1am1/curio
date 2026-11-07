@@ -429,3 +429,142 @@ def test_cocktails_check_the_ingredients_said_to_be_in_a_drink(
 )
 def test_cocktails_report_age_and_allergen_claims(text, cocktails, cocktail_catalog):
     assert cocktails.check(text, cocktail_catalog.get_many([1, 2, 3])).status == "fallback"
+
+
+# --- Grounding v2.2: the categories held-out v2 exposed ------------------------------------
+
+SHOE = Item("product", 2, ("Run Shoe",), {"price": (59.99,)})
+
+
+def arithmetic(text, typed=""):
+    tally = Tally()
+    binder = Binder(text, [DRESS, JEANS, SHOE], CITATIONS)
+    FactCheck(binder, {"price": same_price}, typed=typed, arithmetic=frozenset({"price"})).check(
+        euro_claims(text), tally
+    )
+    return tally.report()
+
+
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [
+        # Any sum of two or three named items, a difference, or a budget minus a sum, is
+        # accepted whatever the wording...
+        ("Summer Dress €24.99 + Slim Jeans €29.99 = €54.98.", "verified"),
+        ("The Summer Dress and the Slim Jeans set you back €54.98.", "verified"),
+        (
+            "Summer Dress, Slim Jeans and Run Shoe: €114.97. Leave out the Run Shoe and you're "
+            "at €54.98.",
+            "verified",
+        ),
+        ("All three: €114.97.", "verified"),
+        ("Your €60 stretches to the Summer Dress and the Slim Jeans, with €5.02 over.", "verified"),
+        ("The Summer Dress (Off White) is €24.99, so the jeans cost €5 more.", "verified"),
+        ("Summer Dress €24.99, Run Shoe €59.99: a €35 gap.", "verified"),
+        # ...unless it is stated as one item's own value, or matches no combination.
+        ("The Summer Dress is €54.98.", "fallback"),
+        ("The Summer Dress is lovely. It's €54.98.", "fallback"),
+        ("The Summer Dress and the Slim Jeans set you back €56.98.", "fallback"),
+        ("Summer Dress €24.99 + Slim Jeans €29.99 = €54.97.", "fallback"),  # a cent off
+        ("The Run Shoe is on sale, now €35.", "fallback"),
+    ],
+)
+def test_derived_numbers_match_any_plausible_combination(text, status):
+    report = arithmetic(text, typed="My budget is €60.")
+    assert report.status == status, report.issues
+
+
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [
+        ("The Summer Dress wins: €24.99 against €29.99 for the Slim Jeans.", "verified"),
+        ("The Summer Dress wins: €29.99 against €24.99 for the Slim Jeans.", "fallback"),
+        ("With €60 for two, the Summer Dress and the Slim Jeans both fit.", "verified"),
+        ("A budget of around €60 covers the Summer Dress and the Slim Jeans.", "verified"),
+        ("Yes, the Summer Dress is €60.", "fallback"),  # the shopper's figure, confirmed
+    ],
+)
+def test_a_value_for_an_item_and_the_shoppers_own_money(text, status):
+    assert prices(text, typed="I have €60 for two").status == status
+
+
+MIXED_DRINKS = [
+    (21, "Mulled Cider", "Optional alcohol", "Punch", "Coffee mug",
+     [("Apple cider", "1 L"), ("Cinnamon", "1 stick"), ("Brandy", "2 oz")]),
+    (22, "Berry Fizz", "Non alcoholic", "Soft Drink", "Highball glass",
+     [("Lemonade", "4 oz"), ("Blackberries", "6"), ("Carbonated soft drink", ", lemon")]),
+    (23, "Velvet Flip", "Alcoholic", "Cocktail", "Cocktail glass",
+     [("Brandy", "2 oz"), ("Egg yolk", "1"), ("Cream", "1 oz")]),
+    (24, "Ginger Cooler", "Non alcoholic", "Soft Drink", "Highball glass",
+     [("Ginger", "1 inch"), ("Lemon juice", "1 oz"), ("Soda water", "4 oz")]),
+]  # fmt: skip
+
+
+@pytest.fixture
+def mixed():
+    from curio.domains.cocktails.catalog import CocktailCatalog
+    from tests.conftest import cocktail_frame
+
+    catalog = CocktailCatalog(cocktail_frame(MIXED_DRINKS))
+    check = CocktailGroundingCheck((c.name for c in catalog), catalog.ingredients())
+    return check, catalog.get_many([21, 22, 23, 24])
+
+
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [
+        # "Alcoholic" says always: wrong for a drink whose alcohol is optional.
+        ("The **Mulled Cider** is an alcoholic punch.", "fallback"),
+        ("The **Mulled Cider** contains alcohol unless you skip the brandy.", "verified"),
+        ("The **Mulled Cider** works with or without alcohol.", "verified"),
+        ("The **Velvet Flip** is alcoholic.", "verified"),
+        # A plural subject stands for the drinks just named, "versions" or not.
+        ("Try the **Berry Fizz** or the **Ginger Cooler**. Both are non-alcoholic.", "verified"),
+        (
+            "The **Mulled Cider** or the **Velvet Flip**? Both are alcohol-free versions here.",
+            "fallback",
+        ),
+        # Reasoning from the recipe, attributed to it, holds when the recipe bears it out.
+        ("The **Ginger Cooler** is dairy-free going by the ingredient list.", "verified"),
+        ("According to the recipe, the **Ginger Cooler** contains no egg.", "verified"),
+        ("The **Velvet Flip** is dairy-free going by the ingredient list.", "fallback"),
+        ("The **Ginger Cooler** is dairy-free.", "fallback"),  # unhedged
+        ("The **Ginger Cooler** is gluten-free going by the recipe.", "fallback"),  # unreadable
+        # Health benefits.
+        ("The **Ginger Cooler** is a good remedy for a cold.", "fallback"),
+        ("The **Ginger Cooler** boosts immunity.", "fallback"),
+        ("The **Ginger Cooler** is good for a sore throat.", "fallback"),
+        ("The **Ginger Cooler** is a nice drink on a cold evening.", "verified"),
+        # Ingredients: measures that describe, plurals, compounds, modifiers, absences.
+        ("The **Berry Fizz** is lemonade, blackberries and a lemon soft drink.", "verified"),
+        ("The **Berry Fizz** uses berries and lemon.", "verified"),
+        ("The **Berry Fizz** uses brandy.", "fallback"),
+        ("The **Velvet Flip** has no cream.", "fallback"),
+        ("The **Ginger Cooler** has no cream.", "verified"),
+    ],
+)
+def test_alcohol_recipe_reasoning_health_and_ingredients(text, status, mixed):
+    check, evidence = mixed
+    report = check.check(text, evidence)
+    assert report.status == status, report.issues
+
+
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [
+        ("**Animal Farm** [id 6] is by George Orwell and Russell Baker.", "verified"),
+        ("**Animal Farm** [id 6] is by George Orwell and Aldous Huxley.", "fallback"),
+        ("**Animal Farm** [id 6] was co-written with Aldous Huxley.", "fallback"),
+        ("**Animal Farm** [id 6] is a fable. It was written by Aldous Huxley.", "fallback"),
+        ("**Animal Farm** [id 6] by George Orwell, together with Aldous Huxley.", "fallback"),
+        (
+            "**Of Mice and Men** [id 5] (112 pages) and **Animal Farm** [id 6] (122 pages): "
+            "234 pages between them.",
+            "verified",
+        ),
+        ("**Of Mice and Men** [id 5] and **Animal Farm** [id 6] add up to 334 pages.", "fallback"),
+    ],
+)
+def test_books_check_co_authors_and_page_combinations(text, status, books, book_catalog):
+    report = books.check(text, book_catalog.get_many([5, 6]))
+    assert report.status == status, report.issues

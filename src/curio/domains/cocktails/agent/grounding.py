@@ -23,6 +23,7 @@ from curio.engine.grounding import (
     check_marked_names,
     check_safety,
     hedged,
+    hedged_after,
     name_allowed,
 )
 from curio.engine.schemas import GroundingReport
@@ -100,10 +101,15 @@ def measures_in(text: str) -> list[tuple[str, Measure]]:
 
 # How an answer labels a drink's alcohol status, and the catalog labels each phrase allows:
 # "alcohol-free" only a drink marked non-alcoholic, "contains alcohol" one with alcohol or
-# alcohol optional, "alcohol optional" only an optional one.
+# alcohol optional, "alcoholic" only one with alcohol, "alcohol optional" only an optional
+# one.
 ALCOHOL_CLAIMS = (
     FlagClaim(
-        re.compile(r"\balcohol[- ]optional\b|\boptional alcohol\b|\balcohol is optional\b", re.I),
+        re.compile(
+            r"\balcohol[- ]optional\b|\boptional alcohol\b|\balcohol is optional\b"
+            r"|\bwith or without (?:the |any )?(?:alcohol|booze)\b",
+            re.I,
+        ),
         frozenset({"optional"}),
         frozenset({"free", "contains"}),
         "alcohol optional",
@@ -111,7 +117,8 @@ ALCOHOL_CLAIMS = (
     FlagClaim(
         re.compile(
             r"\b(?:alcohol|booze)[- ]free\b|\bnon[- ]?alcoholic\b|\bzero[- ]proof\b"
-            r"|\bno alcohol\b|\bwithout (?:any )?alcohol\b|\bmocktails?\b|\bvirgin version\b",
+            r"|\bno alcohol\b|(?<!with or )\bwithout (?:any )?alcohol\b|\bmocktails?\b"
+            r"|\bvirgin version\b",
             re.I,
         ),
         frozenset({"free"}),
@@ -119,10 +126,17 @@ ALCOHOL_CLAIMS = (
         "alcohol-free",
     ),
     FlagClaim(
-        re.compile(r"\bcontains? alcohol\b|\b(?<!non-)(?<!non )alcoholic\b|\bhas alcohol\b", re.I),
+        re.compile(r"\bcontains? alcohol\b|\bhas alcohol\b|\bmade with alcohol\b", re.I),
         frozenset({"contains", "optional"}),
         frozenset({"free"}),
         "a drink with alcohol",
+    ),
+    # "Alcoholic" says the drink always has alcohol: not one whose alcohol is optional.
+    FlagClaim(
+        re.compile(r"\b(?<!non-)(?<!non )alcoholic\b", re.I),
+        frozenset({"contains"}),
+        frozenset({"free", "optional"}),
+        "always alcoholic",
     ),
 )
 # Allergen, dietary, health and age-safety promises: the recipes cannot support any of them.
@@ -167,6 +181,13 @@ _SUBSTITUTE = re.compile(
 _INGREDIENT_LINE = re.compile(
     r"[ \t]*(?:[-*+\u2022]|\d+[.)])[ \t]+(?:[^\s.!?]+[ \t]+){0,5}[^\s.!?]*\s*$"
 )
+# An ingredient said to be missing: "has no tequila", "doesn't contain any cream".
+_ABSENT = re.compile(
+    r"\b(?:has|have|contains?|uses?|includes?|calls? for|there['\u2019]s|there is)\s+no\s+"
+    r"(?:[\w-]+\s+)?$"
+    r"|\b(?:doesn['\u2019]t|does not|don['\u2019]t|do not)\s+"
+    r"(?:have|contain|use|include|need|call for)\s+(?:any\s+)?(?:[\w-]+\s+)?$"
+)
 # The shopper's own bottle, not the recipe's: "your ginger beer", "the rum you have".
 _OWNED = re.compile(r"\b(?:your|my|our)\s+(?:own\s+)?(?:\w+\s+)?$")
 _INGREDIENT_CLAUSE = re.compile(r"[.!?;\n]|,\s|\bbut\b|\bwhile\b")
@@ -184,12 +205,16 @@ def alcohol_label(cocktail: Cocktail) -> str:
 def drink_item(cocktail: Cocktail) -> Item:
     measures = tuple(m for i in cocktail.ingredients for _, m in measures_in(i.measure or ""))
     ingredients = tuple(ingredient_key(i.name) for i in cocktail.ingredients if i.name.strip())
+    # The recipe as written, measures included: a measure may describe its ingredient
+    # ("Carbonated soft drink: , orange").
+    recipe = " ; ".join(ingredient_key(f"{i.measure or ''} {i.name}") for i in cocktail.ingredients)
     return Item(
         "drink",
         cocktail.drink_id,
         (cocktail.name,),
         {"amount": measures, "ingredient": ingredients},
         flags={"alcohol": alcohol_label(cocktail)},
+        text=recipe,
     )
 
 
@@ -204,11 +229,33 @@ def ingredient_key(name: str) -> str:
 
 def recipe_has(ingredients: Sequence[str], named: str) -> bool:
     """Whether a recipe of `ingredients` (keys) has the ingredient `named`: the same one,
-    or one naming it more or less precisely ("rum" for light rum, "lime juice" for lime)."""
-    key = ingredient_key(named)
-    return any(
-        key == have or _whole_word(have, key) or _whole_word(key, have) for have in ingredients
-    )
+    or one naming it more or less precisely ("rum" for light rum, "lime juice" for lime),
+    in the singular or the plural ("cherries" for maraschino cherry), or as the end of a
+    compound word ("berries" for blackberries)."""
+    key = _singular(ingredient_key(named))
+    for have in ingredients:
+        have = _singular(have)
+        if key == have or _whole_word(have, key) or _whole_word(key, have):
+            return True
+        if len(key) >= 4 and re.search(r"\w" + re.escape(key) + r"(?!\w)", have):
+            return True
+    return False
+
+
+def _singular(words: str) -> str:
+    """Each word of an ingredient name in a rough singular: "cherries" → "cherry",
+    "limes" → "lime", "leaves" stays (too irregular to matter)."""
+
+    def one(word: str) -> str:
+        if len(word) > 4 and word.endswith("ies"):
+            return word[:-3] + "y"
+        if len(word) > 4 and word.endswith(("ches", "shes", "oes", "sses")):
+            return word[:-2]
+        if len(word) > 3 and word.endswith("s") and not word.endswith(("ss", "us", "is")):
+            return word[:-1]
+        return word
+
+    return " ".join(one(word) for word in words.split())
 
 
 def _folded_text(text: str) -> str:
@@ -264,9 +311,12 @@ class CocktailGroundingCheck:
     - Ingredient amounts bind to the drink they are about (the nearest drink named in the
       sentence, else the last one named before) and must be in its recipe; an amount with
       no drink before it is unattributed.
-    - "Alcohol-free", "contains alcohol" and "alcohol optional" must match the drink's label.
+    - "Alcohol-free", "contains alcohol", "alcoholic" and "alcohol optional" must match the
+      drink's label ("alcoholic" is wrong for a drink whose alcohol is optional).
     - Allergen, diet, health and age-safety promises are always reported, unless negated
-      or hedged ("I can't guarantee it's nut-free").
+      or hedged ("I can't guarantee it's nut-free"), or attributed to the recipe and true
+      by it ("dairy-free going by the ingredient list" for a recipe with no dairy; only
+      dairy, egg and nuts can be read off a recipe).
     """
 
     def __init__(
@@ -376,7 +426,13 @@ class CocktailGroundingCheck:
         )
         if drinks:
             self.check_ingredients(text, binder, tally, quoted=quoted)
-        check_safety(text, tally, pattern=SAFETY_CLAIMS, reason=SAFETY_REASON)
+        check_safety(
+            text,
+            tally,
+            pattern=SAFETY_CLAIMS,
+            reason=SAFETY_REASON,
+            sourced=lambda match: borne_out_by_recipes(text, binder, match),
+        )
 
     def check_ingredients(
         self, text: str, binder: Binder, tally: Tally, *, quoted: Sequence[str] = ()
@@ -388,7 +444,11 @@ class CocktailGroundingCheck:
         the drink). Ingredients in drink or glass names, the shopper's own ("your ginger
         beer"), in a hedged or negated clause ("if you want ginger beer", "not ginger beer"),
         about a substitute ("swap in") or in tool text the answer repeats (`quoted`) are not
-        read.
+        read. An ingredient matches the recipe by name (singular or plural, broader or
+        narrower: "cherries" for maraschino cherry), by a word of its measure ("orange" for
+        a carbonated soft drink measured as "orange"), or as a word describing the next one
+        ("an orange carbonated soft drink"). One said to be missing ("has no tequila") must
+        not be in the recipe.
         """
         if self._ingredients is None:
             return
@@ -401,7 +461,12 @@ class CocktailGroundingCheck:
         said = [_folded_text(q) for q in quoted if q.strip()]
         for match in self._ingredients.finditer(text):
             start, end = match.span(1)
-            if any(s <= start < e for s, e in skip) or hedged(text, start):
+            if any(s <= start < e for s, e in skip):
+                continue
+            if _ABSENT.search(self._clause(text, start)):
+                self._check_absent(text, binder, tally, match)
+                continue
+            if hedged(text, start):
                 continue
             clause = self._clause(text, start)
             if _SUBSTITUTE.search(clause) or _OWNED.search(clause):
@@ -419,7 +484,13 @@ class CocktailGroundingCheck:
             if not (sentence in measured or based or cue or listed):
                 continue
             named = match.group(1)
-            ok = any(recipe_has(item.values.get("ingredient", ()), named) for item in binding.items)
+            following = text[match.end() : match.end() + 40]
+            ok = any(
+                recipe_has(item.values.get("ingredient", ()), named)
+                or _whole_word(item.text, ingredient_key(named))
+                or _modifies(following, item)
+                for item in binding.items
+            )
             label = binding.items[0].label
             tally.add(
                 "ingredient",
@@ -427,6 +498,28 @@ class CocktailGroundingCheck:
                 f"{label}'s recipe has no {named.lower()}",
                 key=f"{label}|{ingredient_key(named)}",
             )
+
+    def _check_absent(self, text: str, binder: Binder, tally: Tally, match: re.Match[str]) -> None:
+        """ "The Long Island has no tequila": the drink it binds to in its sentence must not
+        list the ingredient. A substitute or the shopper's own bottle is not read."""
+        start, end = match.span(1)
+        clause = self._clause(text, start)
+        if _SUBSTITUTE.search(clause) or _OWNED.search(clause) or hedged_after(text, end):
+            return
+        binding = binder.bind(start, end)
+        if binding is None or not binding.explicit:
+            return
+        named = match.group(1)
+        found = [
+            item for item in binding.items if recipe_has(item.values.get("ingredient", ()), named)
+        ]
+        label = binding.items[0].label
+        tally.add(
+            "ingredient",
+            not found,
+            f"{label}'s recipe has {named.lower()}",
+            key=f"{label}|no {ingredient_key(named)}",
+        )
 
     @staticmethod
     def _clause(text: str, start: int) -> str:
@@ -444,6 +537,60 @@ class CocktailGroundingCheck:
             return False
         gap = text[before[-1].end : start]
         return bool(_RECIPE_CUE.search(gap.lower()))
+
+
+# The words right after an ingredient, up to punctuation or a conjunction.
+_FOLLOWING = re.compile(
+    r"[ -]+(?!(?:and|or|with|plus|in|of|on|over|for)\b)([^\W\d_][\w' -]*?)"
+    r"\s*(?:[,.;:!?()\n]|\band\b|\bor\b|$)"
+)
+
+
+def _modifies(following: str, item: Item) -> bool:
+    """Whether an ingredient word describes the ingredient after it, one the recipe has:
+    "orange" in "an orange carbonated soft drink", "lemon" in "lemon soda"."""
+    match = _FOLLOWING.match(following)
+    if match is None:
+        return False
+    words = match.group(1).split()
+    ingredients = item.values.get("ingredient", ())
+    return any(recipe_has(ingredients, " ".join(words[:n])) for n in range(len(words), 0, -1))
+
+
+# What a recipe must not list for "<allergen>-free" to hold by it. Gluten, sugar, vegan and
+# the rest cannot be read off an ingredient list, so they are never borne out.
+_ALLERGEN_WORDS = {
+    "dairy": r"milk|cream|yog(?:h)?urt|butter|cheese|whey|kefir|half-and-half|eggnog|sherbet|"
+    r"custard|ice[- ]cream|baileys|irish cream|condensed|evaporated|lassi|buttermilk",
+    "egg": r"eggs?|egg whites?|egg yolks?|eggnog|advocaat|meringue",
+    "nut": r"\w*nuts?|almonds?|amaretto|orgeat|frangelico|nocino|praline|marzipan|pecans?|"
+    r"cashews?|pistachios?|macadamias?|nutella",
+}
+_ALLERGEN_OF = re.compile(r"\b(dairy|lactose|milk|eggs?|(?:pea|tree[- ])?nuts?|nut)\b", re.I)
+# Plant milks are not dairy: "coconut milk", "almond milk" (almond is caught as a nut).
+_PLANT_MILK = re.compile(r"\b(?:coconut|almond|oat|soy|soya|rice|cashew)\s+(?:milk|cream)\b")
+
+
+def borne_out_by_recipes(text: str, binder: Binder, match: re.Match[str]) -> bool:
+    """Whether "<allergen>-free" (or "contains no <allergen>") at `match` holds by the
+    recipes of the drinks it is about: those its sentence names, else the drinks a plural
+    subject stands for, else the drink it binds to. Only dairy, egg and nuts can be read
+    off an ingredient list."""
+    found = _ALLERGEN_OF.search(match.group(0))
+    if found is None:
+        return False
+    word = found.group(1).lower()
+    allergen = "dairy" if word in ("dairy", "lactose", "milk") else word.rstrip("s")
+    allergen = "nut" if "nut" in allergen else allergen
+    sentence = binder.sentence(match.start())
+    items = binder.items_between(*sentence)
+    if not items:
+        binding = binder.bind(match.start(), match.end(), nearest=True)
+        items = list(binding.items) if binding else []
+    if not items:
+        return False
+    listed = re.compile(r"\b(?:" + _ALLERGEN_WORDS[allergen] + r")\b")
+    return not any(listed.search(_PLANT_MILK.sub(" ", item.text)) for item in items)
 
 
 def same_measure(a: Measure, b: Measure) -> bool:

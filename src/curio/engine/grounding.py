@@ -18,12 +18,19 @@ tool supports. This module holds the domain-free parts:
   A number framed as a total, a difference or a multiple ("together that's €74.98", "€5
   cheaper", "4 pairs for €23.96", "2,786 pages in total") must equal that sum, difference
   or multiple of the values of the items its sentence (or, failing that, the answer) names.
+  Whatever its wording, a number equal to the sum of any two or three items the answer
+  names (or of all of them), the difference of two, or a budget minus one value or such a
+  sum ("€20 left") is accepted, unless it is framed as a discount or as one item's own
+  value ("the Summer Dress is €54.98"): a wrong total is caught only when it matches no
+  such combination, a trade-off for few false alarms on correct arithmetic.
 - Names: a bold, italic or quoted name-like span, or "<Title> by <Author>", must name an
   item this turn's tools returned (or something the shopper typed); "by <Author>" after an
-  item must name one of its people.
+  item ("**Scarlet** was written by", "It was written by"), and every co-author after it
+  ("by A and B", "together with B", "co-written with B"), must name one of its people.
 - Flags ("alcohol-free" must match the drink's flag) and claims no data can support
-  (allergen, health and age safety in every domain, stock and shipping), unless the answer
-  negates or hedges them.
+  (allergen, health benefit and age safety in every domain, stock and shipping), unless the
+  answer negates or hedges them, or a domain finds a claim it attributes to the data
+  ("dairy-free going by the ingredient list") borne out by that data.
 - `Tally`: counts checked facts by kind and collects issues into a `GroundingReport`.
 
 The engine asks for one rewrite of an unverified answer, then falls back to catalog facts.
@@ -33,7 +40,7 @@ import re
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from itertools import pairwise
+from itertools import combinations, pairwise
 from typing import Any
 
 from curio.engine.schemas import GroundingReport
@@ -48,6 +55,7 @@ _NUMBER = re.compile(r"\d{1,5}(?:[.,]\d{1,2})?")
 # A whole-euro mention may round a real price ("about €35" for €34.99).
 _ROUNDING_TOLERANCE = 1.0
 _EXACT_TOLERANCE = 0.011
+_CENT = 0.005
 # "about", "around": within this share of the real value.
 _APPROXIMATE_SHARE = 0.1
 # "about" a total or difference: within its written rounding, or this share of it.
@@ -364,6 +372,38 @@ def _caseless(name: str) -> bool:
     return len(name.split()) > 1 or len(name.strip()) >= _MIN_CASELESS_NAME
 
 
+# "The former", "the latter", and "the first" or "the second" used as a pronoun ("the first
+# uses vodka", "the second, gin").
+_ORDINAL = re.compile(r"\bthe (former|latter|first|second)\b", re.IGNORECASE)
+_ORDINAL_PRONOUN = re.compile(
+    r"\s*(?:one\b|is\b|uses\b|has\b|needs\b|takes\b|adds\b|costs\b|runs\b|was\b|[,;:.])"
+)
+
+
+def _ordinal_refs(text: str, refs: Sequence[Ref]) -> list[Ref]:
+    """References by order to the last two items named before, in the same paragraph."""
+    found = []
+    matches = list(_ORDINAL.finditer(text))
+    words = {m.group(1).lower() for m in matches}
+    # "The first ..., the second ..." pairs up even when a noun follows.
+    paired = {"first", "second"} <= words or {"former", "latter"} <= words
+    for match in matches:
+        if not (paired or _ORDINAL_PRONOUN.match(text, match.end())):
+            continue
+        paragraph = text.rfind("\n\n", 0, match.start()) + 1
+        named: list[Item] = []
+        for ref in refs:
+            if not ref.weak and paragraph <= ref.start and ref.end <= match.start():
+                named += [item for item in ref.items if item not in named]
+        if len(named) < 2:
+            continue
+        first, second = named[-2], named[-1]
+        word = match.group(1).lower()
+        item = first if word in ("former", "first") else second
+        found.append(Ref(match.start(), match.end(), (item,)))
+    return found
+
+
 class Binder:
     """Ties claims in one answer to the items they are about (see the module docstring)."""
 
@@ -371,6 +411,7 @@ class Binder:
         self.text = text
         self.items = list(items)
         self.refs = find_refs(text, items, citations)
+        self.refs = sorted([*self.refs, *_ordinal_refs(text, self.refs)], key=lambda r: r.start)
         self.strong = [r for r in self.refs if not r.weak]
         self.sentences = sentences(text, [(r.start, r.end) for r in self.strong])
         named = {id(item): item for ref in self.strong for item in ref.items}
@@ -459,13 +500,17 @@ _REPORTED_AFTER = re.compile(
     r"read|suggested)"
 )
 _BUDGET_BEFORE = re.compile(
-    r"\bbudget(?:\s+(?:of|is|was|at))?\s*:?\s*$|\bspend(?:ing)?\s+(?:up to\s+)?$"
+    r"\bbudget(?:\s+(?:of|is|was|at))?\s*:?\s*(?:(?:around|about|roughly|approximately)\s+)?$"
+    r"|\bspend(?:ing)?\s+(?:up to\s+)?$"
     r"|\blimit(?:\s+(?:of|is))?\s*:?\s*$"
 )
 _BUDGET_AFTER = re.compile(r"^\s*(?:total\s+|outfit\s+|overall\s+)?(?:budget|limit|cap)\b")
 _LESS = re.compile(
-    r"(?:\bunder|\bbelow|\bless than|\bup to|\bat most|\bno more than|\bwithin|\bmax(?:imum)?"
-    r"(?:\s+of)?|\bcheaper than|\bnot over|\bbeneath)\s+(?:(?:a|an|the|your|my|just)\s+)?$"
+    r"(?:\bunder|\bbelow|\bless than|\bat most|\bno more than|\bwithin|\bmax(?:imum)?"
+    r"(?:\s+of)?|\bcheaper than|\bnot over|\bbeneath"
+    # "Adds up to 1,237 pages" states a sum, not a limit.
+    r"|(?<!\badd )(?<!\badds )(?<!\badded )(?<!adding )\bup to)"
+    r"\s+(?:(?:a|an|the|your|my|just)\s+)?$"
 )
 _MORE = re.compile(
     r"(?:\bover|\babove|\bmore than|\bat least|\bfrom|\bstarting at|\bmin(?:imum)?(?:\s+of)?"
@@ -557,9 +602,11 @@ _DIFFERENCE = re.compile(
     r"budget|over by|short|left|leaving|leaves|remaining|to spare)\b"
 )
 # A discount is never arithmetic on the catalog: "€5 off", "on sale", "discounted".
+# "Off" only after an amount or before a price: "Off White" is a colour.
 _DISCOUNT = re.compile(
-    r"\b(?:off|on sale|sale price|discount\w*|reduced|marked down|markdown|price drop|"
-    r"promo\w*|coupon|clearance)\b"
+    r"\b(?:on sale|sale price|discount\w*|reduced|marked down|markdown|price drop|"
+    r"promo\w*|coupon|clearance)\b|(?:\d|%)\s*off\b|\boff (?:the|its|their|regular|original|"
+    r"retail|list) (?:price|tag)\b"
 )
 _BUDGETISH = re.compile(r"\b(?:budget|limit|left|leaving|leaves|remaining|spare|over|short)\b")
 _COUNT_WORDS = {
@@ -649,6 +696,44 @@ def _subset_sums(values: Sequence[float]) -> list[float]:
     return sums
 
 
+def _small_sums(values: Sequence[float]) -> list[float]:
+    """Sums of any two or three of `values`, and of all of them."""
+    sums = [a + b for a, b in combinations(values, 2)]
+    sums += [a + b + c for a, b, c in combinations(values, 3)]
+    if len(values) > 3:
+        sums.append(sum(values))
+    return sums
+
+
+# Arithmetic written out: "€34.99 + €19.99 = €54.98", "1,000 \u2212 635".
+_ARITHMETIC = re.compile(r"[+=\u00d7]|\s[-\u2212]\s|\b(?:minus|plus)\b")
+# What may stand between an item's name and its own value: punctuation, a parenthesis with
+# no figure in it ("(Off White)"; after "(176 pages)" the next figure is not the item's),
+# table cells, a short descriptor (", Grey, ") and a copula ("is", "costs", "priced at").
+_VALUE_GAP = re.compile(
+    r"^[\s,:;(\[|\u2013\u2014-]*(?:\([^()\n\d]{0,40}\)[\s,:;|\u2013\u2014-]*)?"
+    r"(?:[^|\n]{0,30}\|[\s|]*)*(?:(?:[\w'-]+ ){0,2}[\w'-]+,\s+)?"
+    r"(?:(?:is|are|was|were|'s|\u2019s|costs?|costing|priced|at|for|now|currently|only|just|"
+    r"a mere|listed|sells?|retails?|goes|comes? in|in|rated|has|with|of|about|around|roughly|"
+    r"still|also|too|it's|it\u2019s)\s+)*(?:\(\s*)?$"
+)
+# Two names joined as one subject: "the A and the B cost ...".
+_JOINED = re.compile(r"[\s,]*(?:and|&|\+|plus|with|or)\s+(?:the\s+)?")
+# A singular pronoun and a copula before the value: "it's €54.98", "this one is just €9".
+_PRONOUN_VALUE = re.compile(
+    r"^[\s\-]*(?:yes,?\s+|so\s+|and\s+)?(?:it|this|this one|that one)"
+    r"(?:['\u2019]s|\s+is|\s+costs?|\s+was|\s+sells for)\s+"
+    r"(?:(?:only|just|now|currently|priced at|at|a mere|listed at)\s+)*$"
+)
+_FOR_ITEM = re.compile(r"\s*(?:for|on)\s+(?:the\s+)?[*_]*")
+# Words that frame a figure the shopper typed as their own money: "with €15 for two", "a
+# budget of around €20", "you have €40".
+_OWN_MONEY = re.compile(
+    r"\b(?:with|have|having|got|your|budget(?: of| is)?|spend(?:ing)?|limit(?: of)?)\s+"
+    r"(?:(?:a|your|just|only|up to|around|about|roughly|approximately)\s+)*~?\s*$"
+)
+
+
 def euro_claims(text: str) -> list[Claim]:
     """Euro amounts in `text` as price claims."""
     claims = []
@@ -718,7 +803,11 @@ class FactCheck:
         sentence = self.binder.sentence(claim.start)
         framing = qualifier(text, claim.start, claim.end, sentence)
         compare = self.compare[claim.kind]
-        binding = self._paired.get(claim.start) or self.binder.bind(claim.start, claim.end)
+        binding = (
+            self._paired.get(claim.start)
+            or self._for_item(claim, sentence)
+            or self.binder.bind(claim.start, claim.end)
+        )
         shown = self._show(claim)
         noun = self.noun.get(claim.kind, claim.kind)
         if framing.contradicted:
@@ -746,6 +835,10 @@ class FactCheck:
             return True, ""  # the shopper's own figure: "the last two are over €50"
         if self._derived(claim, framing.mode, sentence):
             return True, ""
+        if self._combination(claim, framing.mode, sentence):
+            return True, ""
+        if framing.mode == "exact" and self._was_typed(claim) and self._own_money(claim, sentence):
+            return True, ""  # the shopper's own figure: "with €15 for two"
         if binding is None and framing.mode in ("less", "more"):
             if asking or self._was_typed(claim):
                 return True, ""  # the shopper's own limit ("under €30"), or a suggestion
@@ -763,6 +856,12 @@ class FactCheck:
             return False, f"{shown} is not a {noun} the tools returned for {item.label}"
         listed = ", ".join(self._format(claim.kind, value) for value in actual[:4])
         return False, f"{shown} does not match the {noun} of {item.label} ({listed})"
+
+    def _for_item(self, claim: Claim, sentence: tuple[int, int]) -> Binding | None:
+        """The item a value is "for": "€24.99 against €39.99 for the **Eva trousers**"."""
+        after = [r for r in self.binder.strong if claim.end <= r.start < sentence[1]]
+        gap = self.binder.text[claim.end : after[0].start].lower() if after else ""
+        return Binding(after[0].items, True) if after and _FOR_ITEM.fullmatch(gap) else None
 
     def _own_comparison(self, claim: Claim, sentence: tuple[int, int]) -> bool:
         """Whether "under/over <the shopper's figure>" compares against their figure rather
@@ -822,6 +921,73 @@ class FactCheck:
             values = [float(v) for i in self.binder.items for v in i.values.get(claim.kind, ())[:1]]
             return len(values) > 1 and same_derived(float(claim.value), sum(values), mode)
         return False
+
+    def _combination(self, claim: Claim, mode: str, sentence: tuple[int, int]) -> bool:
+        """The permissive rule for derived numbers: a number equal to the sum of the values
+        of any two or three items the answer names (or of all of them), the difference of
+        two, or a figure the shopper or the tools gave minus one value or such a sum ("€20
+        left"), is accepted whatever its wording, unless it is framed as a discount or as
+        one item's own value ("the Summer Dress is €54.98"). A wrong total is then caught
+        only when it matches no such combination: a trade-off made to keep false alarms on
+        correct arithmetic low."""
+        if claim.kind not in self.arithmetic or not isinstance(claim.value, int | float):
+            return False
+        if mode not in ("exact", "about"):
+            return False  # "under €20" bounds values; it is not a sum of them
+        text = self.binder.text
+        if _DISCOUNT.search(_STRIP_MARKS.sub("", text[sentence[0] : sentence[1]]).lower()):
+            return False
+        if self._single_item(claim, sentence):
+            return False
+        items = self.binder.items_between(0, len(text), weak=True) or self.binder.items
+        values = [float(v) for item in items for v in item.values.get(claim.kind, ())[:1]]
+        sums = _small_sums(values)
+        candidates = [*sums, *(abs(a - b) for a, b in combinations(values, 2))]
+        given = [*self._typed, *map(float, self.free.get(claim.kind, ()))]
+        candidates += [abs(g - s) for g in given for s in [*values, *sums]]
+        claimed = float(claim.value)
+        # To the cent: with this many candidates, a cent's slack ("€14.99" for €24.99 -
+        # €9.99) would accept near misses.
+        exact = mode == "exact" and not claimed.is_integer()
+        return any(
+            abs(claimed - c) < _CENT if exact else same_derived(claimed, c, mode)
+            for c in candidates
+        )
+
+    def _single_item(self, claim: Claim, sentence: tuple[int, int]) -> bool:
+        """Whether the claim states one item's own value: right after the item's name ("the
+        **Summer Dress** is €54.98", "| **Hanky skirt** | Purple | €17.99 |", "Fight Club
+        (218 pages)"), after a singular pronoun ("it's €54.98"), or right before "for the
+        <item>", with no total, difference or arithmetic sign in its clause."""
+        text = self.binder.text
+        first, last = clause_span(text, claim.start, claim.end, sentence)
+        clause = _STRIP_MARKS.sub("", text[first:last]).lower()
+        if _TOTAL.search(clause) or _DIFFERENCE.search(clause) or _ARITHMETIC.search(clause):
+            return False
+        if self._multiplier(text, claim, clause, sentence):
+            return False
+        strong = self.binder.strong
+        before = [r for r in strong if sentence[0] <= r.start and r.end <= claim.start]
+        if before:
+            ref = before[-1]
+            gap = _STRIP_MARKS.sub("", text[ref.end : claim.start]).lower()
+            if _VALUE_GAP.match(gap):
+                earlier = [r for r in before[:-1] if r.end <= ref.start]
+                joined = earlier and _JOINED.fullmatch(
+                    _STRIP_MARKS.sub("", text[earlier[-1].end : ref.start]).lower()
+                )
+                return not joined
+        lead = _STRIP_MARKS.sub("", text[first : claim.start]).lower()
+        if _PRONOUN_VALUE.match(lead):
+            return True
+        after = [r for r in strong if claim.end <= r.start < sentence[1]]
+        return bool(after and _FOR_ITEM.fullmatch(text[claim.end : after[0].start].lower()))
+
+    def _own_money(self, claim: Claim, sentence: tuple[int, int]) -> bool:
+        """Whether the words before a figure the shopper typed frame it as theirs."""
+        text = self.binder.text
+        before = _STRIP_MARKS.sub("", text[max(sentence[0], claim.start - 40) : claim.start])
+        return bool(_OWN_MONEY.search(before.lower()))
 
     @staticmethod
     def _multiplier(text: str, claim: Claim, clause: str, sentence: tuple[int, int]) -> int:
@@ -1029,7 +1195,27 @@ _BYLINE = re.compile(
     rf"\bby\s+\**({_PERSON_WORD}(?:\s+(?:{_PERSON_WORD}|de|van|von|le|la|du|der|da|di)){{0,4}})"
 )
 # What may stand between an item reference and its "by": closing marks, an ID, a year.
-_BYLINE_GAP = re.compile(r"^[\s*_\"\u201d\u2019,]*(?:[(\[][^()\[\]\n]{0,30}[)\]][\s*_,]*)*$")
+# A verb of authorship may come between too: "**Scarlet** was written by", "is by".
+_BYLINE_GAP = re.compile(
+    r"^[\s*_\"\u201d\u2019,]*(?:[(\[][^()\[\]\n]{0,30}[)\]][\s*_,]*)*"
+    r"(?:(?:which |that )?(?:is |was |were )?(?:(?:co-?)?(?:written|authored|penned)\s+)?)?$"
+)
+# A sentence about the item named before: "It was written by", "The book is co-written by".
+_BYLINE_PRONOUN = re.compile(
+    r"(?:^|[.!?]\s+|\n[\s*+-]*)(?:it|the book|the novel|this one|that one|this book)\s+"
+    r"(?:is|was|['\u2019]s)\s+(?:also\s+)?(?:co-?)?(?:written|authored|penned)\s+$",
+    re.IGNORECASE,
+)
+# More authors after the first: "by A and B", "by A together with B", "co-written with B".
+_CO_AUTHOR = re.compile(
+    rf"\s*,?\s*(?:together with|along with|alongside|with|and|&)\s+"
+    rf"({_PERSON_WORD}(?:\s+(?:{_PERSON_WORD}|de|van|von|le|la|du|der|da|di)){{0,4}})"
+)
+_CO_WRITTEN = re.compile(
+    rf"\bco-?(?:written|authored|wrote)\s+(?:by|with)\s+\**"
+    rf"({_PERSON_WORD}(?:\s+(?:{_PERSON_WORD}|de|van|von|le|la|du|der|da|di)){{0,4}})"
+    rf"|\bco-?authors?\s+\**({_PERSON_WORD}(?:\s+{_PERSON_WORD}){{0,4}})"
+)
 # "<Title> by <Author>" without marks: two or more capitalised words (with small words
 # between) right before "by".
 _SMALL = r"(?:of|the|and|a|an|in|on|to|for|at|from|with|or|is|&)"
@@ -1056,6 +1242,23 @@ def _person_key(name: str) -> str:
     return " ".join(re.sub(r"[^\w' ]+", " ", name).split())
 
 
+def _co_authors(text: str, end: int, titles: Sequence[str]) -> list[str]:
+    """The authors named after a byline's first one ("by A and B", "by A together with
+    B"), not a title that follows ("by A and **Emma** by ...")."""
+    found = []
+    while (match := _CO_AUTHOR.match(text, end)) is not None:
+        person = match.group(1).rstrip(".,;:")
+        if _BYLINE_TAIL.match(text, match.end()) or names_known(person, titles):
+            break
+        found.append(person)
+        end = match.end()
+    return found
+
+
+# What follows a title rather than a person: "Emma by", "Emma (1815)", "Emma [id 3]".
+_BYLINE_TAIL = re.compile(r"\s*[*_]*\s*(?:by\b|\(|\[id\b|#)", re.IGNORECASE)
+
+
 def check_bylines(
     text: str,
     binder: Binder,
@@ -1066,18 +1269,35 @@ def check_bylines(
 ) -> None:
     """ "<item> by <name>" must name one of that item's people; an unmarked "<Title> by
     <Author>" that names no returned item is reported like an unknown name."""
+    titles = [name for item in binder.items for name in item.names]
     for match in _BYLINE.finditer(text):
         named = match.group(1).rstrip(".,;:")
         refs = [r for r in binder.refs if r.end <= match.start()]
         ref = refs[-1] if refs else None
-        if ref is None or not _BYLINE_GAP.match(text[ref.end : match.start()]):
+        if ref is None:
             continue
+        if not _BYLINE_GAP.match(text[ref.end : match.start()]):
+            strong = [r for r in binder.strong if r.end <= match.start()]
+            ref = strong[-1] if strong else None
+            if ref is None or not _BYLINE_PRONOUN.search(text[ref.end : match.start()]):
+                continue
         people = [p for item in ref.items for p in item.people]
         if not people:
             continue
-        ok = person_matches(named, people)
         title = ref.items[0].label
-        tally.add("author", ok, f"{title} is not by {named}", key=f"{title}|{named}".casefold())
+        for person in [named, *_co_authors(text, match.end(), titles)]:
+            ok = person_matches(person, people)
+            key = f"{title}|{person}".casefold()
+            tally.add("author", ok, f"{title} is not by {person}", key=key)
+    for match in _CO_WRITTEN.finditer(text):
+        person = (match.group(1) or match.group(2)).rstrip(".,;:")
+        refs = [r for r in binder.strong if r.end <= match.start()]
+        people = [p for item in refs[-1].items for p in item.people] if refs else []
+        if not people:
+            continue
+        title = refs[-1].items[0].label
+        ok = person_matches(person, people)
+        tally.add("author", ok, f"{title} is not by {person}", key=f"{title}|{person}".casefold())
     for match in _UNMARKED_TITLE.finditer(text):
         title = match.group(1).strip(_TRIM)
         # Leading sentence words ("Try", "Read") are not part of a title.
@@ -1129,6 +1349,26 @@ def hedged_after(text: str, end: int) -> bool:
     return bool(_HEDGE_AFTER.search((rest[: stop.start()] if stop else rest).lower()))
 
 
+# The data named as the source of a claim: "going by the ingredient list", "according to
+# the recipe", "based on the listed ingredients", "on paper".
+_DATA_SOURCE = re.compile(
+    r"\b(?:going (?:by|from|off)|according to|based on|judging (?:by|from)|from|per|by|"
+    r"looking at|as (?:listed|written) in|on|in)\s+(?:the|its|their|this|these|those|each)?\s*"
+    r"(?:listed\s+|drinks?['\u2019]?s?\s+|catalog(?:ue)?['\u2019]?s?\s+)?"
+    r"(?:ingredient(?:s)?(?: lists?)?|recipes?|catalog(?:ue)?(?: data| entry| listings?)?|"
+    r"listings?|data)\b"
+    r"|\bon paper\b|\bas listed\b|\bby the (?:book|list)\b",
+    re.IGNORECASE,
+)
+
+
+def attributed_to_data(text: str, position: int) -> bool:
+    """Whether the sentence around `position` names the data as the claim's source."""
+    start = max(text.rfind(". ", 0, position), text.rfind("\n", 0, position)) + 1
+    stop = _SENTENCE_STOP.search(text, position)
+    return bool(_DATA_SOURCE.search(text[start : stop.start() if stop else len(text)]))
+
+
 def check_unsupported(
     text: str,
     pattern: re.Pattern[str],
@@ -1138,16 +1378,21 @@ def check_unsupported(
     kind: str = "claim",
     hedge_after: bool = False,
     supported: Sequence[str] = (),
+    sourced: Callable[[re.Match[str]], bool] | None = None,
 ) -> None:
     """Claims no catalog data can support (`pattern`), unless the answer negates or hedges
     them (with `hedge_after`, also later in the sentence: "but check the label"), or the
     evidence's own text says them (`supported`: a description that reads "nickel-free"):
-    each one is an issue."""
+    each one is an issue. With `sourced`, a claim its sentence attributes to the data
+    ("dairy-free going by the ingredient list") is allowed when `sourced` finds the data
+    bears it out (no dairy in the recipe)."""
     said = [_folded(s) for s in supported if s.strip()]
     for match in pattern.finditer(text):
         if hedged(text, match.start()):
             continue
         if hedge_after and hedged_after(text, match.end()):
+            continue
+        if sourced is not None and attributed_to_data(text, match.start()) and sourced(match):
             continue
         phrase = _folded(match.group(0))
         if phrase and any(phrase in s for s in said):
@@ -1155,6 +1400,13 @@ def check_unsupported(
         tally.add(kind, False, f"\u201c{match.group(0)}\u201d: {reason}")
 
 
+# What a health claim promises to help with: "a sore throat", "colds", "your immune system".
+_AILMENT = (
+    r"(?:(?:a|an|the|your|any|those|that)\s+)?(?:(?:sore|scratchy|tickly)\s+throats?|colds?|"
+    r"coughs?|(?:the )?flu|fevers?|headaches?|hangovers?|nausea|(?:upset |sore )?stomachs?|"
+    r"stomach ?aches?|indigestion|digestion|insomnia|inflammation|immunity|immune systems?|"
+    r"congestion|cramps?|(?:the )?sniffles|chills|a cold or (?:the )?flu)\b"
+)
 # Allergen, skin-health and age-suitability promises: no catalog in any domain records them.
 SAFETY_CLAIMS = re.compile(
     r"\b(?:nut|peanut|tree[- ]nut|gluten|wheat|dairy|lactose|milk|egg|soy|allergen|allergy|"
@@ -1177,7 +1429,16 @@ SAFETY_CLAIMS = re.compile(
     r"|\b(?:for )?(?:kids|children|readers|ages?) (?:aged )?\d{1,2}\s?(?:\+|and up\b|and over\b|"
     r"and older\b)"
     r"|\b(?:kid|child|pregnancy|allergy|toddler|baby)[- ](?:safe|friendly|proof)\b"
-    r"|\bguaranteed(?: to be)? safe\b",
+    r"|\bguaranteed(?: to be)? safe\b"
+    # Health benefits: "a good remedy for a sore throat", "good for a cold", "boosts
+    # immunity".
+    r"|\b(?:(?:remed(?:y|ies)|cures?|medicine|tonic|treatment)\s+(?:for|against)|"
+    r"cures?|heals?|treats?|soothes?|settles?|calms?|eases?|relieves?|fights?|"
+    r"(?:fights?|wards?) off|prevents?|helps? (?:with|fight|prevent|ease|soothe|relieve)|"
+    r"(?:good|great|perfect|ideal|helpful|best) (?:for|against)|works? (?:wonders )?(?:for|on))"
+    rf"\s+{_AILMENT}"
+    r"|\bmedicinal\b|\bboost(?:s|ing)? (?:your |the )?(?:immun\w*|metabolism)\b"
+    r"|\bimmun(?:e|ity)[- ](?:boost\w*|support\w*)\b",
     re.IGNORECASE,
 )
 SAFETY_REASON = "no catalog records allergen, diet, health or age-suitability facts"
@@ -1190,11 +1451,21 @@ def check_safety(
     pattern: re.Pattern[str] = SAFETY_CLAIMS,
     reason: str = SAFETY_REASON,
     supported: Sequence[str] = (),
+    sourced: Callable[[re.Match[str]], bool] | None = None,
 ) -> None:
     """Allergen, health and age-safety promises, unless negated or hedged before or after
-    ("I can't confirm it's nut-free", "it's nut-free, but check the label"), or stated by
-    the evidence's own text (`supported`)."""
-    check_unsupported(text, pattern, tally, reason=reason, hedge_after=True, supported=supported)
+    ("I can't confirm it's nut-free", "it's nut-free, but check the label"), stated by
+    the evidence's own text (`supported`), or attributed to the data and borne out by it
+    (`sourced`: "dairy-free going by the ingredient list" for recipes without dairy)."""
+    check_unsupported(
+        text,
+        pattern,
+        tally,
+        reason=reason,
+        hedge_after=True,
+        supported=supported,
+        sourced=sourced,
+    )
 
 
 # Stock, sizes, delivery and discounts: nothing in any catalog supports them.
@@ -1227,6 +1498,18 @@ _ABOUT_ANOTHER = re.compile(
     re.IGNORECASE,
 )
 _PRONOUN_SUBJECT = re.compile(r"(?:it|this|that|both|they|it's|it\u2019s|its)\b", re.IGNORECASE)
+# A plural subject that opens a sentence: "Both are alcohol-free", "They're all
+# non-alcoholic".
+_PLURAL_SUBJECT = re.compile(
+    r"(both|they|these|those|all (?:three|four|of them|of these)|each of them)\b"
+    r"(?:\s+(?:of them|drinks|recipes))?\s*(?:are|['\u2019]re|were|contain|have)\b"
+)
+# The phrase is the predicate of the subject before it: "the Shirley Temple is the
+# alcohol-free version", "both are non-alcoholic versions"; not "there is", "try a".
+_PREDICATE = re.compile(
+    r"(?<!there )(?<!here )\b(?:is|are|['\u2019]s|['\u2019]re|was|were)\s+"
+    r"(?:(?:a|an|the|both|all|just|really|actually|also|simply)\s+)*$"
+)
 _PLURAL = re.compile(r"\b(?:all|both|these|those|every|each|everything|here are|picks|options)\b")
 
 
@@ -1262,11 +1545,19 @@ def check_flags(
             allowed = claim.negated_values if negated else claim.values
             phrase = ("not " if negated else "") + claim.describe
             in_sentence = binder.items_between(*sentence)
-            if not in_sentence and _PLURAL.search(text[sentence[0] : sentence[1]].lower()):
+            said_lower = text[sentence[0] : sentence[1]].lower()
+            plural_subject = _PLURAL_SUBJECT.match(_STRIP_MARKS.sub("", said_lower).lstrip("-*+ "))
+            opens_list = text[: sentence[1]].rstrip().endswith(":")
+            if not in_sentence and plural_subject and not opens_list:
+                # "Both are alcohol-free": the drinks named just before.
+                items = _named_before(binder, sentence[0], plural_subject.group(1))
+            elif not in_sentence and _PLURAL.search(said_lower):
                 items = binder.items_between(sentence[1], _list_end(text, sentence[1]))
-                items = items if text[: sentence[1]].rstrip().endswith(":") else []
-            elif _ABOUT_ANOTHER.match(text[end:]):
-                items = []  # "an alcohol-free version": about another drink
+                items = items if opens_list else []
+            elif _ABOUT_ANOTHER.match(text[end:]) and not _PREDICATE.search(
+                _STRIP_MARKS.sub("", text[sentence[0] : start]).lower()
+            ):
+                items = []  # "try an alcohol-free version": about another drink
             else:
                 binding = binder.bind(start, end, nearest=True)
                 pronoun = _PRONOUN_SUBJECT.match(text[sentence[0] : sentence[1]].lstrip("-*+ "))
@@ -1277,6 +1568,21 @@ def check_flags(
                     continue
                 ok = value in allowed
                 tally.add(kind, ok, f"{item.label} is not {phrase}", key=f"{item.id}|{start}")
+
+
+def _named_before(binder: Binder, position: int, subject: str) -> list[Item]:
+    """The items a plural subject at `position` stands for: the last two named before it
+    for "both", else those named in its paragraph before it."""
+    paragraph = binder.text.rfind("\n\n", 0, position) + 1
+    refs = [r for r in binder.strong if r.end <= position]
+    if subject.startswith("both"):
+        items: list[Item] = []
+        for ref in reversed(refs):
+            items += [i for i in ref.items if i not in items]
+            if len(items) >= 2:
+                break
+        return items[:2]
+    return binder.items_between(paragraph, position)
 
 
 def _list_end(text: str, start: int) -> int:
