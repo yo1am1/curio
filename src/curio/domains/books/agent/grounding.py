@@ -35,10 +35,12 @@ _RATING = re.compile(
     r"|(?<![\d.,])([0-5](?:[.,]\d{1,2})?)\s*(?:/\s*5\b|out of 5\b|stars?\b|★|on Goodreads\b)",
     re.IGNORECASE,
 )
-# In a book answer a bare "4.55" or "3.9" is a rating too.
+# In a book answer a bare "4.55" or "3.9" is a rating too. What follows it on the same
+# line can make it something else (a range "4.2-4.5", "3.5 hours"); the next bullet's dash
+# ("- 4.37\n- **Goblet of Fire**") does not.
 _BARE_RATING = re.compile(
     r"(?<![\d.,€$£#\w])([1-5][.,]\d{1,2})(?![\d.,]*\d)"
-    r"(?!\s*(?:%|€|eur|cm|mm|oz|ml|cl|hours?|million|m\b|k\b|-))",
+    r"(?![ \t]*(?:%|€|eur|cm|mm|oz|ml|cl|hours?|million|m\b|k\b|[-\u2013\u2014][ \t]*\d))",
     re.IGNORECASE,
 )
 # "320 pages", "a 300-page novel", "1,007 pp".

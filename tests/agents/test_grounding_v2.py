@@ -214,3 +214,22 @@ def test_a_title_the_reader_typed_may_be_named(books, book_catalog):
     text = "Sorry, *The Seven Moons of Maali Almeida* isn't in the catalog."
     report = books.check(text, book_catalog.get_many([3]), typed)
     assert report.status == "verified" and report.counts == {"title": 1}
+
+
+def test_a_bare_rating_before_the_next_bullet_is_read(books, book_catalog):
+    """The next bullet's dash does not make "4.43" a range: another book's rating is caught."""
+    evidence = book_catalog.get_many([3, 4])
+    wrong = "- **The Way of Kings** - 4.43\n- **The Final Empire** - 4.43"
+    assert books.check(wrong, evidence).status == "fallback"
+    right = "- **The Way of Kings** - 4.64\n- **The Final Empire** - 4.43"
+    assert books.check(right, evidence).counts["rating"] == 2
+
+
+def test_a_names_final_period_ends_no_sentence():
+    hw = Item("product", 9, ("Curvy Jegging HW.",), {"price": (19.99,)})
+    text = "The **Curvy Jegging HW.** (€19.99) costs less than the **Summer Dress**."
+    tally = Tally()
+    FactCheck(Binder(text, [DRESS, hw], CITATIONS), {"price": same_price}).check(
+        euro_claims(text), tally
+    )
+    assert tally.report().status == "verified"

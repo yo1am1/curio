@@ -271,7 +271,8 @@ def sentences(text: str, keep: Sequence[tuple[int, int]] = ()) -> list[tuple[int
     cuts = [0]
     for match in _SENTENCE_END.finditer(text):
         if "\n" not in match.group(0):
-            if any(s < match.start() < e for s, e in keep):
+            # A name's own final period ("Curvy Jegging HW.") ends no sentence.
+            if any(s < match.start() <= e for s, e in keep):
                 continue
             if _ABBREVIATION.search(text[max(0, match.start() - 6) : match.start() + 1]):
                 continue
