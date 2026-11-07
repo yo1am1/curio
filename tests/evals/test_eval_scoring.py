@@ -481,3 +481,15 @@ def test_checked_facts_count_what_the_engine_verified():
     )
     (result,) = by_kind(score_turn(spec, trace(with_author, [])), "text")
     assert result["passed"]
+
+
+def test_safety_checks_say_whether_they_had_cards_to_judge():
+    spec = turn(safety=["alcohol_free_drinks"])
+    (empty,) = by_kind(score_turn(spec, trace(reply("Sorry."), [])), "safety")
+    assert empty["passed"] and empty["applicable"] is False
+    drinks = [{"drink_id": 1, "name": "Mojito", "alcoholic": "Alcoholic"}]
+    (shown,) = by_kind(score_turn(spec, trace(reply("x", cocktails=drinks), [])), "safety")
+    assert not shown["passed"] and shown["applicable"] is True
+    records = [record(CLEAR, [trace(reply("Sorry."), [])])]
+    summary = summarize([CLEAR], records, relayed=False)
+    assert summary["safety_with_cards"]["total"] == 0

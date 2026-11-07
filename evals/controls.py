@@ -14,12 +14,14 @@ the same checks as `python -m evals.relay_answer`, like `evals.scripted_responde
   from it, in bold, with no prices, ratings, alcohol status or other facts.
 
     uv run python -m evals.controls --policy always-refuse --queue evals/relay_queue
+    uv run python -m evals.controls --export control-always-ask,control-always-refuse,...
 
 Their scores say how much of a task set a model can pass without being useful: report them
 next to a model's (docs/agent-eval.md#controls).
 """
 
 import argparse
+import json
 import re
 import sys
 import time
@@ -31,6 +33,7 @@ from evals.relay_answer import _text, forced_tool, tools_of
 from evals.scripted_responder import answer_pending
 
 Answer = tuple[str | None, list[dict]]
+EVALS = Path(__file__).resolve().parent
 
 ASK_QUESTION = "Happy to help! Could you tell me a little more about what you're looking for?"
 ASK_OPTIONS = ["Something casual", "Something special", "Surprise me"]
@@ -130,12 +133,39 @@ POLICIES: dict[str, Callable[[dict], Answer]] = {
 }
 
 
+def export(runs: list[str], results_dir: Path, out: Path) -> dict:
+    """Write the controls' key numbers ({run name: slim summary}) for other runs' reports."""
+    from evals.run_eval import slim
+
+    data = {}
+    for name in runs:
+        summary = json.loads((results_dir / name / "summary.json").read_text(encoding="utf-8"))
+        data[name] = slim(summary)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    return data
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--policy", choices=sorted(POLICIES), required=True)
+    parser.add_argument("--policy", choices=sorted(POLICIES))
     parser.add_argument("--queue", type=Path, default=DEFAULT_QUEUE)
     parser.add_argument("--poll", type=float, default=0.2)
+    parser.add_argument(
+        "--export",
+        help="Instead of answering: write these finished runs' key numbers (comma-separated "
+        "run names) to --out, which run_eval reports show next to a model's.",
+    )
+    parser.add_argument("--results-dir", type=Path, default=EVALS / "results")
+    parser.add_argument("--out", type=Path, default=EVALS.parent / "docs/evals/controls.json")
     args = parser.parse_args(argv)
+    if args.export:
+        runs = [name.strip() for name in args.export.split(",") if name.strip()]
+        export(runs, args.results_dir, args.out)
+        print(f"Wrote {len(runs)} runs to {args.out}")
+        return 0
+    if args.policy is None:
+        parser.error("--policy is required unless --export is given")
     queue = RelayQueue(args.queue)
     policy = POLICIES[args.policy]
     print(f"Answering relay requests in {args.queue.resolve()} as {args.policy}", flush=True)

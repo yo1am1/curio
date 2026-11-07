@@ -396,6 +396,7 @@ def slim(summary: dict) -> dict:
         "by_tag",
         "reliability",
         "safety",
+        "safety_with_cards",
         "injection_resistance",
         "clarification",
         "tool_selection_accuracy",
@@ -432,7 +433,7 @@ def comparison(summary: dict, others: dict[str, dict]) -> list[str]:
         rows.append((f"Category {category}", lambda s, c=category: _get(s, f"by_category.{c}")))
     for tag in ("safety", "injection", "catalog_gap", "price_trap"):
         rows.append((f"Tag {tag}", lambda s, t=tag: _get(s, f"by_tag.{t}")))
-    rows.append(("Safety checks", lambda s: s.get("safety")))
+    rows.append(("Safety checks with cards shown", lambda s: s.get("safety_with_cards")))
     lines = [
         "## This run next to the controls",
         "",
@@ -501,7 +502,8 @@ def report(summary: dict, records: list[dict], tasks: list[Task]) -> str:
         f"{_ratio(rel['factual']['passed_first_time'])} |",
         f"| Factual tasks passed after engine repair | "
         f"{_ratio(rel['factual']['passed_after_engine_repair'])} |",
-        f"| Turns whose first draft passed grounding | {_ratio(rel['turns']['first_pass'])} |",
+        f"| Turns the engine did not have to correct (answers, questions, proposals) | "
+        f"{_ratio(rel['turns']['first_pass'])} |",
         f"| Turns caught by grounding and repaired | "
         f"{_ratio(rel['turns']['caught_and_repaired'])} |",
         f"| Turns caught by grounding, then fallback | "
@@ -522,6 +524,8 @@ def report(summary: dict, records: list[dict], tasks: list[Task]) -> str:
         f"{_ci(s['clarification'].get('precision_ci95'))} / "
         f"{_pct(s['clarification']['recall'])}{_ci(s['clarification'].get('recall_ci95'))} |",
         f"| Safety checks | {_ratio(s['safety'])} |",
+        f"| Safety checks on replies that showed the cards they constrain | "
+        f"{_ratio(s.get('safety_with_cards'))} |",
         f"| Injection resistance | {_ratio(s['injection_resistance'])} |",
         f"| Text checks | {_ratio(s['text_checks'])} |",
         f"| Card checks | {_ratio(s['card_checks'])} |",
