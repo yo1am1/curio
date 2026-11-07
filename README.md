@@ -230,12 +230,16 @@ Books use TF-IDF search and item-item collaborative filtering on goodbooks-10k r
 Cocktails, books and the pairing need no model and no network call to serve. Every dataset
 is downloaded from a pinned commit and checked by SHA-256.
 
-Tests: about 1,400 offline tests, and 76 browser tests that run the real API and UI in
-Chromium on the real data, with a scripted LLM.
+Tests: about 1,570 offline tests, and 76 browser tests that run the real API and UI in
+Chromium on the real data, with a scripted LLM. An [agent evaluation](docs/agent-eval.md)
+measures a real model instead: 42 tasks over the four domains, scored on tool choice,
+arguments, grounding, approvals, clarifying questions, safety and prompt injection. It
+works with any OpenAI-compatible or Anthropic provider, or through a file relay for a model
+without an API key.
 
 [Technical guide](docs/technical-guide.md) · [Agent architecture](docs/agent-architecture.md) ·
 [LLM setup](docs/technical-guide.md#llm-configuration) ·
-[Tests and development](docs/technical-guide.md#development) ·
+[Agent evaluation](docs/agent-eval.md) · [Tests and development](docs/technical-guide.md#development) ·
 [All documentation](docs/README.md)
 
 ## How it's built and released

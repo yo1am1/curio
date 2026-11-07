@@ -868,6 +868,7 @@ How the project was built and reviewed is summarised in
 uv run pytest                        # fast, offline unit tests (fake encoder, in-memory Qdrant, fake LLM)
 uv run pytest -m integration        # tests that download the real CLIP model
 uv run pytest -m e2e tests/e2e      # browser end-to-end run over prepared data (below)
+uv run python -m evals.run_eval     # agent evaluation with a real model (docs/agent-eval.md)
 uv run ruff check . && uv run ruff format --check .
 ```
 

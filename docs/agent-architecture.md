@@ -433,8 +433,8 @@ actions. Gaps addressed here:
   lemon, sugar" does not yet find Whiskey Sour, whose recipe lists "Blended whiskey" and
   "Powdered sugar".
 - Feedback stays in memory and resets when the API restarts.
-- The live behaviour of a real LLM with the new tools has not been evaluated at scale;
-  unit and UI tests use scripted models.
+- Unit and UI tests use scripted models. The [agent evaluation](agent-eval.md) measures a
+  real model on 42 tasks, a small set that shows failure modes rather than precise rates.
 - Outfit coherence is a CLIP query per slot plus co-purchase and photo similarity; there is
   no colour-harmony or style model, so a dress and earrings can clash. Occasion templates
   are keyword-based and English-only, and the photo index has few men's and children's

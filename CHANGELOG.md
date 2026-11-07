@@ -6,6 +6,18 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Agent evaluation (`evals/`, [docs/agent-eval.md](docs/agent-eval.md)): 42 tasks over
+  fashion, cocktails, books and evening with machine-checkable expectations, a runner that
+  drives the real API with any OpenAI-compatible or Anthropic model, and a scorer for task
+  success, tool selection, arguments, grounding, approval discipline, clarification,
+  safety, injection resistance and budgets.
+- A file relay (`python -m evals.relay`) and answering CLI (`python -m evals.relay_answer`)
+  so a model without an API key in the environment can be evaluated by an agent answering
+  each call.
+- `AGENT_TURN_DEADLINE_SECONDS` sets the agent's turn deadline (default 90 s, unchanged).
+
 ## [2.0.0] - 2026-11-06
 
 ### Highlights
