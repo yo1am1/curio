@@ -15,3 +15,4 @@ docs/
 .vscode
 tests
 CHANGELOG.md
+web/node_modules
