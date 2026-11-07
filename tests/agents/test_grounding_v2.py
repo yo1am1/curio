@@ -233,3 +233,78 @@ def test_a_names_final_period_ends_no_sentence():
         euro_claims(text), tally
     )
     assert tally.report().status == "verified"
+
+
+# --- Grounding v2.1: the categories the blind held-out set (v1) exposed --------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [
+        # A total, difference or multiple of the named items' prices is verified...
+        ("The Summer Dress (€24.99) and the Slim Jeans (€29.99) come to €54.98.", "verified"),
+        ("- Summer Dress: €24.99\n- Slim Jeans: €29.99\n\nTogether that's €54.98.", "verified"),
+        ("| Summer Dress | €24.99 |\n| Slim Jeans | €29.99 |\n| **Total** | €54.98 |", "verified"),
+        ("The Summer Dress is €24.99, so it's €5 cheaper than the Slim Jeans.", "verified"),
+        ("The Slim Jeans are €29.99. The dress is €5.00 less.", "verified"),
+        ("The Summer Dress saves you €5 compared with the Slim Jeans.", "verified"),
+        ("Two Summer Dresses would be €49.98.", "verified"),
+        ("Both together cost about €55.", "verified"),
+        # ...and a wrong one is reported.
+        ("The Summer Dress (€24.99) and the Slim Jeans (€29.99) come to €56.98.", "fallback"),
+        ("The Summer Dress is €24.99, so it's €7 cheaper than the Slim Jeans.", "fallback"),
+        ("Two Summer Dresses would be €52.98.", "fallback"),
+        # A discount is never arithmetic.
+        ("The Slim Jeans are €29.99, but the Summer Dress is €5 off.", "fallback"),
+        ("The Summer Dress is on sale, €5 less than the Slim Jeans.", "fallback"),
+        # A price stated for one item stays that item's price, "cheaper" or not.
+        ("The Summer Dress is the cheaper one at €29.99.", "fallback"),
+    ],
+)
+def test_totals_differences_and_multiples_are_verified(text, status):
+    tally = Tally()
+    binder = Binder(text, [DRESS, JEANS], CITATIONS)
+    FactCheck(binder, {"price": same_price}, arithmetic=frozenset({"price"})).check(
+        euro_claims(text), tally
+    )
+    assert tally.report().status == status, tally.report().issues
+
+
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [
+        ("The Summer Dress (€24.99) fits your €30 budget.", "verified"),
+        ("The Summer Dress is €24.99; the Slim Jeans are over €25.", "verified"),
+        ("The last one is over €25, so the Summer Dress wins.", "verified"),
+        ("Both are within €30.", "verified"),
+        ("You mentioned €25, but the Summer Dress is €24.99.", "verified"),
+        ("Yes, the Summer Dress is under €20.", "fallback"),  # confirms a wrong figure
+        ("The Slim Jeans are lovely. Yes, it's under €25.", "fallback"),
+    ],
+)
+def test_the_shoppers_own_figures_are_theirs_never_an_items(text, status):
+    typed = "Anything under €25? Is the Summer Dress under €20? My budget is €30."
+    assert prices(text, typed=typed).status == status
+
+
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [
+        # Each bullet is its own sentence: the rating before the next bullet's dash counts.
+        ("- **The Way of Kings** - 4.64\n- **The Final Empire** - 4.43", "verified"),
+        ("- **The Way of Kings** - 4.43\n- **The Final Empire** - 4.43", "fallback"),
+        ("**The Way of Kings** and **The Final Empire** are rated 4.64 and 4.43.", "verified"),
+        ("**The Way of Kings** and **The Final Empire** are rated 4.43 and 4.64.", "fallback"),
+        ("Together they run to 1,548 pages.", "verified"),
+        (
+            "**The Way of Kings** (1007 pages) is 466 pages longer than **The Final Empire**.",
+            "verified",
+        ),
+        (
+            "**The Way of Kings** (1007 pages) is 400 pages longer than **The Final Empire**.",
+            "fallback",
+        ),
+    ],
+)
+def test_book_ratings_in_lists_and_page_totals(text, status, books, book_catalog):
+    assert books.check(text, book_catalog.get_many([3, 4])).status == status

@@ -15,6 +15,9 @@ tool supports. This module holds the domain-free parts:
   anywhere. Anything else is "unattributed". A number the shopper typed counts only as
   their own figure in a budget or limit ("under €30", "your €100 budget") or where the
   answer contradicts it ("€8.99, not €4.99"): confirming a wrong figure is caught.
+  A number framed as a total, a difference or a multiple ("together that's €74.98", "€5
+  cheaper", "4 pairs for €23.96", "2,786 pages in total") must equal that sum, difference
+  or multiple of the values of the items its sentence (or, failing that, the answer) names.
 - Names: a bold, italic or quoted name-like span, or "<Title> by <Author>", must name an
   item this turn's tools returned (or something the shopper typed); "by <Author>" after an
   item must name one of its people.
@@ -46,6 +49,8 @@ _ROUNDING_TOLERANCE = 1.0
 _EXACT_TOLERANCE = 0.011
 # "about", "around": within this share of the real value.
 _APPROXIMATE_SHARE = 0.1
+# "about" a total or difference: within its written rounding, or this share of it.
+_ABOUT_DERIVED_SHARE = 0.02
 # Markdown and quote marks that set a name apart from the prose around it.
 _OPENERS = {
     "**": "**",
@@ -412,8 +417,10 @@ class Binder:
             return Binding(self._only, False)
         return None
 
-    def items_between(self, start: int, end: int) -> list[Item]:
-        found = {id(i): i for r in self.strong if start <= r.start < end for i in r.items}
+    def items_between(self, start: int, end: int, *, weak: bool = False) -> list[Item]:
+        """The items referenced in text[start:end] (with `weak`, by a single name word too)."""
+        refs = self.refs if weak else self.strong
+        found = {id(i): i for r in refs if start <= r.start < end for i in r.items}
         return list(found.values())
 
 
@@ -528,6 +535,116 @@ def same_price(claimed: float, actual: float, mode: str) -> bool:
 
 type Compare = Callable[[Any, Any, str], bool]
 
+# --- Totals, differences and multiples -----------------------------------------------------
+
+# Where a number is framed as derived from item values: a total anywhere in its sentence
+# ("together that's €74.98", "| **Total** | €23.97 |"), a difference in its own clause ("so
+# the Waverly is €5.00 cheaper"), so a price stated for one item in a sentence that also
+# says "cheaper" is still that item's price.
+_TOTAL = re.compile(
+    r"\b(?:total(?:s|ling|ing)?|together|combined|in all|altogether|all together|sum|"
+    r"adds? up|comes? to|come to|runs? to|"
+    r"for (?:both|all (?:two|three|four|five|six)|the (?:two|three|four|pair|lot|set))|"
+    r"buying (?:both|all|the two|the three|them|these|those)|"
+    r"(?:both|all (?:three|four|five)) (?:would|will) (?:cost|be|come))\b"
+)
+_DIFFERENCE = re.compile(
+    r"\b(?:cheaper|less|more|pricier|dearer|costlier|more expensive|difference|apart|"
+    r"saves?|saving|savings|longer|shorter|over (?:your |the )?budget|under (?:your |the )?"
+    r"budget|over by|short|left|leaving|leaves|remaining|to spare)\b"
+)
+# A discount is never arithmetic on the catalog: "€5 off", "on sale", "discounted".
+_DISCOUNT = re.compile(
+    r"\b(?:off|on sale|sale price|discount\w*|reduced|marked down|markdown|price drop|"
+    r"promo\w*|coupon|clearance)\b"
+)
+_BUDGETISH = re.compile(r"\b(?:budget|limit|left|leaving|leaves|remaining|spare|over|short)\b")
+_COUNT_WORDS = {
+    "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+    "ten": 10, "a pair of": 2, "a couple of": 2,
+}  # fmt: skip
+# "4 pairs for €23.96", "three of them come to €17.97", "two packs at €11.98".
+_MULTIPLE_BEFORE = re.compile(
+    r"(?:(?<![\d.,\u20ac])\b(\d{1,2})"
+    r"|\b(two|three|four|five|six|seven|eight|nine|ten|a pair of|a couple of))"
+    r"\s+(?:[\w'\u2019-]+\s+){0,6}?(?:for|at|costs?|would cost|would be|comes? to|come to|"
+    r"=|is|are)\s+(?:(?:just|only|a total of|about|around)\s+)?$"
+)
+# "€5.99 x 4 = €23.96", "4x" (also with the multiplication sign).
+_MULTIPLE_SIGN = re.compile(r"(?:[x\u00d7]\s?(\d{1,2})\b|\b(\d{1,2})\s?[x\u00d7])")
+# A clause ends at punctuation, a spaced dash or a conjunction; a label's colon and table
+# cells ("|") do not split it, so "Total: €54.98" and a "Total" row frame their amount.
+_CLAUSE_EDGE = re.compile(
+    r"[.!?;\n()]|,\s|\s[\u2014\u2013-]\s|\b(?:but|while|whereas|although|though|and)\b"
+)
+# What may stand between facts listed in the order of their items: "€24.99 and €29.99",
+# "4.53, 4.46 and 4.37" (a unit or "stars" may follow each).
+_LIST_JOIN = re.compile(
+    r"\s*(?:pages?|stars?|\u2605)?\s*(?:,\s*(?:and\s+|or\s+)?|\s(?:and|or)\s+|\s*/\s*)"
+    r"(?:\u20ac|\u2605\s*)?\s*"
+)
+# Subsets of more items than this are not tried: only their full sum.
+_MAX_SUBSET_ITEMS = 8
+
+
+def clause_span(text: str, start: int, end: int, sentence: tuple[int, int]) -> tuple[int, int]:
+    """The (start, end) of the clause around text[start:end] within its sentence."""
+    head = text[sentence[0] : start]
+    cuts = [m.end() for m in _CLAUSE_EDGE.finditer(head)]
+    first = sentence[0] + (cuts[-1] if cuts else 0)
+    tail = text[end : sentence[1]]
+    stop = _CLAUSE_EDGE.search(tail)
+    return first, end + (stop.start() if stop else len(tail))
+
+
+def _clause(text: str, start: int, end: int, sentence: tuple[int, int]) -> str:
+    """The clause around text[start:end], lower case and without markdown marks."""
+    first, last = clause_span(text, start, end, sentence)
+    return _STRIP_MARKS.sub("", text[first:last]).lower()
+
+
+# A clause whose subject is one item: "it's under €20", "this one is over €50".
+_SINGULAR_SUBJECT = re.compile(
+    r"^[\s*_\-]*(?:yes,?\s+|so\s+|and\s+)?(?:it|it['\u2019]s|this|that|this one|that one|he|she)\b",
+    re.IGNORECASE,
+)
+
+
+def _rounding_unit(claimed: float, mode: str) -> float:
+    """The rounding a written number implies: "€5.00" none, "€76" a euro, "about 1,200" a
+    hundred. Only "about" allows more than a unit."""
+    if not float(claimed).is_integer():
+        return 0.0
+    if mode != "about":
+        return 1.0
+    whole = int(abs(claimed))
+    for unit in (1000, 100, 10, 5):
+        if whole and whole % unit == 0:
+            return float(unit)
+    return 1.0
+
+
+def same_derived(claimed: float, actual: float, mode: str) -> bool:
+    """Whether a total, difference or multiple `claimed` states `actual`: to the cent, or
+    rounded to the precision written ("€76" for €75.96, "about 1,200 pages" for 1,157)."""
+    if mode in ("less", "more"):
+        return same_number(claimed, actual, mode)
+    tolerance = max(_EXACT_TOLERANCE, _rounding_unit(claimed, mode) / 2 + 1e-9)
+    if mode == "about":
+        tolerance = max(tolerance, abs(actual) * _ABOUT_DERIVED_SHARE)
+    return abs(actual - claimed) <= tolerance
+
+
+def _subset_sums(values: Sequence[float]) -> list[float]:
+    """Sums of two or more of `values` (only the full sum when there are many)."""
+    if len(values) > _MAX_SUBSET_ITEMS:
+        return [sum(values)]
+    sums = []
+    for mask in range(1, 1 << len(values)):
+        if mask & (mask - 1):  # at least two members
+            sums.append(sum(v for i, v in enumerate(values) if mask >> i & 1))
+    return sums
+
 
 def euro_claims(text: str) -> list[Claim]:
     """Euro amounts in `text` as price claims."""
@@ -554,21 +671,51 @@ class FactCheck:
     typed: str = ""
     describe: Mapping[str, Callable[[Any], str]] = field(default_factory=dict)
     noun: Mapping[str, str] = field(default_factory=dict)
+    arithmetic: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         self._typed = amounts_in(self.typed)
+        self._paired: dict[int, Binding] = {}
 
     def check(self, claims: Iterable[Claim], tally: Tally) -> None:
+        claims = list(claims)
+        self._paired = self._pair_in_order(claims)
         for claim in claims:
             ok, issue = self._judge(claim)
             tally.add(claim.kind, ok, issue)
+
+    def _pair_in_order(self, claims: Sequence[Claim]) -> dict[int, Binding]:
+        """Claims listed after the items they describe, in the same order: "the A and the B
+        cost €24.99 and €29.99", "rated 4.53 and 4.46 respectively". When a sentence names
+        n items and then states n facts of one kind joined only by "and", "or", commas or
+        "respectively", the k-th fact binds to the k-th item."""
+        text = self.binder.text
+        paired: dict[int, Binding] = {}
+        by_sentence: dict[tuple[int, int, str], list[Claim]] = {}
+        for claim in claims:
+            key = (*self.binder.sentence(claim.start), claim.kind)
+            by_sentence.setdefault(key, []).append(claim)
+        for (first, _last, _), group in by_sentence.items():
+            if len(group) < 2:
+                continue
+            refs = [r for r in self.binder.strong if first <= r.start and r.end <= group[0].start]
+            if len(refs) != len(group) or any(
+                group[0].start <= r.start < group[-1].end for r in self.binder.strong
+            ):
+                continue
+            joins = [text[a.end : b.start] for a, b in pairwise(group)]
+            if not all(_LIST_JOIN.fullmatch(_STRIP_MARKS.sub("", j)) for j in joins):
+                continue
+            for ref, claim in zip(refs, group, strict=True):
+                paired[claim.start] = Binding(ref.items, True)
+        return paired
 
     def _judge(self, claim: Claim) -> tuple[bool, str]:
         text = self.binder.text
         sentence = self.binder.sentence(claim.start)
         framing = qualifier(text, claim.start, claim.end, sentence)
         compare = self.compare[claim.kind]
-        binding = self.binder.bind(claim.start, claim.end)
+        binding = self._paired.get(claim.start) or self.binder.bind(claim.start, claim.end)
         shown = self._show(claim)
         noun = self.noun.get(claim.kind, claim.kind)
         if framing.contradicted:
@@ -591,6 +738,11 @@ class FactCheck:
             return True, ""
         if free:
             return True, ""
+        own = framing.mode in ("less", "more") and self._was_typed(claim)
+        if own and self._own_comparison(claim, sentence):
+            return True, ""  # the shopper's own figure: "the last two are over €50"
+        if self._derived(claim, framing.mode, sentence):
+            return True, ""
         if binding is None and framing.mode in ("less", "more"):
             if asking or self._was_typed(claim):
                 return True, ""  # the shopper's own limit ("under €30"), or a suggestion
@@ -608,6 +760,78 @@ class FactCheck:
             return False, f"{shown} is not a {noun} the tools returned for {item.label}"
         listed = ", ".join(self._format(claim.kind, value) for value in actual[:4])
         return False, f"{shown} does not match the {noun} of {item.label} ({listed})"
+
+    def _own_comparison(self, claim: Claim, sentence: tuple[int, int]) -> bool:
+        """Whether "under/over <the shopper's figure>" compares against their figure rather
+        than stating one item's value: its clause names no item and is not about a single
+        one ("it's under €20" confirms a figure for the item before)."""
+        first, last = clause_span(self.binder.text, claim.start, claim.end, sentence)
+        if self.binder.items_between(first, last):
+            return False
+        return not _SINGULAR_SUBJECT.match(self.binder.text[first:last])
+
+    def _derived(self, claim: Claim, mode: str, sentence: tuple[int, int]) -> bool:
+        """Whether the claim is a total, difference or multiple its words frame as one,
+        of the values of the items its sentence names (or, when the sentence names fewer
+        than two, the items the whole answer names; when it names none, the total of every
+        item the tools returned), and equals it."""
+        if claim.kind not in self.arithmetic or not isinstance(claim.value, int | float):
+            return False
+        text = self.binder.text
+        clause = _clause(text, claim.start, claim.end, sentence)
+        said = _STRIP_MARKS.sub("", text[sentence[0] : sentence[1]]).lower()
+        if _DISCOUNT.search(said):
+            return False
+        # A total may be framed anywhere in its sentence ("Together, A, B and C run to 1,157
+        # pages"); a difference only in its own clause, since "the cheaper one at €19.99"
+        # states one item's price.
+        total = bool(_TOTAL.search(said))
+        difference = bool(_DIFFERENCE.search(clause))
+        count = self._multiplier(text, claim, clause, sentence)
+        if not (total or difference or count):
+            return False
+        in_sentence = self.binder.items_between(*sentence, weak=True)
+        scopes = [in_sentence]
+        if len(in_sentence) < 2:
+            scopes.append(self.binder.items_between(0, len(text), weak=True))
+        for items in scopes:
+            values = [float(v) for item in items for v in item.values.get(claim.kind, ())[:1]]
+            candidates: list[float] = []
+            if total:
+                candidates += _subset_sums(values)
+            if difference:
+                candidates += [abs(a - b) for i, a in enumerate(values) for b in values[i + 1 :]]
+                if _BUDGETISH.search(clause):
+                    given = [*self._typed, *map(float, self.free.get(claim.kind, ()))]
+                    sums = [*values, *_subset_sums(values)]
+                    candidates += [abs(g - s) for g in given for s in sums]
+            if count:
+                bound = self.binder.bind(claim.start, claim.end)
+                own = [*items, *(bound.items if bound else ())]
+                candidates += [
+                    count * float(v) for item in own for v in item.values.get(claim.kind, ())
+                ]
+            if any(same_derived(float(claim.value), c, mode) for c in candidates):
+                return True
+        if total and not self.binder.strong:
+            # An answer that names no item ("the trilogy is 1,157 pages in total") may give
+            # the total of everything the tools returned.
+            values = [float(v) for i in self.binder.items for v in i.values.get(claim.kind, ())[:1]]
+            return len(values) > 1 and same_derived(float(claim.value), sum(values), mode)
+        return False
+
+    @staticmethod
+    def _multiplier(text: str, claim: Claim, clause: str, sentence: tuple[int, int]) -> int:
+        """The count a multiple is framed by ("4 pairs for €23.96"), else 0."""
+        before = _STRIP_MARKS.sub("", text[max(sentence[0], claim.start - 60) : claim.start])
+        match = _MULTIPLE_BEFORE.search(before.lower())
+        if match is None:
+            match = _MULTIPLE_SIGN.search(clause)
+            if match is None:
+                return 0
+        raw = next(group for group in match.groups() if group)
+        count = int(raw) if raw.isdigit() else _COUNT_WORDS[raw]
+        return count if 2 <= count <= 20 else 0
 
     def _matches(self, claim: Claim, item: Item, mode: str) -> bool:
         compare = self.compare[claim.kind]

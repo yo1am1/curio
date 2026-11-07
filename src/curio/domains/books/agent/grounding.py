@@ -144,7 +144,8 @@ class BookGroundingCheck:
     - "<title> by <name>" must name one of that book's authors.
     - Ratings, page counts and publication years bind to the book they are about (the
       nearest book named in the sentence, else the last one named before) and must match
-      it. A rating the reader typed counts only where the answer contradicts it.
+      it. A rating the reader typed counts only where the answer contradicts it. A page
+      total ("2,786 pages in total") must add up the books named.
     """
 
     def __init__(self, titles: Iterable[str], *, other_names: Iterable[str] = ()) -> None:
@@ -211,9 +212,13 @@ class BookGroundingCheck:
             ok = name_allowed(title, known, typed)
             tally.add("title", ok, f"{title} was not returned by any tool", key=title.casefold())
         binder = Binder(text, [book_item(b) for b in evidence], citations)
-        FactCheck(binder, BOOK_COMPARE, typed=typed, noun={"rating": "rating"}).check(
-            book_claims(text), tally
-        )
+        FactCheck(
+            binder,
+            BOOK_COMPARE,
+            typed=typed,
+            noun={"rating": "rating", "pages": "page count"},
+            arithmetic=frozenset({"pages"}),
+        ).check(book_claims(text), tally)
         people = [author for b in evidence for author in b.authors]
         check_bylines(text, binder, tally, known=[*known, *people], typed=typed)
         if names:

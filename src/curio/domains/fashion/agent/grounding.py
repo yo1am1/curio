@@ -86,7 +86,9 @@ class FashionGroundingCheck:
     - A price binds to the product it is about (the nearest product named or cited in the
       sentence, else the last one named before) and must be that product's price; a whole
       euro may round it, and "under €30" or "about €35" compare. Totals, budgets and what
-      is left (`amounts`) may stand anywhere. Anything else is unattributed.
+      is left (`amounts`) may stand anywhere. A total, difference or multiple of the named
+      products' prices ("together that's €74.98", "€5 cheaper", "4 pairs for €23.96") must
+      add up. Anything else is unattributed.
     - A price the shopper typed counts only as their budget or limit, or where the answer
       contradicts it: "Yes, it's €4.99" for a €24.99 dress is reported.
     - Prices in dollars or pounds, percentages not in the product's description, and stock,
@@ -143,6 +145,7 @@ class FashionGroundingCheck:
             typed=typed,
             noun={"price": "price", "percent": "percentage"},
             describe={"percent": lambda value: f"{value:g}%"},
+            arithmetic=frozenset({"price"}),
         ).check([*euro_claims(text), *percent_claims(text)], tally)
         check_currency(text, tally)
         check_unsupported(text, UNSUPPORTED_SHOP_CLAIMS, tally, reason=SHOP_REASON)
