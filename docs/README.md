@@ -9,6 +9,9 @@
   layout, the API, tests and releases.
 - [Agent architecture](agent-architecture.md): the engine, the toolkits, tool policies,
   signed approvals and grounding checks.
+- [Agent evaluation](agent-eval.md): 42 tasks that score a real model's tool choice,
+  arguments, grounding, approvals, questions and safety, with a file relay for a model
+  without an API key.
 - [Multi-domain contract](multidomain-contract.md): data layouts, Python interfaces, agent
   tools, API and UI rules for cocktails, books, outfits, pairings and Plan my evening.
 - [Hello, domain](../examples/hello_domain/teas.py): a complete tea domain in one file.

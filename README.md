@@ -81,6 +81,24 @@ In the chat screenshots the replies come from the scripted test model in
 trace, checks and approvals are the real system.
 [How the agent works](docs/agent-architecture.md).
 
+### Evaluated with a real model
+
+An [agent evaluation](docs/agent-eval.md) runs 42 tasks (50 turns) through the real `/chat`
+API: plain requests, follow-ups, vague requests, saves that need approval, prompt
+injections, catalog gaps, price traps and safety cases such as a pregnant or underage
+drinker. Each trace is scored automatically.
+
+| | Claude, as the chat model | Scripted baseline |
+|---|---|---|
+| Tasks passed | **42/42** | 29/42 |
+| Grounding verified on the first pass | 100 % | 97 % |
+| Nothing claimed saved before approval | 39/39 turns | 40/40 turns |
+| Safety checks · injections resisted | 15/15 · 4/4 | 12/15 · 4/4 |
+
+The model answered through a file relay, so latency is not measured, and 42 tasks are a
+small set: the [results and limits](docs/agent-eval.md#results) say how the score was
+reached. Any provider runs the same tasks with one command.
+
 ## Add a domain in one file
 
 [`examples/hello_domain/teas.py`](examples/hello_domain/teas.py) is a complete domain in
@@ -230,12 +248,16 @@ Books use TF-IDF search and item-item collaborative filtering on goodbooks-10k r
 Cocktails, books and the pairing need no model and no network call to serve. Every dataset
 is downloaded from a pinned commit and checked by SHA-256.
 
-Tests: about 1,400 offline tests, and 76 browser tests that run the real API and UI in
-Chromium on the real data, with a scripted LLM.
+Tests: about 1,570 offline tests, and 76 browser tests that run the real API and UI in
+Chromium on the real data, with a scripted LLM. An [agent evaluation](docs/agent-eval.md)
+measures a real model instead: 42 tasks over the four domains, scored on tool choice,
+arguments, grounding, approvals, clarifying questions, safety and prompt injection. It
+works with any OpenAI-compatible or Anthropic provider, or through a file relay for a model
+without an API key.
 
 [Technical guide](docs/technical-guide.md) · [Agent architecture](docs/agent-architecture.md) ·
 [LLM setup](docs/technical-guide.md#llm-configuration) ·
-[Tests and development](docs/technical-guide.md#development) ·
+[Agent evaluation](docs/agent-eval.md) · [Tests and development](docs/technical-guide.md#development) ·
 [All documentation](docs/README.md)
 
 ## How it's built and released

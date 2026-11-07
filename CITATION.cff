@@ -9,8 +9,8 @@ authors:
 repository-code: "https://github.com/yo1am1/curio"
 url: "https://github.com/yo1am1/curio"
 license: Apache-2.0
-version: 2.0.0
-date-released: "2026-11-06"
+version: 2.1.0
+date-released: "2026-11-07"
 keywords:
   - recommendations
   - agent

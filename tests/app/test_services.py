@@ -34,6 +34,7 @@ def construction(monkeypatch, tmp_path, sample_catalog):
         ranker_path=tmp_path / "ranker.json",
         clip_model_name="fake",
         llm_configured=False,
+        agent_turn_deadline_seconds=90.0,
         images_dir=tmp_path / "images",
         query_photos_dir=tmp_path / "query_photos",
         evaluation_path=tmp_path / "evaluation.json",
@@ -186,9 +187,12 @@ def test_llm_builds_both_assistants_with_one_model_and_signer(construction, monk
     monkeypatch.setattr(service_module, "build_chat_model", build_model)
     construction.settings.llm_configured = True
     construction.settings.agent_signing_key = None
+    construction.settings.agent_turn_deadline_seconds = 1234.0
 
     services = service_module.build_services(construction.settings)
 
     build_model.assert_called_once_with(construction.settings)
     assert isinstance(services.cocktails.assistant, CocktailAssistant)
     assert services.cocktails.assistant._signer is services.fashion.assistant._signer
+    assert services.fashion.assistant.turn_deadline_seconds == 1234.0
+    assert services.cocktails.assistant.turn_deadline_seconds == 1234.0

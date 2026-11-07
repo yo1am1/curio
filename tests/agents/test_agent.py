@@ -323,3 +323,37 @@ def test_grounding_check(text, status, catalog):
 def test_negative_or_unicode_minus_prices_are_flagged(catalog):
     for text in ("Now just €-2.01!", "Now just €\u22122.01!", "Only -5 EUR"):
         assert check_grounding(text, catalog.get_many([1]), []).status == "fallback"
+
+
+def test_a_longer_turn_deadline_lets_a_slow_turn_answer(chat_model_replying, search, catalog):
+    clock = Clock()
+    search.results = [ScoredProduct(1, 0.9)]
+
+    class SlowSearch:
+        def by_text(self, *args, **kwargs):
+            clock.now += 120
+            return search.by_text(*args, **kwargs)
+
+    model = chat_model_replying({"query": "jeans"}, "The **Slim Jeans** are €29.99.")
+    assistant = ShoppingAssistant(
+        model, SlowSearch(), catalog, clock=clock, turn_deadline_seconds=600
+    )
+    reply = assistant.reply("jeans", [])
+    assert assistant.turn_deadline_seconds == 600
+    assert all(step.name != "Time budget" for step in reply.steps)
+    assert reply.grounding.status == "verified"
+
+
+def test_the_default_turn_deadline_is_unchanged(chat_model_replying, search, catalog):
+    from curio.engine import TURN_DEADLINE_SECONDS
+
+    model = chat_model_replying({"query": "jeans"})
+    assert TURN_DEADLINE_SECONDS == 90.0
+    assert ShoppingAssistant(model, search, catalog).turn_deadline_seconds == 90.0
+
+
+@pytest.mark.parametrize("seconds", [0, -5])
+def test_a_turn_deadline_must_be_positive(chat_model_replying, search, catalog, seconds):
+    model = chat_model_replying({"query": "jeans"})
+    with pytest.raises(ValueError, match="positive"):
+        ShoppingAssistant(model, search, catalog, turn_deadline_seconds=seconds)
