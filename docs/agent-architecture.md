@@ -388,6 +388,9 @@ total, the book with its rating, the drink with its alcohol status, what is miss
 - A 90-second wall-clock budget (`AGENT_TURN_DEADLINE_SECONDS`), checked before every model
   call, including the self-correction call. When it is spent the trace shows a "Time budget" step and the
   answer falls back to catalog facts.
+- At most `MAX_CONCURRENT_TURNS` turns (default 8) run at once per API process. A turn over
+  the cap is refused at once with HTTP 503 and `Retry-After: 5`, before any model call, so
+  slow models cannot take every worker thread from search and `/health`.
 - Provider failures map to safe HTTP errors (429 retry, 502 otherwise). On the
   streaming endpoint they arrive as an `error` event; provider details stay in server logs.
 

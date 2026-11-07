@@ -14,6 +14,10 @@ All notable changes to Curio are recorded here. The format follows
 - The eval relay (`evals/relay.py`) takes an optional bearer token (`RELAY_TOKEN` or
   `--token`; `run_eval` sends it as the API key) and refuses to listen on a non-loopback
   address without one.
+- Agent turns are capped per process (`MAX_CONCURRENT_TURNS`, default 8). Over the cap,
+  `/chat` and `/chat/stream` answer **503 with `Retry-After: 5`** at once (a new status for
+  these routes, documented in the OpenAPI schema) instead of queueing on the worker-thread
+  pool, which 45 slow chats used to exhaust until `/health` and search stopped answering.
 
 ### Changed
 

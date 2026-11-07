@@ -19,8 +19,9 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, ConfigDict, Field
 
-from curio.app.config import get_settings
+from curio.app.config import Settings, get_settings
 from curio.app.demo import DemoCustomer
+from curio.app.hardening import SlotStreamingResponse, TurnSlots
 from curio.app.schemas import AssistantReply, ChatRequest, Domain, TurnContext
 from curio.app.services import (
     BOOKS,
@@ -372,12 +373,20 @@ def _read_image(upload: UploadFile) -> Image.Image:
     return image
 
 
-def create_app(services: Services | None = None, *, web_dist: Path | None = None) -> FastAPI:
+def create_app(
+    services: Services | None = None,
+    *,
+    web_dist: Path | None = None,
+    settings: Settings | None = None,
+) -> FastAPI:
     """Build the app. Tests pass ready-made `services`; production builds them at startup.
 
     `web_dist` is the built React app to serve beside the API (`curio.app.web`). Production
     (no `services`) takes it from the settings (`WEB_DIST`, on unless `SERVE_WEB=false`).
+    `settings` default to the environment's; the HTTP limits always come from them.
     """
+    if settings is None:
+        settings = get_settings()
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
@@ -388,7 +397,7 @@ def create_app(services: Services | None = None, *, web_dist: Path | None = None
             app.state.services = services
             yield
             return
-        built = app.state.services = build_services(get_settings())
+        built = app.state.services = build_services(settings)
         try:
             if built.fashion is not None:
                 # Choosing the examples runs the recommenders for many customers (~10 s on the
@@ -741,30 +750,37 @@ def create_app(services: Services | None = None, *, web_dist: Path | None = None
             raise HTTPException(status_code=503, detail=CHAT_DISABLED)
         return runtime.assistant
 
-    @app.post("/chat")
+    turns = TurnSlots(settings.max_concurrent_turns)
+    busy_response = {503: {"description": "Every agent-turn slot is taken; see Retry-After."}}
+
+    @app.post("/chat", responses=busy_response)
     def chat(request: ChatRequest, services: ServicesDep) -> AssistantReply:
         """One agent turn in the requested domain. Send `decision` instead of a message to
-        answer a pending proposal."""
+        answer a pending proposal. 503 with `Retry-After` while every turn slot is taken."""
         assistant = assistant_for(services, request.domain)
         context = TurnContext.model_validate(request.model_dump(include=_CONTEXT_FIELDS))
+        slot = turns.acquire()
         try:
             if request.decision is not None:
                 return assistant.resume(request.decision, request.history, context)
             return assistant.reply(request.message, request.history, context)
         except Exception as error:
             raise _chat_error(error) from error
+        finally:
+            slot.release()
 
-    @app.post("/chat/stream")
+    @app.post("/chat/stream", responses=busy_response)
     def chat_stream(request: ChatRequest, services: ServicesDep) -> StreamingResponse:
         """The same turn as /chat, as NDJSON: one `step` event per agent step, then `reply`."""
         assistant = assistant_for(services, request.domain)
         context = TurnContext.model_validate(request.model_dump(include=_CONTEXT_FIELDS))
-        events = assistant.stream(
-            request.message, request.history, context, decision=request.decision
-        )
+        slot = turns.acquire()
 
         def lines() -> Iterator[str]:
             try:
+                events = assistant.stream(
+                    request.message, request.history, context, decision=request.decision
+                )
                 for event in events:
                     yield event.model_dump_json() + "\n"
             except Exception as error:
@@ -775,8 +791,10 @@ def create_app(services: Services | None = None, *, web_dist: Path | None = None
                     )
                     + "\n"
                 )
+            finally:
+                slot.release()
 
-        return StreamingResponse(lines(), media_type="application/x-ndjson")
+        return SlotStreamingResponse(lines(), slot, media_type="application/x-ndjson")
 
     feedback: deque[ChatFeedback] = deque(maxlen=MAX_FEEDBACK_RECORDS)
 

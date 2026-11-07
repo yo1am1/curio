@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     # Signs the agent's approval proposals. Unset: a random per-process key, so pending
     # proposals expire on restart. Set it when running several API workers.
     agent_signing_key: SecretStr | None = None
+    # Agent turns running at once, across /chat and /chat/stream. A turn over the cap gets
+    # 503 with Retry-After. Keep it well below AnyIO's 40 worker threads, which every route
+    # shares, so search and /health stay responsive while turns wait on a slow model.
+    max_concurrent_turns: int = Field(default=8, ge=1, le=32)
 
     # --- Web app ----------------------------------------------------------
     # The built React app (`npm run build` in web/). The API serves it beside its own routes

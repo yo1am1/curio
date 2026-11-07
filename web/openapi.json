@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Curio Recommendation API",
-    "version": "2.1.1"
+    "version": "3.0.0"
   },
   "paths": {
     "/health": {
@@ -1388,7 +1388,7 @@
     "/chat": {
       "post": {
         "summary": "Chat",
-        "description": "One agent turn in the requested domain. Send `decision` instead of a message to\nanswer a pending proposal.",
+        "description": "One agent turn in the requested domain. Send `decision` instead of a message to\nanswer a pending proposal. 503 with `Retry-After` while every turn slot is taken.",
         "operationId": "chat_chat_post",
         "requestBody": {
           "content": {
@@ -1410,6 +1410,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Every agent-turn slot is taken; see Retry-After."
           },
           "422": {
             "description": "Validation Error",
@@ -1447,6 +1450,9 @@
                 "schema": {}
               }
             }
+          },
+          "503": {
+            "description": "Every agent-turn slot is taken; see Retry-After."
           },
           "422": {
             "description": "Validation Error",

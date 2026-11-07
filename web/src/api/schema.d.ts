@@ -666,7 +666,7 @@ export interface paths {
     /**
      * Chat
      * @description One agent turn in the requested domain. Send `decision` instead of a message to
-     *     answer a pending proposal.
+     *     answer a pending proposal. 503 with `Retry-After` while every turn slot is taken.
      */
     post: operations["chat_chat_post"];
     delete?: never;
@@ -3216,6 +3216,13 @@ export interface operations {
           "application/json": components["schemas"]["HTTPValidationError"];
         };
       };
+      /** @description Every agent-turn slot is taken; see Retry-After. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
     };
   };
   chat_stream_chat_stream_post: {
@@ -3248,6 +3255,13 @@ export interface operations {
         content: {
           "application/json": components["schemas"]["HTTPValidationError"];
         };
+      };
+      /** @description Every agent-turn slot is taken; see Retry-After. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
     };
   };

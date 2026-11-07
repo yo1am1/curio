@@ -212,15 +212,14 @@ def _compose_services() -> dict:
 
 
 def test_compose_publishes_ports_on_loopback_only_unless_opted_in():
-    published = {
-        name: service["ports"] for name, service in _compose_services().items() if "ports" in service
-    }
+    services = _compose_services()
+    published = {name: service["ports"] for name, service in services.items() if "ports" in service}
     assert set(published) == {"demo-api", "api"}
     for ports in published.values():
         # host:port:container with the host defaulting to 127.0.0.1; CURIO_HOST opts in.
         assert ports == ["${CURIO_HOST:-127.0.0.1}:${CURIO_PORT:-8000}:8000"]
     for name in published:
-        environment = _compose_services()[name]["environment"]
+        environment = services[name]["environment"]
         assert environment["ALLOWED_HOSTS"] == "${ALLOWED_HOSTS:-localhost,127.0.0.1}"
 
 
