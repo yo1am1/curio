@@ -56,6 +56,12 @@ logger = logging.getLogger(__name__)
 # Each ChatTurn is one message; older turns rarely matter and only cost tokens.
 MAX_HISTORY_TURNS = 10
 MAX_TOOL_CALLS = 5
+# A question whose facts fail grounding twice becomes this one, without quick replies.
+FALLBACK_QUESTION = "Could you tell me a little more about what you're looking for?"
+QUESTION_REPAIR = (
+    "Not asked: the question states facts no tool returned ({issues}). Ask again without "
+    "them (name only items, prices and details from the tool results), or answer instead."
+)
 # Default wall-clock budget for one turn; checked before every model call. An app may set
 # another per engine (`turn_deadline_seconds`), e.g. for a slow model behind a relay.
 TURN_DEADLINE_SECONDS = 90.0
@@ -298,25 +304,86 @@ class AgentEngine[T]:
             messages.append(ToolMessage(content=result, tool_call_id=call_id))
             return None
         if isinstance(action, AskShopper):
+            return (yield from self._ask(turn, action, call_id, messages, started))
+        return (yield from self._propose(turn, name, call_id, action, messages, started))
+
+    def _ask(
+        self,
+        turn: Turn[T],
+        action: AskShopper,
+        call_id: str,
+        messages: list[BaseMessage],
+        started: float,
+    ) -> Iterator[AgentEvent]:
+        """Pause for the shopper's answer. The question and its quick replies are grounded
+        like an answer: a first failure goes back to the model (it may ask again or answer),
+        a second one asks a generic question without the unverified facts."""
+        # Quick replies are candidate answers, so each reads as a question of its own.
+        options = "\n".join(f"- {option.rstrip(' .!?')}?" for option in action.options)
+        report = self._toolkit.check(turn, f"{action.question}\n{options}".strip())
+        if report.status == "fallback":
+            detail = {"issues": report.issues}
+            if turn.question_issues is None:
+                turn.question_issues = report
+                yield self._record(
+                    turn,
+                    AgentStep(
+                        kind="guardrail",
+                        name="Question grounding",
+                        summary=(
+                            f"Found {len(report.issues)} unverified claims in a question; "
+                            "asking for a rewrite."
+                        ),
+                        status="error",
+                        detail=detail,
+                    ),
+                    started,
+                )
+                messages.append(
+                    ToolMessage(
+                        content=QUESTION_REPAIR.format(issues="; ".join(report.issues)),
+                        tool_call_id=call_id,
+                    )
+                )
+                return None
             yield self._record(
                 turn,
                 AgentStep(
-                    kind="approval",
-                    name="AskShopper",
-                    summary="Waiting for the shopper's answer.",
-                    status="pending",
-                    detail=action.model_dump(),
+                    kind="guardrail",
+                    name="Question grounding",
+                    summary="Question still unverified; asking a general question instead.",
+                    status="blocked",
+                    detail=detail,
                 ),
                 started,
             )
+            first = turn.question_issues
+            question = getattr(self._toolkit, "fallback_question", FALLBACK_QUESTION)
+            grounding = _with_status(first, "fallback")
+            clarification = Clarification(question=question, options=[])
             return self._reply(
-                turn,
-                action.question,
-                None,
-                status="needs_input",
-                clarification=Clarification(question=action.question, options=action.options),
+                turn, question, grounding, status="needs_input", clarification=clarification
             )
-        return (yield from self._propose(turn, name, call_id, action, messages, started))
+        if turn.question_issues is not None:
+            report = _with_status(turn.question_issues, "repaired")
+        yield self._record(
+            turn,
+            AgentStep(
+                kind="approval",
+                name="AskShopper",
+                summary="Waiting for the shopper's answer.",
+                status="pending",
+                detail=action.model_dump(),
+            ),
+            started,
+        )
+        return self._reply(
+            turn,
+            action.question,
+            report,
+            status="needs_input",
+            clarification=Clarification(question=action.question, options=action.options),
+        )
 
     def _progress(
         self, turn: Turn[T], stages: Generator[AgentStep, None, ReadOutcome], started: float

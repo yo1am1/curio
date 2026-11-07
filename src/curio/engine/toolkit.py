@@ -57,6 +57,8 @@ class Turn[T]:
     resuming: bool = False
     # Domain-owned results of this turn that are not catalog items (e.g. a planned outfit).
     extras: dict[str, Any] = field(default_factory=dict)
+    # The grounding report of a question the model had to rewrite, if any.
+    question_issues: GroundingReport | None = None
 
     def show(self, items: Iterable[T], reasons: dict[int, list[str]] | None = None) -> None:
         self.items = list(items)

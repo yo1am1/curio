@@ -1,5 +1,5 @@
-"""The thirteen false answers of the November 2026 agent audit (F1), run through the real
-assistants with a scripted model.
+"""The thirteen false answers of the November 2026 agent audit (F1) and its AskShopper probe
+(F6), run through the real assistants with a scripted model.
 
 Each false answer is written twice (the draft and the self-correction), so a caught answer
 ends as `fallback`: catalog facts replace it. Before grounding v2 every one of them was
@@ -132,3 +132,42 @@ def test_the_probes_name_what_is_wrong(chat_model_replying, search, catalog):
         "€29.99 does not match the price of Summer Dress (€24.99)",
         "€24.99 does not match the price of Slim Jeans (€29.99)",
     ]
+
+
+def test_an_unverified_question_is_asked_again_then_replaced(chat_model_replying, cocktail_catalog):
+    question = {"question": "The Mojito is alcohol-free and €2; want it?", "options": ["Yes", "No"]}
+    model = chat_model_replying(act("AskShopper", question), act("AskShopper", question, "t2"))
+    assistant = CocktailAssistant(model, cocktail_catalog, CocktailRecommender(cocktail_catalog))
+    reply = assistant.reply("I want a drink", [])
+    assert reply.status == "needs_input"
+    assert reply.text == "Could you tell me a little more about what you're looking for?"
+    assert reply.clarification.options == []
+    assert reply.grounding.status == "fallback"
+    assert [s.name for s in reply.steps][-2:] == ["Question grounding", "Question grounding"]
+
+
+def test_a_rewritten_question_is_repaired(chat_model_replying, cocktail_catalog):
+    wrong = {"question": "The Mojito is alcohol-free; want it?", "options": ["Yes", "No"]}
+    right = {"question": "Would you like the Mojito?", "options": ["Yes", "No"]}
+    model = chat_model_replying(
+        act("SearchCocktails", {"query": "mojito"}),
+        act("AskShopper", wrong, "t2"),
+        act("AskShopper", right, "t3"),
+    )
+    assistant = CocktailAssistant(model, cocktail_catalog, CocktailRecommender(cocktail_catalog))
+    reply = assistant.reply("I want a mojito", [])
+    assert reply.status == "needs_input" and reply.text == "Would you like the Mojito?"
+    assert reply.grounding.status == "repaired"
+    assert reply.grounding.issues == ["Mojito is not alcohol-free"]
+
+
+def test_a_grounded_question_carries_its_report(chat_model_replying, cocktail_catalog):
+    question = {"question": "Shall I find drinks like the Mojito?", "options": ["Yes", "No"]}
+    model = chat_model_replying(
+        act("SearchCocktails", {"query": "mojito"}), act("AskShopper", question, "t2")
+    )
+    assistant = CocktailAssistant(model, cocktail_catalog, CocktailRecommender(cocktail_catalog))
+    reply = assistant.reply("I want a mojito", [])
+    assert reply.status == "needs_input"
+    assert reply.grounding.status == "verified"
+    assert reply.grounding.counts == {"name": 1}
