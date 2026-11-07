@@ -1,7 +1,8 @@
 """Hand-written cases of the grounding corpus, the audit's probes and the labels of run texts.
 
 `WRITTEN` cases reuse the evidence of a relay or stub case (`base`, a case id) or carry their
-own (`domain` and `evidence`, whose IDs point into `PROBE_ITEMS` for probes). Each has a
+own (`domain` and `evidence`, whose IDs point into `PROBE_ITEMS` for probes). The new
+phrasings of `phrasings.py` (an overfitting check after held-out v2) carry catalog IDs. Each has a
 `label` and a `note` saying what is true or false about it.
 
 `LABELS` overrides the default `correct` label of a run text, with the reason.
@@ -11,6 +12,7 @@ from typing import Any
 
 from curio.domains.books.catalog import BookCatalog
 from curio.domains.cocktails.catalog import CocktailCatalog
+from tests.agents.grounding_corpus.phrasings import PHRASINGS, PHRASINGS_2
 from tests.conftest import book_frame, cocktail_frame
 
 # The products of tests/agents/conftest.py, as catalog rows.
@@ -553,6 +555,22 @@ WRITTEN: list[dict[str, Any]] = [
 ]
 WRITTEN += [{**case, "id": f"written/false-{n:02d}"} for n, case in enumerate(FALSE_ANSWERS, 1)]
 WRITTEN += [{**case, "id": f"written/correct-{n:02d}"} for n, case in enumerate(CORRECT_ANSWERS, 1)]
+_FIELDS_OF = {"fashion": "products", "books": "books", "cocktails": "drinks"}
+
+
+def _phrasing(case: dict[str, Any], case_id: str) -> dict[str, Any]:
+    """A case of `phrasings.py` (held-out layout) as a written case with its own evidence."""
+    evidence: dict[str, list[Any]] = {
+        "products": [], "books": [], "drinks": [], "paired": [], "amounts": [], "cited": [],
+    }  # fmt: skip
+    evidence[_FIELDS_OF[case["domain"]]] = list(case["evidence_ids"])
+    return {"id": case_id, "source": "written", "domain": case["domain"], "label": case["label"],
+            "note": case["note"], "typed": case["user"], "answer": case["answer"],
+            "evidence": evidence}  # fmt: skip
+
+
+WRITTEN += [_phrasing(case, f"written/phrasing-{n:02d}") for n, case in enumerate(PHRASINGS, 1)]
+WRITTEN += [_phrasing(case, f"written/phrasing2-{n:02d}") for n, case in enumerate(PHRASINGS_2, 1)]
 
 LABELS: dict[str, tuple[str, str]] = {
     "stub/stub-best-deal/1/1/answer": (

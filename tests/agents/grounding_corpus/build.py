@@ -23,6 +23,9 @@ label says why). Run from the repository root with the prepared data in `data/`:
     uv run python -m tests.agents.grounding_corpus.build \\
         --stub-results <dry run>/results.jsonl [--stub-results <another run>/results.jsonl] \\
         --stub-queue <the dry runs' relay queue>
+
+After editing only `written.py` or `phrasings.py`, `--written-only` keeps the committed run
+cases and rebuilds the rest (no dry runs needed).
 """
 
 import argparse
@@ -324,13 +327,24 @@ def main(argv: list[str] | None = None) -> None:
         "--relay-results", type=Path, default=ROOT / "evals/results/claude-relay-1/results.jsonl"
     )
     parser.add_argument("--relay-queue", type=Path, default=ROOT / "evals/relay_queue")
-    parser.add_argument("--stub-results", type=Path, action="append", required=True)
-    parser.add_argument("--stub-queue", type=Path, required=True)
+    parser.add_argument("--stub-results", type=Path, action="append")
+    parser.add_argument("--stub-queue", type=Path)
+    parser.add_argument(
+        "--written-only",
+        action="store_true",
+        help="keep the run cases of the committed corpus.json and rebuild only the written ones",
+    )
     args = parser.parse_args(argv)
     catalogs = load_catalogs()
-    cases = run_cases(args.relay_results, args.relay_queue, "relay")
-    for results in args.stub_results:
-        cases += run_cases(results, args.stub_queue, "stub")
+    if args.written_only:
+        committed = json.loads((HERE / "corpus.json").read_text())["cases"]
+        cases = [c for c in committed if c["source"] in ("relay", "stub")]
+    else:
+        if not args.stub_results or args.stub_queue is None:
+            parser.error("--stub-results and --stub-queue are required without --written-only")
+        cases = run_cases(args.relay_results, args.relay_queue, "relay")
+        for results in args.stub_results:
+            cases += run_cases(results, args.stub_queue, "stub")
     for case in cases:
         if (label := LABELS.get(case["id"])) is not None:
             case["label"], case["note"] = label
