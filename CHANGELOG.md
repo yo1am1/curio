@@ -6,8 +6,36 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Agent evaluation: control policies.** `python -m evals.controls --policy always-ask |
+  always-refuse | first-tool-echo` answers relay requests with a policy that does nothing
+  useful: a generic question, a refusal, or one search with the raw message followed by a
+  list of names without facts. On the frozen task set they pass 4, 0 and 0 of 61 tasks (the
+  4 are the vague requests, where asking is right); the scripted baseline passes 19.
+  Reports in `docs/evals/controls-*.md`, key numbers in `docs/evals/controls.json`, which
+  every run's report shows next to its own.
+- **16 factual-reliability tasks** (a new `factual` category, 61 tasks in all): stock and
+  sizes, a discount, a material, free shipping, a price comparison, a total, a swapped
+  price, the Mojito and an alcohol-optional egg nog for children, a Bloody Mary and Project
+  Hail Mary (famous, not in the catalogs), an egg allergy, a rating comparison, a wrong
+  rating, a page total and a delivery promise. Each needs the right fact or the not-found
+  statement, and is scored with the engine's grounding outcome.
+- **The scorer freeze.** `evals/FROZEN.json` records the scorer version and the SHA-256 of
+  `evals/tasks.yaml`, `evals/scoring.py` and `evals/tasks.py`. `run_eval --frozen` refuses
+  to run or rescore unless they match; `--rescore` with changed files needs
+  `--rescore-note`, recorded in `run.json` and the report; `--resume` refuses to mix two
+  scorers. Every run records the fingerprint in `run.json`, `summary.json` and the report.
+- Eval reports give 95 % Wilson intervals for every rate, split passed tasks into "model
+  right first time" and "passed after the engine caught and repaired a draft", and report
+  the safety rate on replies that showed cards.
+
 ### Fixed
 
+- Tests: running `tests/evals` before `tests/app` leaked the runner's turn deadline,
+  signing key and domains into the environment, and two app tests failed. The runner test
+  restores the environment, and a guard fails any eval test that leaves those variables
+  changed.
 - **Grounding v2: the check now catches the plausible false claims the November 2026 audit
   found** (all 13 of its probes had been labelled verified or not applicable). A price,
   rating, page count, year or recipe amount must match the item it is attached to (the
@@ -29,6 +57,16 @@ All notable changes to Curio are recorded here. The format follows
 
 ### Changed
 
+- **The README no longer reports "42/42 with a Claude model".** That run used the 42 tasks
+  of 2.1.0, an agent session with no model ID, and a scorer changed after the run was seen;
+  two do-nothing policies passed 17 of the 45 tasks. docs/agent-eval.md says what it did and
+  did not show. A frozen rerun with a real model is pending.
+- Eval tasks that a refusal, a question or a raw search could pass now need a useful
+  answer: clear requests expect cards (`min_items`), refusals must give their reason, traps
+  must correct the shopper, catalog gaps must search and name the item, book answers must
+  state a checked fact (`checked_facts`), and evening answers must label a drink's alcohol
+  status. An argument check now fails when its tool was not called, unless marked
+  `optional`.
 - `GroundingReport` has a new `counts` field (checked facts by kind; existing fields are
   unchanged), and `verified` means at least one fact was checked. The badge says what was
   checked ("Checked 3 prices and 2 names against the catalog") instead of "Prices verified
@@ -213,7 +251,7 @@ and an evaluation task ([docs/agent-eval.md](docs/agent-eval.md#app-issues-found
   so a model without an API key in the environment can be evaluated by an agent answering
   each call.
 - `AGENT_TURN_DEADLINE_SECONDS` sets the agent's turn deadline (default 90 s, unchanged).
-- First results ([docs/agent-eval.md](docs/agent-eval.md#results), reports in
+- First results ([docs/agent-eval.md](docs/agent-eval.md#what-the-first-run-did-and-did-not-show), reports in
   `docs/evals/`): a Claude model answering as the chat model passed 42/42 tasks with every
   answer grounded on the first pass, 15/15 safety checks and 4/4 injections resisted; the
   scripted baseline passed 29/42. Summarised in the README.

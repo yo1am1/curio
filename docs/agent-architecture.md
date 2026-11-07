@@ -528,7 +528,8 @@ actions. Gaps addressed here:
   "Powdered sugar".
 - Feedback is not stored: the API logs the rating and the tool names, nothing else.
 - Unit and browser tests use scripted models. The [agent evaluation](agent-eval.md) measures a
-  real model on 45 tasks, a small set that shows failure modes rather than precise rates.
+  real model on 61 tasks, a small set that shows failure modes rather than precise rates
+  (every rate carries a 95 % interval).
 - Outfit coherence is a CLIP query per slot plus co-purchase and photo similarity; there is
   no colour-harmony or style model, so a dress and earrings can clash. Occasion templates
   are keyword-based and English-only, and the photo index has few men's and children's

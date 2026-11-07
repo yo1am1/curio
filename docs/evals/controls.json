@@ -1,0 +1,992 @@
+{
+ "control-always-ask": {
+  "tasks": {
+   "selected": 61,
+   "scored": 61,
+   "passed": 4,
+   "errors": [],
+   "skipped": {},
+   "not_run": []
+  },
+  "task_success": {
+   "passed": 4,
+   "total": 61,
+   "rate": 0.0656,
+   "ci95": [
+    0.0258,
+    0.1568
+   ]
+  },
+  "by_category": {
+   "adversarial": {
+    "passed": 0,
+    "total": 21,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.1546
+    ]
+   },
+   "approval": {
+    "passed": 0,
+    "total": 3,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.5615
+    ]
+   },
+   "clarification": {
+    "passed": 4,
+    "total": 4,
+    "rate": 1.0,
+    "ci95": [
+     0.5101,
+     1.0
+    ]
+   },
+   "decision": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "factual": {
+    "passed": 0,
+    "total": 16,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.1936
+    ]
+   },
+   "follow_up": {
+    "passed": 0,
+    "total": 6,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.3903
+    ]
+   },
+   "straightforward": {
+    "passed": 0,
+    "total": 7,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.3543
+    ]
+   }
+  },
+  "by_tag": {
+   "alcohol_status": {
+    "passed": 0,
+    "total": 2,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.6576
+    ]
+   },
+   "arithmetic": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "catalog_gap": {
+    "passed": 0,
+    "total": 6,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.3903
+    ]
+   },
+   "children": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "factual": {
+    "passed": 0,
+    "total": 16,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.1936
+    ]
+   },
+   "injection": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "price_trap": {
+    "passed": 0,
+    "total": 7,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.3543
+    ]
+   },
+   "safety": {
+    "passed": 0,
+    "total": 15,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.2039
+    ]
+   },
+   "stock": {
+    "passed": 0,
+    "total": 3,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.5615
+    ]
+   }
+  },
+  "reliability": {
+   "all": {
+    "tasks": 61,
+    "passed_first_time": {
+     "passed": 4,
+     "total": 61,
+     "rate": 0.0656,
+     "ci95": [
+      0.0258,
+      0.1568
+     ]
+    },
+    "passed_after_engine_repair": {
+     "passed": 0,
+     "total": 61,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0592
+     ]
+    },
+    "engine_caught": {
+     "passed": 0,
+     "total": 61,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0592
+     ]
+    },
+    "passed_after_repair_ids": []
+   },
+   "factual": {
+    "tasks": 16,
+    "passed_first_time": {
+     "passed": 0,
+     "total": 16,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.1936
+     ]
+    },
+    "passed_after_engine_repair": {
+     "passed": 0,
+     "total": 16,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.1936
+     ]
+    },
+    "engine_caught": {
+     "passed": 0,
+     "total": 16,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.1936
+     ]
+    },
+    "passed_after_repair_ids": []
+   },
+   "turns": {
+    "checked": 64,
+    "first_pass": {
+     "passed": 64,
+     "total": 64,
+     "rate": 1.0,
+     "ci95": [
+      0.9434,
+      1.0
+     ]
+    },
+    "caught_and_repaired": {
+     "passed": 0,
+     "total": 64,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0566
+     ]
+    },
+    "caught_then_fallback": {
+     "passed": 0,
+     "total": 64,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0566
+     ]
+    }
+   }
+  },
+  "safety": {
+   "passed": 22,
+   "total": 22,
+   "rate": 1.0,
+   "ci95": [
+    0.8513,
+    1.0
+   ]
+  },
+  "safety_with_cards": {
+   "passed": 0,
+   "total": 0,
+   "rate": null,
+   "ci95": null
+  },
+  "injection_resistance": {
+   "passed": 0,
+   "total": 4,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.4899
+   ]
+  },
+  "clarification": {
+   "fp": 49,
+   "tp": 4,
+   "precision": 0.0755,
+   "recall": 1.0,
+   "precision_ci95": [
+    0.0297,
+    0.1786
+   ],
+   "recall_ci95": [
+    0.5101,
+    1.0
+   ]
+  },
+  "tool_selection_accuracy": {
+   "passed": 10,
+   "total": 38,
+   "rate": 0.2632,
+   "ci95": [
+    0.1497,
+    0.4201
+   ]
+  },
+  "argument_accuracy": {
+   "passed": 0,
+   "total": 19,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.1682
+   ]
+  },
+  "run": {
+   "run_name": "control-always-ask",
+   "mode": "relay",
+   "model": "control-always-ask",
+   "commit": "13027bb",
+   "scorer": {
+    "scorer_version": "3.0.0",
+    "files": {
+     "evals/tasks.yaml": "58c5cda676a879cc060cc9bbdc08d65bdc7f9d5100e2a9a634549a5b56115f8c",
+     "evals/scoring.py": "73c457b7f64876683119a5c04860983593fc40205f5b8b91c74ddcaaf6af69c0",
+     "evals/tasks.py": "f0510a7187b9c7bf774e855c5f4928fbcf14410464949d906cf608bb5e67f512"
+    }
+   }
+  }
+ },
+ "control-always-refuse": {
+  "tasks": {
+   "selected": 61,
+   "scored": 61,
+   "passed": 0,
+   "errors": [],
+   "skipped": {},
+   "not_run": []
+  },
+  "task_success": {
+   "passed": 0,
+   "total": 61,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.0592
+   ]
+  },
+  "by_category": {
+   "adversarial": {
+    "passed": 0,
+    "total": 21,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.1546
+    ]
+   },
+   "approval": {
+    "passed": 0,
+    "total": 3,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.5615
+    ]
+   },
+   "clarification": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "decision": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "factual": {
+    "passed": 0,
+    "total": 16,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.1936
+    ]
+   },
+   "follow_up": {
+    "passed": 0,
+    "total": 6,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.3903
+    ]
+   },
+   "straightforward": {
+    "passed": 0,
+    "total": 7,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.3543
+    ]
+   }
+  },
+  "by_tag": {
+   "alcohol_status": {
+    "passed": 0,
+    "total": 2,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.6576
+    ]
+   },
+   "arithmetic": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "catalog_gap": {
+    "passed": 0,
+    "total": 6,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.3903
+    ]
+   },
+   "children": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "factual": {
+    "passed": 0,
+    "total": 16,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.1936
+    ]
+   },
+   "injection": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "price_trap": {
+    "passed": 0,
+    "total": 7,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.3543
+    ]
+   },
+   "safety": {
+    "passed": 0,
+    "total": 15,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.2039
+    ]
+   },
+   "stock": {
+    "passed": 0,
+    "total": 3,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.5615
+    ]
+   }
+  },
+  "reliability": {
+   "all": {
+    "tasks": 61,
+    "passed_first_time": {
+     "passed": 0,
+     "total": 61,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0592
+     ]
+    },
+    "passed_after_engine_repair": {
+     "passed": 0,
+     "total": 61,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0592
+     ]
+    },
+    "engine_caught": {
+     "passed": 0,
+     "total": 61,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0592
+     ]
+    },
+    "passed_after_repair_ids": []
+   },
+   "factual": {
+    "tasks": 16,
+    "passed_first_time": {
+     "passed": 0,
+     "total": 16,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.1936
+     ]
+    },
+    "passed_after_engine_repair": {
+     "passed": 0,
+     "total": 16,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.1936
+     ]
+    },
+    "engine_caught": {
+     "passed": 0,
+     "total": 16,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.1936
+     ]
+    },
+    "passed_after_repair_ids": []
+   },
+   "turns": {
+    "checked": 64,
+    "first_pass": {
+     "passed": 64,
+     "total": 64,
+     "rate": 1.0,
+     "ci95": [
+      0.9434,
+      1.0
+     ]
+    },
+    "caught_and_repaired": {
+     "passed": 0,
+     "total": 64,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0566
+     ]
+    },
+    "caught_then_fallback": {
+     "passed": 0,
+     "total": 64,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0566
+     ]
+    }
+   }
+  },
+  "safety": {
+   "passed": 22,
+   "total": 22,
+   "rate": 1.0,
+   "ci95": [
+    0.8513,
+    1.0
+   ]
+  },
+  "safety_with_cards": {
+   "passed": 0,
+   "total": 0,
+   "rate": null,
+   "ci95": null
+  },
+  "injection_resistance": {
+   "passed": 0,
+   "total": 4,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.4899
+   ]
+  },
+  "clarification": {
+   "tn": 49,
+   "fn": 4,
+   "precision": null,
+   "recall": 0.0,
+   "precision_ci95": null,
+   "recall_ci95": [
+    0.0,
+    0.4899
+   ]
+  },
+  "tool_selection_accuracy": {
+   "passed": 6,
+   "total": 38,
+   "rate": 0.1579,
+   "ci95": [
+    0.0744,
+    0.3042
+   ]
+  },
+  "argument_accuracy": {
+   "passed": 0,
+   "total": 19,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.1682
+   ]
+  },
+  "run": {
+   "run_name": "control-always-refuse",
+   "mode": "relay",
+   "model": "control-always-refuse",
+   "commit": "13027bb",
+   "scorer": {
+    "scorer_version": "3.0.0",
+    "files": {
+     "evals/tasks.yaml": "58c5cda676a879cc060cc9bbdc08d65bdc7f9d5100e2a9a634549a5b56115f8c",
+     "evals/scoring.py": "73c457b7f64876683119a5c04860983593fc40205f5b8b91c74ddcaaf6af69c0",
+     "evals/tasks.py": "f0510a7187b9c7bf774e855c5f4928fbcf14410464949d906cf608bb5e67f512"
+    }
+   }
+  }
+ },
+ "control-first-tool-echo": {
+  "tasks": {
+   "selected": 61,
+   "scored": 61,
+   "passed": 0,
+   "errors": [],
+   "skipped": {},
+   "not_run": []
+  },
+  "task_success": {
+   "passed": 0,
+   "total": 61,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.0592
+   ]
+  },
+  "by_category": {
+   "adversarial": {
+    "passed": 0,
+    "total": 21,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.1546
+    ]
+   },
+   "approval": {
+    "passed": 0,
+    "total": 3,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.5615
+    ]
+   },
+   "clarification": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "decision": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "factual": {
+    "passed": 0,
+    "total": 16,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.1936
+    ]
+   },
+   "follow_up": {
+    "passed": 0,
+    "total": 6,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.3903
+    ]
+   },
+   "straightforward": {
+    "passed": 0,
+    "total": 7,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.3543
+    ]
+   }
+  },
+  "by_tag": {
+   "alcohol_status": {
+    "passed": 0,
+    "total": 2,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.6576
+    ]
+   },
+   "arithmetic": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "catalog_gap": {
+    "passed": 0,
+    "total": 6,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.3903
+    ]
+   },
+   "children": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "factual": {
+    "passed": 0,
+    "total": 16,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.1936
+    ]
+   },
+   "injection": {
+    "passed": 0,
+    "total": 4,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.4899
+    ]
+   },
+   "price_trap": {
+    "passed": 0,
+    "total": 7,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.3543
+    ]
+   },
+   "safety": {
+    "passed": 0,
+    "total": 15,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.2039
+    ]
+   },
+   "stock": {
+    "passed": 0,
+    "total": 3,
+    "rate": 0.0,
+    "ci95": [
+     0.0,
+     0.5615
+    ]
+   }
+  },
+  "reliability": {
+   "all": {
+    "tasks": 61,
+    "passed_first_time": {
+     "passed": 0,
+     "total": 61,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0592
+     ]
+    },
+    "passed_after_engine_repair": {
+     "passed": 0,
+     "total": 61,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0592
+     ]
+    },
+    "engine_caught": {
+     "passed": 1,
+     "total": 61,
+     "rate": 0.0164,
+     "ci95": [
+      0.0029,
+      0.0872
+     ]
+    },
+    "passed_after_repair_ids": []
+   },
+   "factual": {
+    "tasks": 16,
+    "passed_first_time": {
+     "passed": 0,
+     "total": 16,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.1936
+     ]
+    },
+    "passed_after_engine_repair": {
+     "passed": 0,
+     "total": 16,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.1936
+     ]
+    },
+    "engine_caught": {
+     "passed": 1,
+     "total": 16,
+     "rate": 0.0625,
+     "ci95": [
+      0.0111,
+      0.2833
+     ]
+    },
+    "passed_after_repair_ids": []
+   },
+   "turns": {
+    "checked": 64,
+    "first_pass": {
+     "passed": 63,
+     "total": 64,
+     "rate": 0.9844,
+     "ci95": [
+      0.9167,
+      0.9972
+     ]
+    },
+    "caught_and_repaired": {
+     "passed": 0,
+     "total": 64,
+     "rate": 0.0,
+     "ci95": [
+      0.0,
+      0.0566
+     ]
+    },
+    "caught_then_fallback": {
+     "passed": 1,
+     "total": 64,
+     "rate": 0.0156,
+     "ci95": [
+      0.0028,
+      0.0833
+     ]
+    }
+   }
+  },
+  "safety": {
+   "passed": 12,
+   "total": 22,
+   "rate": 0.5455,
+   "ci95": [
+    0.3466,
+    0.7308
+   ]
+  },
+  "safety_with_cards": {
+   "passed": 9,
+   "total": 19,
+   "rate": 0.4737,
+   "ci95": [
+    0.2733,
+    0.6829
+   ]
+  },
+  "injection_resistance": {
+   "passed": 0,
+   "total": 4,
+   "rate": 0.0,
+   "ci95": [
+    0.0,
+    0.4899
+   ]
+  },
+  "clarification": {
+   "tn": 49,
+   "fn": 4,
+   "precision": null,
+   "recall": 0.0,
+   "precision_ci95": null,
+   "recall_ci95": [
+    0.0,
+    0.4899
+   ]
+  },
+  "tool_selection_accuracy": {
+   "passed": 30,
+   "total": 38,
+   "rate": 0.7895,
+   "ci95": [
+    0.6365,
+    0.8893
+   ]
+  },
+  "argument_accuracy": {
+   "passed": 3,
+   "total": 24,
+   "rate": 0.125,
+   "ci95": [
+    0.0434,
+    0.31
+   ]
+  },
+  "run": {
+   "run_name": "control-first-tool-echo",
+   "mode": "relay",
+   "model": "control-first-tool-echo",
+   "commit": "13027bb",
+   "scorer": {
+    "scorer_version": "3.0.0",
+    "files": {
+     "evals/tasks.yaml": "58c5cda676a879cc060cc9bbdc08d65bdc7f9d5100e2a9a634549a5b56115f8c",
+     "evals/scoring.py": "73c457b7f64876683119a5c04860983593fc40205f5b8b91c74ddcaaf6af69c0",
+     "evals/tasks.py": "f0510a7187b9c7bf774e855c5f4928fbcf14410464949d906cf608bb5e67f512"
+    }
+   }
+  }
+ }
+}

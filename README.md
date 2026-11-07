@@ -90,26 +90,26 @@ In the chat screenshots the replies come from the scripted test model in
 trace, checks and approvals are the real system.
 [How the agent works](docs/agent-architecture.md).
 
-### Evaluated with a real model
+### Evaluated with a real model: frozen rerun pending
 
-An [agent evaluation](docs/agent-eval.md) runs 45 tasks (53 turns) through the real `/chat`
+An [agent evaluation](docs/agent-eval.md) runs 61 tasks (69 turns) through the real `/chat`
 API: plain requests, follow-ups, vague requests, saves that need approval, prompt
-injections, catalog gaps, price traps and safety cases such as a pregnant or underage
-drinker. Each trace is scored automatically. The first run, on the 42 tasks of 2.1.0:
+injections, catalog gaps, price traps, safety cases such as a pregnant or underage
+drinker, and 16 questions of fact built to tempt the model (stock, discounts, materials,
+shipping, a famous item the catalog lacks, allergens, totals, drinks whose alcohol is
+optional). Each trace is scored automatically, with 95 % intervals, and passes the engine
+repaired are counted apart from answers right the first time.
 
-| | Claude, as the chat model | Scripted baseline |
-|---|---|---|
-| Tasks passed | **42/42** | 29/42 |
-| Grounding verified on the first pass | 100 % | 97 % |
-| Nothing claimed saved before approval | 39/39 turns | 40/40 turns |
-| Safety checks · injections resisted | 15/15 · 4/4 | 12/15 · 4/4 |
-
-The model answered through a file relay, so latency is not measured, and 42 tasks are a
-small set: the [results and limits](docs/agent-eval.md#results) say how the score was
-reached. The grounding row was measured with the check before grounding v2, which passed
-all 13 false answers of the November 2026 audit; v2 flags none of that run's answers.
-Reading its transcripts found three app issues, fixed in 2.1.1 with a task each: a driver's
-date night planned as a cosy night in, a men's sweater's look-alikes from
+There is no current model result. The first run's "42/42 with a Claude model" was weak
+evidence: two do-nothing bots passed 17 of those 45 tasks, the scorer was loosened after
+the run was seen, and no task tested the cases where grounding fails. The tasks and scorer
+have been rebuilt and frozen (`evals/FROZEN.json`), and three control policies now score
+0 to 4 of 61: always asking a question passes only the four vague requests, and refusing
+or echoing one search passes none. A rerun with a real model on the frozen files is
+pending; its result will be reported here next to the controls
+([what the first run did and did not show](docs/agent-eval.md#what-the-first-run-did-and-did-not-show)).
+Reading the first run's transcripts did find three app issues, fixed in 2.1.1 with a task
+each: a driver's date night planned as a cosy night in, a men's sweater's look-alikes from
 Ladieswear, and a dollar budget silently read as euros. Any provider runs the same tasks
 with one command.
 
@@ -270,11 +270,12 @@ Books use TF-IDF search and item-item collaborative filtering on goodbooks-10k r
 Cocktails, books and the pairing need no model and no network call to serve. Every dataset
 is downloaded from a pinned commit and checked by SHA-256.
 
-Tests: about 1,570 offline Python tests, 63 Vitest tests of the web app, and 85 end-to-end
+Tests: about 1,860 offline Python tests, 63 Vitest tests of the web app, and 85 end-to-end
 tests that run the real API and the React app in Chromium on the real data, with a scripted
 LLM. An [agent evaluation](docs/agent-eval.md)
-measures a real model instead: 45 tasks over the four domains, scored on tool choice,
-arguments, grounding, approvals, clarifying questions, safety and prompt injection. It
+measures a real model instead: 61 tasks over the four domains, scored on tool choice,
+arguments, grounding, approvals, clarifying questions, safety, prompt injection and
+factual questions, next to three control policies, on a frozen task file and scorer. It
 works with any OpenAI-compatible or Anthropic provider, or through a file relay for a model
 without an API key.
 
