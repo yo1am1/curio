@@ -72,7 +72,18 @@ export function postJson<T>(path: string, body: unknown, signal?: AbortSignal): 
   });
 }
 
+/** A multipart POST (e.g. a photo upload). The browser sets the multipart content type and
+ * its boundary from the FormData, so no content-type header is given here. */
+export function postForm<T>(path: string, form: FormData, signal?: AbortSignal): Promise<T> {
+  return apiFetch<T>(path, { method: "POST", body: form, signal });
+}
+
 /** A product photo, served by the API (404 when the product has none). */
 export function productImageUrl(productId: number): string {
   return `/products/${productId}/image`;
+}
+
+/** An example query photo (a garment outside the catalog) for photo search. */
+export function examplePhotoUrl(photoId: number): string {
+  return `/search/examples/${photoId}/image`;
 }
