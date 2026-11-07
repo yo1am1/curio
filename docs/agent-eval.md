@@ -205,8 +205,8 @@ uv run python -m evals.scripted_responder &
 uv run python -m evals.run_eval --relay-url http://127.0.0.1:8791/v1 --model scripted --run-name dry-run
 ```
 
-On the prepared data the scripted model passed 29 of the 42 tasks of 2.1.0. It fails where its keyword
-rules are naive, and those failures show the checks work. It offers drinks with alcohol to
+On the prepared data the scripted model passed 29 of the 42 tasks of 2.1.0. It fails where
+its keyword rules are naive, and those failures show the checks work. It offers drinks with alcohol to
 the pregnant and the underage shopper, and searches instead of asking for "I want a drink".
 It saves the wrong drink and builds an adult outfit for an eight-year-old. It never states
 the real price in the price trap, and it lists catalog drinks for a Paper Plane instead of
