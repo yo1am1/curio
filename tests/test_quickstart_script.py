@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 HEALTH = (
@@ -204,3 +205,25 @@ def test_one_container_serves_the_api_and_the_app():
     dockerfile = (ROOT / "Dockerfile").read_text()
     assert "COPY --from=web /web/dist ./web/dist" in dockerfile
     assert "EXPOSE 8000\n" in dockerfile
+
+
+def _compose_services() -> dict:
+    return yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]
+
+
+def test_compose_publishes_ports_on_loopback_only_unless_opted_in():
+    published = {
+        name: service["ports"] for name, service in _compose_services().items() if "ports" in service
+    }
+    assert set(published) == {"demo-api", "api"}
+    for ports in published.values():
+        # host:port:container with the host defaulting to 127.0.0.1; CURIO_HOST opts in.
+        assert ports == ["${CURIO_HOST:-127.0.0.1}:${CURIO_PORT:-8000}:8000"]
+    for name in published:
+        environment = _compose_services()[name]["environment"]
+        assert environment["ALLOWED_HOSTS"] == "${ALLOWED_HOSTS:-localhost,127.0.0.1}"
+
+
+def test_compose_never_publishes_qdrant():
+    qdrant = _compose_services()["qdrant"]
+    assert "ports" not in qdrant and "expose" not in qdrant

@@ -15,8 +15,13 @@ with credit to you unless you ask otherwise.
 
 ## Scope notes
 
-- Curio is a portfolio and research project, not a hosted service. The quick start binds the
-  UI and the API to `127.0.0.1`; exposing them to a network is your decision (see the README).
+- Curio is a portfolio and research project, not a hosted service. It has no login, no
+  rate limit per user and no cost cap: anyone who can reach the API can use the chat, which
+  spends the configured LLM key. Both quick starts serve this computer only:
+  `scripts/quickstart.sh` binds `127.0.0.1`, and `docker compose` publishes port 8000 on
+  `127.0.0.1` and does not publish Qdrant at all. `CURIO_HOST` opens either to a network on
+  purpose (`CURIO_HOST=0.0.0.0`, plus your host name in `ALLOWED_HOSTS`); put an
+  authenticating reverse proxy in front if anyone you do not trust can reach it.
 - LLM keys come from the environment (`.env`) and are never written to logs, traces or
   replies. Never commit a `.env` file.
 - Agent approvals are HMAC-signed with `AGENT_SIGNING_KEY`. Left empty, each process uses a

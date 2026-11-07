@@ -224,8 +224,9 @@ Both prepare the cocktail recipes (a checksum-verified ~400 KB download) and goo
 (~150 MB, under a minute) on the first run. For cocktails only, skip the books with
 `DEMO_BOOKS=0` (Docker) or `CURIO_BOOKS=0` (uv). Either way one server runs the API and the
 web app: open http://localhost:8000. `scripts/quickstart.sh` builds the web app first when
-npm (Node 22) is installed. The quick start serves this computer only; `CURIO_HOST=0.0.0.0`
-opens it to your network.
+npm (Node 22) is installed. Both quick starts serve this computer only (Docker publishes
+port 8000 on 127.0.0.1); `CURIO_HOST=0.0.0.0` opens them to your network, and
+[SECURITY.md](SECURITY.md) says what that exposes.
 
 Search and recommendations work without an LLM. Chat needs one: copy `.env.example` to
 `.env` and set `LLM_MODEL` (plus `LLM_API_KEY` / `LLM_BASE_URL`). The Docker demo can also

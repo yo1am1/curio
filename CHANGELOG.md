@@ -6,6 +6,12 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- `docker compose` publishes port 8000 on `127.0.0.1` only, as `scripts/quickstart.sh`
+  already did. `CURIO_HOST` (and `CURIO_PORT`) opt in to another address; Qdrant (no API key)
+  is no longer published at all, since only the API needs it on the compose network.
+
 ### Changed
 
 - CI: a "Docker image" workflow builds and smoke-tests the image on pull requests that can
