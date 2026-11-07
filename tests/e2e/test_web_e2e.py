@@ -1,7 +1,10 @@
 """The React app (web/) end to end: the real API serving the built app, the scripted LLM and
 Chromium. Covers the landing on Plan my evening, a plan and a swap, a fashion chat turn with
-its step trace and grounding badge, an approval narrowed before approving, and a book's drink
-pairing. Screenshots go to the artifacts folder as `web-*.png`.
+its step trace and grounding badge, an approval narrowed before approving, a book's drink
+pairing, and the browse pages: the fashion feed and its strategies, description and photo
+search, product connections, model quality, recipe search, "What can I make?", book search,
+"Because you liked…", browse by mood, the reading list's cocktail and the Compare dialogs.
+Screenshots go to the artifacts folder as `web-*.png`.
 
 The API serves `web/dist` itself (`curio.app.web`), so this reuses the session's API. The
 build is made with `npm run build` when `web/dist` is missing and `web/node_modules` exists;
@@ -67,14 +70,36 @@ class Web:
         expect(self.page.get_by_test_id("assistant-turn")).to_have_count(turns + 1, timeout=120_000)
 
     def photos(self) -> None:
+        """Wait for the photos in view (lazy photos below the fold load when scrolled to)."""
         self.page.wait_for_function(
             """() => [...document.querySelectorAll('img')]
-                .filter(i => i.offsetParent !== null).every(i => i.complete)""",
+                .filter(i => {
+                    const box = i.getBoundingClientRect();
+                    return i.offsetParent !== null && box.bottom > 0
+                        && box.top < window.innerHeight;
+                })
+                .every(i => i.complete)""",
             timeout=60_000,
         )
 
+    def scroll_through(self) -> None:
+        """Bring every lazy photo into view once, then return to the top."""
+        self.page.evaluate(
+            """async () => {
+                const step = window.innerHeight * 0.8;
+                for (let y = 0; y < document.documentElement.scrollHeight; y += step) {
+                    window.scrollTo(0, y);
+                    await new Promise((r) => setTimeout(r, 150));
+                }
+            }"""
+        )
+        self.photos()
+        self.page.evaluate("window.scrollTo(0, 0)")
+
     def shot(self, name: str, *, full_page: bool = False) -> None:
         self.page.wait_for_timeout(600)  # let entrance animations settle
+        if full_page:
+            self.scroll_through()
         self.photos()
         self.page.screenshot(path=self.artifacts / f"web-{name}.png", full_page=full_page)
 
@@ -114,12 +139,28 @@ def test_a_visit_lands_on_plan_my_evening(web):
     expect(switch.get_by_role("link", name="Evening")).to_have_attribute("aria-current", "page")
     expect(web.page.get_by_text("Pick an occasion above to see a plan.")).to_be_visible()
     web.shot("01-landing")
-    # The switch routes per domain, and a deep link opens its page.
-    switch.get_by_role("link", name="Books").click()
-    expect(web.page).to_have_url(re.compile(r"/ask/books$"))
-    expect(web.page.get_by_role("heading", name="Find your next great read.")).to_be_visible()
+    # The switch opens each domain on its main page, with the domain's pages beside its chat.
+    for label, path, heading in (
+        ("Books", "/reading", "Books"),
+        ("Cocktails", "/drinks", "Cocktails"),
+        ("Fashion", "/fashion", "For you"),
+    ):
+        switch.get_by_role("link", name=label).click()
+        expect(web.page).to_have_url(re.compile(rf"{path}$"))
+        expect(web.page.get_by_role("heading", name=heading, level=1)).to_be_visible()
+        pages = web.page.get_by_role("navigation", name=f"{label} pages")
+        expect(pages.get_by_role("link", name="Ask Curio")).to_be_visible()
+    # A deep link opens its page, also after a reload (the API's SPA fallback).
     web.open("/ask/cocktails")
     expect(web.page.get_by_role("heading", name="Mix something new tonight.")).to_be_visible()
+    for path, heading in (
+        ("/reading/moods", "Books"),
+        ("/drinks/pantry", "Cocktails"),
+        ("/fashion/quality", "Model quality"),
+    ):
+        web.open(path)
+        web.page.reload()
+        expect(web.page.get_by_role("heading", name=heading, level=1)).to_be_visible()
 
 
 @pytest.mark.skipif(not BOOKS_READY, reason="Books or cocktails not prepared")
@@ -249,7 +290,19 @@ def test_pair_a_drink_with_a_book(web):
 
 @pytest.mark.skipif(not BOOKS_READY, reason="Books or cocktails not prepared")
 def test_phone_layouts_do_not_scroll_sideways(web_phone):
-    for path, name in (("/evening", "10-phone-evening"), ("/ask/fashion", "11-phone-fashion")):
+    for path, name in (
+        ("/evening", "10-phone-evening"),
+        ("/ask/fashion", "11-phone-fashion"),
+        ("/fashion", "30-phone-for-you"),
+        ("/fashion/discover", "31-phone-discover"),
+        ("/fashion/connections", "32-phone-connections"),
+        ("/fashion/quality", "33-phone-quality"),
+        ("/drinks", "34-phone-cocktails"),
+        ("/drinks/pantry", "35-phone-pantry"),
+        ("/reading", "36-phone-books"),
+        ("/reading/because", "37-phone-because"),
+        ("/reading/moods", "38-phone-moods"),
+    ):
         web_phone.open(path)
         expect(web_phone.page.get_by_role("navigation", name="Catalog")).to_be_visible()
         assert web_phone.no_horizontal_scroll(), path
@@ -260,3 +313,226 @@ def test_phone_layouts_do_not_scroll_sideways(web_phone):
     expect(web_phone.page.get_by_test_id("evening-plan")).to_be_visible(timeout=120_000)
     assert web_phone.no_horizontal_scroll()
     web_phone.shot("12-phone-evening-plan", full_page=True)
+
+
+# --- Browse pages ------------------------------------------------------------------------
+
+
+def results(web: Web, title: str):
+    """The results section headed `title`, once its cards are there."""
+    section = web.page.get_by_role("region", name=title)
+    expect(section).to_be_visible(timeout=60_000)
+    expect(section).to_have_attribute("aria-busy", "false", timeout=60_000)
+    return section
+
+
+def test_fashion_feed_switches_strategy_with_evidence(web):
+    with web.page.expect_response(re.compile(r"/users/\d+/recommendations\?strategy=")) as first:
+        web.open("/fashion")
+    assert first.value.ok
+    expect(web.page.get_by_role("heading", name="For you", level=1)).to_be_visible()
+    shopper = web.page.get_by_role("combobox", name="Shopping history")
+    expect(shopper).to_contain_text("#")
+    feed = results(web, "Personalized ranking")
+    expect(feed.get_by_test_id("product-card")).to_have_count(12)
+    web.shot("20-for-you", full_page=True)
+
+    with web.page.expect_response(re.compile(r"strategy=repeat")) as repeat:
+        web.page.get_by_role("radio", name="Buy again").click()
+    assert repeat.value.ok
+    feed = results(web, "Buy again")
+    card = feed.get_by_test_id("product-card").first
+    expect(card).to_contain_text("Buy again: last purchased on")
+    card.get_by_role("button", name="Why this pick").click()
+    expect(card.get_by_text(re.compile(r"Ranking score: -?\d"))).to_be_visible()
+    # The explanation, and Model quality linked from it (outside the navigation).
+    web.page.get_by_role("button", name="How picks are chosen").click()
+    web.page.get_by_role("link", name=re.compile("How each approach scores")).click()
+    expect(web.page).to_have_url(re.compile(r"/fashion/quality$"))
+    expect(web.page.get_by_role("heading", name="Model quality", level=1)).to_be_visible()
+    expect(web.page.get_by_role("table")).to_contain_text("Buy again + best-sellers")
+    expect(web.page.get_by_role("img", name=re.compile("MAP@12 by strategy"))).to_be_visible()
+    web.shot("21-model-quality", full_page=True)
+
+
+def test_describe_a_piece(web):
+    web.open("/fashion/discover")
+    with web.page.expect_request(lambda r: r.url.endswith("/search/text")) as request:
+        web.page.get_by_role("button", name="white sneakers").click()
+    assert request.value.post_data_json == {"query": "white sneakers", "top_k": 9, "section": None}
+    found = results(web, "Matching pieces")
+    cards = found.get_by_test_id("product-card")
+    expect(cards).to_have_count(9)
+    assert any("Sneakers" in text for text in cards.all_inner_texts())
+    # A filter applies at once to the search on screen.
+    with web.page.expect_request(lambda r: r.url.endswith("/search/text")) as request:
+        web.page.get_by_label("Section").select_option("Menswear")
+    assert request.value.post_data_json["section"] == "Menswear"
+    expect(results(web, "Matching pieces").get_by_test_id("product-card").first).to_be_visible()
+    web.shot("22-discover-text", full_page=True)
+
+
+def test_search_with_an_example_photo(web):
+    web.open("/fashion/discover")
+    web.page.get_by_role("radio", name="Photo").click()
+    examples = web.page.get_by_role("list", name="Example photos").get_by_role("button")
+    expect(examples.first).to_be_visible()
+    with web.page.expect_request(lambda r: "/search/image" in r.url) as request:
+        examples.first.click()
+    upload = request.value
+    assert upload.method == "POST"
+    assert upload.headers["content-type"].startswith("multipart/form-data; boundary=")
+    found = results(web, "Visually similar pieces")
+    expect(found.get_by_test_id("product-card")).to_have_count(9)
+    expect(web.page.get_by_text("Your photo")).to_be_visible()
+    web.shot("23-discover-photo", full_page=True)
+
+
+def test_connections_graph_opens_a_product(web):
+    web.open("/fashion/connections")
+    nodes = web.page.get_by_test_id("graph-node")
+    expect(nodes.first).to_be_visible(timeout=60_000)
+    assert nodes.count() >= 3
+    neighbor = web.page.locator('[data-testid="graph-node"][data-kind="product"]:not([data-focus])')
+    expect(neighbor.first).to_be_visible()
+    neighbor.first.hover()
+    web.page.wait_for_timeout(500)
+    web.shot("24-connections")
+    label = neighbor.first.get_attribute("aria-label") or ""
+    name = label.split(" (")[0]
+    with web.page.expect_response(re.compile(r"/products/\d+$")) as opened:
+        neighbor.first.click()
+    assert opened.value.ok
+    dialog = web.page.get_by_role("dialog")
+    expect(dialog.get_by_role("button", name="Save to shortlist")).to_be_visible()
+    expect(dialog.get_by_role("heading", level=2)).to_be_visible()
+    web.page.keyboard.press("Escape")
+    expect(dialog).to_be_hidden()
+    # The related products follow the selected piece.
+    expect(web.page.get_by_role("heading", name=f"Related products · {name}")).to_be_visible()
+    web.page.get_by_role("button", name=re.compile(r"Relationships · \d+")).click()
+    expect(web.page.get_by_role("table")).to_contain_text("Bought together")
+
+
+@pytest.mark.skipif(not BOOKS_READY, reason="Books or cocktails not prepared")
+def test_search_recipes_with_filters(web):
+    web.open("/drinks")
+    box = web.page.get_by_role("combobox", name="Must include")
+    box.fill("Lime")
+    expect(web.page.get_by_role("option", name="Lime", exact=True)).to_be_visible()
+    box.press("Enter")
+    box.press("Escape")
+    web.page.get_by_role("radio", name="Alcohol-free").click()
+    with web.page.expect_request(lambda r: r.url.endswith("/cocktails/search")) as request:
+        web.page.get_by_role("button", name="Something with rum and lime").click()
+    body = request.value.post_data_json
+    assert body["ingredients"] == ["Lime"] and body["alcohol"] == "non_alcoholic"
+    found = results(web, "Matching drinks")
+    cards = found.get_by_test_id("cocktail-card")
+    expect(cards.first).to_be_visible()
+    for text in cards.all_inner_texts():
+        assert "Alcohol-free" in text
+    web.shot("25-cocktail-search", full_page=True)
+
+
+@pytest.mark.skipif(not BOOKS_READY, reason="Books or cocktails not prepared")
+def test_what_can_i_make(web):
+    web.open("/drinks/pantry")
+    expect(web.page.get_by_text("Add at least one ingredient")).to_be_visible()
+    box = web.page.get_by_role("combobox", name="Ingredients you have")
+    for name in ("Gin", "Lime Juice", "Tonic Water"):
+        box.fill(name)
+        expect(web.page.get_by_role("option", name=name, exact=True)).to_be_visible()
+        box.press("Enter")
+    box.press("Escape")
+    with web.page.expect_request(lambda r: r.url.endswith("/cocktails/pantry")) as request:
+        web.page.get_by_role("radio", name="1", exact=True).click()
+    assert request.value.post_data_json == {
+        "ingredients": ["Gin", "Lime Juice", "Tonic Water"],
+        "alcohol": "any",
+        "max_missing": 1,
+        "top_k": 9,
+    }
+    found = results(web, "Drinks you can make")
+    first = found.get_by_test_id("cocktail-card").first
+    meter = first.get_by_role("meter")
+    expect(meter).to_have_accessible_name(re.compile(r"You have \d of \d ingredients"))
+    expect(first.get_by_role("list", name="Ingredients you have")).to_contain_text("Gin")
+    web.shot("26-pantry", full_page=True)
+
+
+@pytest.mark.skipif(not BOOKS_READY, reason="Books or cocktails not prepared")
+def test_book_pages_and_the_reading_list_cocktail(web):
+    web.open("/reading")
+    expect(web.page.get_by_test_id("reading-list-pairing")).to_have_count(0)
+    with web.page.expect_request(lambda r: r.url.endswith("/books/search")) as request:
+        web.page.get_by_role("button", name="A cosy mystery").click()
+    assert request.value.post_data_json["query"] == "A cosy mystery"
+    found = results(web, "Matching books")
+    expect(found.get_by_test_id("book-card")).to_have_count(12)
+    found.get_by_role("button", name=re.compile("Save .* to your reading list")).first.click()
+
+    # The reading list's cocktail appears once the list has a book.
+    card = web.page.get_by_test_id("reading-list-pairing")
+    expect(card.get_by_test_id("pairing-drink").first).to_be_visible(timeout=60_000)
+    web.shot("27-books-search", full_page=True)
+
+    # Because you liked…: starts from the reading list; add a title from the picker.
+    web.page.get_by_role("link", name="Because you liked…").click()
+    box = web.page.get_by_role("combobox", name="Books you loved")
+    chosen = web.page.get_by_role("list", name="Chosen books you loved")
+    expect(chosen.get_by_role("listitem")).to_have_count(1)
+    box.fill("The Hobbit")
+    expect(web.page.get_by_role("option").first).to_contain_text("The Hobbit")
+    with web.page.expect_request(lambda r: r.url.endswith("/books/because")) as request:
+        box.press("Enter")
+    assert len(request.value.post_data_json["liked"]) == 2
+    box.press("Escape")
+    found = results(web, "Readers like you also loved")
+    expect(found.get_by_test_id("book-card").first).to_be_visible()
+    web.shot("28-because", full_page=True)
+
+    # Browse by mood.
+    web.page.get_by_role("link", name="Browse by mood").click()
+    with web.page.expect_request(lambda r: r.url.endswith("/books/search")) as request:
+        web.page.get_by_role("radio", name="Cosy").click()
+    assert request.value.post_data_json["mood"] == "Cosy"
+    found = results(web, "Cosy")
+    expect(found.get_by_test_id("book-card").first).to_be_visible()
+    web.shot("29-moods", full_page=True)
+
+
+@pytest.mark.skipif(not BOOKS_READY, reason="Books or cocktails not prepared")
+def test_compare_saved_pieces_and_drinks(web):
+    web.open("/fashion")
+    feed = results(web, "Personalized ranking")
+    for _ in range(2):
+        feed.get_by_role("button", name=re.compile("Save .* to your shortlist")).first.click()
+    web.page.get_by_role("button", name=re.compile("^Your session")).click()
+    sheet = web.page.get_by_role("dialog", name="Your session")
+    expect(sheet.get_by_role("list", name="Saved pieces").get_by_role("listitem")).to_have_count(2)
+    sheet.get_by_role("button", name="Compare").click()
+    dialog = web.page.get_by_role("dialog")
+    expect(dialog.get_by_role("heading", name="Compare pieces")).to_be_visible()
+    expect(dialog.get_by_test_id("compare-piece")).to_have_count(2)
+    expect(dialog.get_by_text("Lowest price").first).to_be_visible()
+    web.shot("40-compare-pieces")
+    web.page.keyboard.press("Escape")
+
+    web.open("/drinks")
+    web.page.get_by_role("button", name="Margarita").click()
+    found = results(web, "Matching drinks")
+    for _ in range(2):
+        found.get_by_role("button", name=re.compile("Save .* to your shortlist")).first.click()
+    web.page.get_by_role("button", name=re.compile("^Your session")).click()
+    sheet = web.page.get_by_role("dialog", name="Your session")
+    sheet.get_by_role("button", name="Compare").click()
+    dialog = web.page.get_by_role("dialog")
+    expect(dialog.get_by_role("heading", name="Compare drinks")).to_be_visible()
+    expect(dialog.get_by_test_id("compare-drink")).to_have_count(2)
+    web.shot("41-compare-drinks")
+    # A drink opens from the comparison, with a way back.
+    dialog.get_by_role("button", name=re.compile("^View ")).first.click()
+    expect(dialog.get_by_role("heading", name="Ingredients")).to_be_visible()
+    dialog.get_by_role("button", name="Back").click()
+    expect(dialog.get_by_role("heading", name="Compare drinks")).to_be_visible()
