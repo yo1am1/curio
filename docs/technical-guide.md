@@ -551,10 +551,11 @@ setup hint of whichever domain is missing, and the UI shows its pairing controls
 ## Web app
 
 `web/` is a React single-page app over the same API, replacing the Streamlit client in
-stages. Stage 1 has the shell and domain switch, Plan my evening, chat for every domain
-and the item dialogs; the browse pages (fashion feed, discover, connections, cocktail
-search and pantry, book search) are still Streamlit-only. Streamlit stays the default UI
-until the React app covers them.
+stages. It covers every Streamlit page: the shell and domain switch, Plan my evening, chat
+for every domain, the item dialogs, the fashion feed (For you), Discover (description and
+photo search), Product connections, Model quality, recipe search, "What can I make?", book
+search, "Because you liked…", browse by mood, the reading list's cocktail and the Compare
+dialogs. Streamlit stays in the repository until it is removed.
 
 - **Stack:** Vite, React 19 and TypeScript (strict), React Router, TanStack Query, the
   `motion` package for animation, `react-markdown` for answers and lucide icons. Styling
@@ -567,9 +568,30 @@ until the React app covers them.
   `TurnContext`, chat transcripts, approval narrowing, effects), `src/domains` (the
   registry: copy, badges, step labels, credits), `src/components` (shell, chat, evening,
   cards, dialogs, session panel) and `src/ui` (buttons, toggles, dialog, toasts, photos).
-- **Routes:** `/evening` (Plan my evening, where a visit lands when the evening is served)
-  and `/ask/<domain>` (chat). They are chosen not to collide with API paths: never add a
-  page route under an API path such as `/books/…`, which the API answers itself.
+- **Routes:** each domain opens on its main page, with its pages and its chat in the
+  sub-navigation (`DOMAIN_PAGES` in `src/domains/registry.ts`):
+
+  | Domain | Pages |
+  |---|---|
+  | Fashion | `/fashion` (For you), `/fashion/discover`, `/fashion/connections`, `/fashion/quality` (Model quality, linked from For you, not in the navigation) |
+  | Cocktails | `/drinks` (recipe search), `/drinks/pantry` ("What can I make?") |
+  | Books | `/reading` (search), `/reading/because`, `/reading/moods` |
+  | Evening | `/evening` (Plan my evening, where a visit lands when the evening is served) |
+
+  Chat is `/ask/<domain>`. Page paths never sit under an API path (`/books/…`,
+  `/cocktails/…`, `/products/…`, `/search/…`, `/users/…`, `/evaluation`…), which the API
+  answers itself; that is why cocktails live under `/drinks` and books under `/reading`.
+- **Browse pages:** filters become request bodies in `src/domains/requests.ts` (remembered
+  reading tastes boost liked genres and leave out avoided genres and authors, as in
+  Streamlit; remembered cocktail tastes leave out avoided ingredients and make "Any" mean
+  alcohol-free). Inputs are kept for the browser tab (`curio.page.*` in `sessionStorage`).
+  Photo search uploads the file (or an example photo) as multipart form data
+  (`postForm`). The filter controls are a hand-written accessible combobox
+  (`src/ui/Combobox.tsx`, the WAI-ARIA list-autocomplete pattern) and styled native
+  selects; the product connections graph and the Model quality chart are hand-drawn SVG
+  (`ConnectionsGraph.tsx`, a radial layout from `graph.ts`), so no chart or graph library
+  is bundled. The saved list's count in the sub-navigation opens the session panel, with
+  Compare for pieces and drinks.
 - **Session:** the shortlist, reading list, saved drinks, memory, outfit and evening
   state, the approval toggles and the linked shopper live in `localStorage`
   (`curio.session.v1`) and go back with every chat request field for field as the
@@ -994,7 +1016,13 @@ tests skip otherwise). It checks that a visit lands on Plan my evening, plans a 
 in, swaps the book and saves the evening with one part unticked, streams a fashion turn
 with its live step trace and verified grounding, narrows a shortlist approval (the
 decision's `edited_args`), pairs a drink in the book dialog (alcohol-free, the recipe and
-back) and in book chat, and checks phone layouts. Its screenshots are `web-*.png`.
+back) and in book chat, and checks phone layouts. It also covers the browse pages: the
+fashion feed with a strategy switch and its evidence, Model quality, description search
+with a section filter, photo search with an example photo (a multipart upload), the
+connections graph opening a product, recipe search with filters, a pantry match, book
+search, the reading list's cocktail, "Because you liked…", browse by mood, both Compare
+dialogs, deep links after a reload, and every new page at 390 px without sideways
+scrolling. Its screenshots are `web-*.png`.
 
 The chat model is `tests/e2e/llm_stub.py`, a scripted OpenAI-compatible server: the app
 reaches it through `LLM_PROVIDER=openai` and `LLM_BASE_URL`, so the real provider path runs
