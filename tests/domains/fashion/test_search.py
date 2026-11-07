@@ -42,3 +42,11 @@ def test_by_image_finds_product_indexed_from_same_photo(
 
     assert hits[0].product_id == boots.product_id
     assert hits[0].score == pytest.approx(1.0, abs=1e-5)
+
+
+def test_similar_to_stays_in_the_given_sections(search: ProductSearch):
+    everything = search.similar_to(1, top_k=10)
+    assert {hit.product_id for hit in everything} == {2, 3, 4, 5, 6}
+    menswear = search.similar_to(1, top_k=10, sections=("Menswear",))
+    assert [hit.product_id for hit in menswear] == [4]
+    assert search.similar_to(99, top_k=10, sections=("Menswear",)) is None

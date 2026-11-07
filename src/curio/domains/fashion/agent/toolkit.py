@@ -47,6 +47,7 @@ from curio.domains.fashion.catalog import ProductCatalog
 from curio.domains.fashion.models import Product
 from curio.domains.fashion.navigator import CatalogNavigator, NoPersonalHistoryError
 from curio.domains.fashion.outfits import (
+    AUDIENCE_SECTIONS,
     SECTION_AUDIENCE,
     SLOT_LABELS,
     Audience,
@@ -304,19 +305,25 @@ class FashionToolkit(BaseToolkit[Product]):
             raise ToolError(f"Product {action.product_id} is not in the catalog.")
         if self._navigator is None:
             raise ToolError("Related products are unavailable right now.")
-        found = self._navigator.related(action.product_id, action.relation, self._top_k)
+        sections = related_sections(product, action.audience)
+        found = self._navigator.related(
+            action.product_id, action.relation, self._top_k, sections=sections
+        )
         label = {
             "complement": "pieces bought with",
             "similar": "look-alikes of",
             "alternative": "higher-priced alternatives to",
         }[action.relation]
+        where = f" in {' and '.join(sections)}" if sections else ""
+        detail = {"product_id": action.product_id, "relation": action.relation}
+        detail |= {"sections": list(sections)} if sections else {}
         if not found:
             return AgentStep(
                 kind="tool",
                 name="FindRelated",
-                summary=f"Found no {label} {product.display_name}.",
+                summary=f"Found no {label} {product.display_name}{where}.",
                 status="skipped",
-                detail={"product_id": action.product_id, "relation": action.relation},
+                detail=detail,
             )
         turn.show(
             self._catalog.get_many(e.product_id for e in found),
@@ -325,8 +332,8 @@ class FashionToolkit(BaseToolkit[Product]):
         return AgentStep(
             kind="tool",
             name="FindRelated",
-            summary=f"Found {len(turn.items)} {label} {product.display_name}.",
-            detail={"product_id": action.product_id, "relation": action.relation},
+            summary=f"Found {len(turn.items)} {label} {product.display_name}{where}.",
+            detail=detail,
         )
 
     def _personal(self, turn: Turn[Product]) -> AgentStep:
@@ -499,11 +506,21 @@ _RELATED_HINTS = {
     "complement": "No shopper bought it together with pieces from another product group. "
     "Try relation 'similar' for look-alikes or 'alternative' for upgrades, and say that "
     "there is no bought-together evidence.",
-    "similar": "It has no photo in the image index. Try relation 'complement' or a "
+    "similar": "It has no photo in the image index, or no look-alike in its audience's "
+    "sections. Try relation 'complement' or a "
     "SearchCatalog query describing it.",
     "alternative": "No higher-priced piece shares its specific category, type and section. "
     "Try relation 'similar'.",
 }
+
+
+def related_sections(product: Product, audience: Audience | None = None) -> tuple[str, ...]:
+    """The sections related pieces come from: the audience the shopper asked for, else the
+    product's own audience (`SECTION_AUDIENCE`: Menswear stays Menswear; Ladieswear and
+    Divided are both womenswear; Baby/Children is kids). A section with no audience (Sport,
+    which the catalog does not split by gender) leaves the results unrestricted."""
+    audience = audience or SECTION_AUDIENCE.get(product.section)
+    return AUDIENCE_SECTIONS[audience] if audience else ()
 
 
 def _with_preferences(

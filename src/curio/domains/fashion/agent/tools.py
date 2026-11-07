@@ -28,11 +28,16 @@ class InspectProducts(BaseModel):
 class FindRelated(BaseModel):
     """Find pieces related to one catalog product: 'complement' (bought together by real
     shoppers), 'similar' (closest product photos) or 'alternative' (same category, higher
-    price)."""
+    price). Results stay in the product's own audience (menswear for a men's piece)."""
 
     model_config = ConfigDict(extra="forbid")
     product_id: PositiveInt
     relation: Literal["complement", "similar", "alternative"]
+    audience: Audience | None = Field(
+        default=None,
+        description="Only when the shopper explicitly asks for another audience, e.g. "
+        "'women's pieces like this men's sweater'; leave empty otherwise.",
+    )
 
 
 class PersonalPicks(BaseModel):

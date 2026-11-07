@@ -58,7 +58,7 @@ def test_empty_related_result_keeps_cards_and_hints_the_next_relation(
     from langchain_core.runnables import RunnableLambda
 
     class NoComplements:
-        def related(self, product_id, relation, top_k):
+        def related(self, product_id, relation, top_k, sections=()):
             return []
 
     search.results = [ScoredProduct(1, 0.9)]
