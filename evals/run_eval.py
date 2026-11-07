@@ -772,7 +772,9 @@ def rescore(
         entry["previous_scorer"] = run.get("scorer")
     run = run | {
         "rescored": entry["at"],
-        "rescores": [*run.get("rescores", []), entry],
+        # Only a rescore that can change verdicts (or carries a note) is listed; scoring the
+        # same traces with the same files again changes nothing.
+        "rescores": [*run.get("rescores", []), *([entry] if changed or entry["note"] else [])],
         "scorer": current,
         "frozen": run.get("frozen", False) and not changed,
     }

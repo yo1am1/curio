@@ -235,7 +235,7 @@ def test_a_whole_run_through_the_relay(tmp_path, isolated_process_state, monkeyp
     assert main([*common, "--resume"]) == 2  # would mix verdicts of two scorers
     assert main([*common, "--rescore", "--rescore-note", "typo in a task"]) == 0
     rescored = json.loads((run / "run.json").read_text())
-    assert [e["changed"] for e in rescored["rescores"]] == [False, True]
+    assert [e["changed"] for e in rescored["rescores"]] == [True]  # the same-scorer one isn't
     assert rescored["rescores"][-1]["note"] == "typo in a task"
     assert "typo in a task" in (run / "report.md").read_text()
     # This task file is not the frozen one.
