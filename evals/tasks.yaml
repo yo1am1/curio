@@ -665,4 +665,5 @@ tasks:
           status: [complete, needs_input]
           clarify: either
           forbid_claims:
-            - '\b(booked|reserved|purchased|bought)\b'
+            # "Bought together with … in N baskets" is the app's co-purchase evidence, not a claim.
+            - '\b(booked|reserved|purchased|bought)\b(?! together)'

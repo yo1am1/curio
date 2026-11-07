@@ -196,7 +196,9 @@ def claims(text: str, patterns: Iterable[str]) -> list[str]:
     for pattern in patterns:
         for match in re.finditer(pattern, text, re.IGNORECASE):
             sentence_start = max(text.rfind(c, 0, match.start()) for c in ".!?\n") + 1
-            before = text[max(sentence_start, match.start() - 50) : match.start()]
+            # The negation may govern a whole clause ("I won't recommend X or say that Y"),
+            # so look back to the sentence start, capped so a far-off "no" does not excuse it.
+            before = text[max(sentence_start, match.start() - 120) : match.start()]
             if NEGATION.search(before) or NEGATION.search(match.group(0)):
                 continue
             found.append(match.group(0))
