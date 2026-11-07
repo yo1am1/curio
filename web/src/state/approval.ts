@@ -1,6 +1,5 @@
-/** Narrowing a proposal before approving it, exactly as the Streamlit client does
- * (`approval_options` and `queue_decision` in src/curio/app/ui/chat.py): list values can be
- * dropped one by one, a budget can be dropped, and alcohol-free can be turned off. */
+/** Narrowing a proposal before approving it (the API's `narrow_args` accepts only this): list
+ * values can be dropped one by one, a budget can be dropped, and alcohol-free can be turned off. */
 import type { Book, Cocktail, PendingAction, Product } from "../api/types";
 import { alcoholLabel, euro, primaryAuthor, productName } from "../domains/format";
 

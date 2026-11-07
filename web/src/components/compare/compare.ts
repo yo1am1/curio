@@ -1,7 +1,7 @@
 /** What the Compare dialogs work out: which saved items to show and what they share. */
 import type { Cocktail, Product } from "../../api/types";
 
-/** Columns side by side, as in the Streamlit client. */
+/** Columns side by side at most. */
 export const MAX_COMPARE = 4;
 
 /** Start with the first saved items, at most `MAX_COMPARE`. */

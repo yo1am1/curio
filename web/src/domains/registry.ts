@@ -1,7 +1,6 @@
 /**
- * The client's domain registry, mirroring the Streamlit client's `DOMAIN_VIEWS`
- * (src/curio/app/ui/shell.py and common.py): each domain's label, copy, grounding badges,
- * approval tools and credit line. Which domains are served comes from `/domains`.
+ * The client's domain registry: each domain's label, copy, grounding badges, approval tools
+ * and credit line. Which domains are served comes from `/domains`.
  */
 import type { ApprovalTool, Domain, Health } from "../api/types";
 
@@ -27,7 +26,7 @@ export interface DomainCopy {
   askShortlist: string;
 }
 
-/** Approval policy settings shared by every domain, as in the Streamlit session panel. */
+/** Approval policy settings shared by every domain (the session panel's toggles). */
 export type PolicySetting = "ask_shortlist" | "ask_memory";
 
 export interface DomainView {
@@ -250,7 +249,7 @@ export const DOMAIN_PAGES: Record<Domain, readonly DomainPage[]> = {
   evening: [{ to: "/evening", label: "Plan my evening" }],
 };
 
-/** Model quality: routable, but outside the navigation (as in the Streamlit client). */
+/** Model quality: routable, but outside the navigation (linked from For you). */
 export const QUALITY_PATH = "/fashion/quality";
 
 /** The first path segment of each domain's pages. */
@@ -271,7 +270,7 @@ export function askPath(domain: Domain): string {
   return `/ask/${domain}`;
 }
 
-/** Friendly names for the agent's steps (the Streamlit client's `STEP_LABELS`). */
+/** Friendly names for the agent's steps. */
 export const STEP_LABELS: Record<string, string> = {
   "Understand request": "Plan",
   SearchCatalog: "Search catalog",

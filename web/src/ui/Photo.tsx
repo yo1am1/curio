@@ -3,7 +3,7 @@ import { useState } from "react";
 import styles from "./Photo.module.css";
 
 /**
- * A photo with the Streamlit client's placeholder style: a dashed, tinted box with a short
+ * A photo with a placeholder: a dashed, tinted box with a short
  * caption when there is no photo or it fails to load. Several sources are tried in order.
  */
 export function Photo({

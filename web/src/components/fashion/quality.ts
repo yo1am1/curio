@@ -14,7 +14,7 @@ export interface QualityRow {
 }
 
 /** The strategies' full-holdout results, best MAP@12 first, against the buy-again baseline
- * (or popularity without it), as the Streamlit page tabulates them. */
+ * (or popularity without it). */
 export function qualityRows(evaluation: Evaluation): {
   rows: QualityRow[];
   baseline: { id: string; name: string; map: number } | null;

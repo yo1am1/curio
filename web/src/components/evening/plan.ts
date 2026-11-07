@@ -17,7 +17,7 @@ export type Part = "outfit" | "book" | "drink";
 export type SwapMode = "other" | "cheaper" | "alcohol_free";
 
 /** What the plan's buttons do: on the planner page they call the API; in chat they ask the
- * agent with the same words the Streamlit client sends. */
+ * agent in words ("Another book", "Cheaper shoes"). */
 export type PlanActions =
   | {
       kind: "page";

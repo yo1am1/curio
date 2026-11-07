@@ -40,7 +40,7 @@ describe("cocktail requests", () => {
     });
   });
 
-  it("sends every filter, as the Streamlit form does", () => {
+  it("sends every filter", () => {
     expect(
       cocktailSearchBody(
         {

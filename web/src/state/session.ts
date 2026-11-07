@@ -1,8 +1,8 @@
 /**
  * The client-held session: the shortlist, reading list, saved drinks, remembered preferences
  * and tastes, the current outfit and evening, the approval policy and the linked shopper.
- * The server is stateless: every chat request carries this state back (`buildContext`), as the
- * Streamlit client's TurnContext does. It is kept in localStorage.
+ * The server is stateless: every chat request carries this state back as its `TurnContext`
+ * (`buildContext`). It is kept in localStorage.
  */
 import type {
   AssistantReply,
@@ -411,7 +411,7 @@ export function forget(session: Session, chip: MemoryChip): Session {
 
 // --- Requests -----------------------------------------------------------------------------
 
-/** Only the remembered fields that hold something, as the Streamlit client sends them. */
+/** Only the remembered fields that hold something. */
 function present<T extends object>(memory: T): Partial<T> | null {
   const kept = Object.fromEntries(
     Object.entries(memory).filter(([, value]) =>
@@ -423,9 +423,8 @@ function present<T extends object>(memory: T): Partial<T> | null {
 
 export type TurnContext = Omit<Partial<ChatRequest>, "message" | "history" | "decision">;
 
-/** This domain's fields of a chat request, field for field the Streamlit client's
- * `*_context()`. Unset state is left out, and fashion requests leave `domain` out, so they
- * look exactly as they did before the other domains existed. */
+/** This domain's fields of a chat request. Unset state is left out, and fashion requests
+ * leave `domain` out, so they look exactly as they did before the other domains existed. */
 export function buildContext(domain: Domain, session: Session): TurnContext {
   const prefs = present(session.preferences) as TurnContext["preferences"] | null;
   const tastes = present(session.cocktailPreferences) as TurnContext["cocktail_preferences"] | null;

@@ -77,7 +77,7 @@ describe("ApprovalDrawer", () => {
     expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
   });
 
-  it("lists every narrowable value as the Streamlit client does", () => {
+  it("lists every narrowable value", () => {
     const action = proposal(
       "SaveEvening",
       { product_ids: [1, 99], book_ids: [5], drink_ids: [7] },

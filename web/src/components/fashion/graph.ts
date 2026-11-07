@@ -1,7 +1,7 @@
 /**
- * A product neighborhood (`/products/{id}/graph`) as a bounded one-hop view, as the Streamlit
- * client draws it: the focus product in the middle, at most 12 nodes and 24 relationships, the
- * strongest first, with stable positions on a circle. Pure, so the drawing is easy to test.
+ * A product neighborhood (`/products/{id}/graph`) as a bounded one-hop view: the focus product
+ * in the middle, at most 12 nodes and 24 relationships, the strongest first, with stable
+ * positions on a circle. Pure, so the drawing is easy to test.
  */
 import type { GraphEdge, GraphNode, ProductGraph } from "../../api/types";
 

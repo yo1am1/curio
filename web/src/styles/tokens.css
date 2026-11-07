@@ -1,6 +1,5 @@
 /*
- * Curio's design tokens, ported from the Streamlit theme (.streamlit/config.toml) and
- * src/curio/app/ui/ui.css: warm paper, ink, terracotta, serif display headings.
+ * Curio's design tokens: warm paper, ink, terracotta, serif display headings.
  * Dark mode follows the system (prefers-color-scheme) with the same hues, lifted.
  */
 :root {
@@ -22,7 +21,7 @@
   --line-soft: #e7e4dd;
   --photo-bg: #ecebe8;
 
-  /* Accent: the Streamlit primary colour */
+  /* Accent: terracotta */
   --accent: #9c4935;
   --accent-strong: #823a29;
   --accent-ink: #ffffff;

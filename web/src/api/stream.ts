@@ -37,7 +37,7 @@ function isStepEvent(event: unknown): event is Extract<StreamEvent, { type: "ste
 
 /** Read a chat stream: report each step and return the final reply. An `error` event, a
  * stream that ends without a reply, or malformed JSON raise an `ApiError`. A line that is not
- * an event at all is a plain, non-streamed reply (as the Streamlit client accepts). */
+ * an event at all is a plain, non-streamed reply. */
 export async function readChatStream(
   stream: ReadableStream<Uint8Array>,
   onStep: (step: AgentStep) => void,

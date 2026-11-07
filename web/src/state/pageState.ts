@@ -1,5 +1,5 @@
-/** A page's inputs (queries, filters, the chosen shopper), kept for the browser tab like the
- * Streamlit client's remembered inputs: they survive a reload and a visit to another page. */
+/** A page's inputs (queries, filters, the chosen shopper), kept for the browser tab: they
+ * survive a reload and a visit to another page. */
 import { useCallback, useState } from "react";
 
 import { browserStorage, readStorage, writeStorage } from "./store";

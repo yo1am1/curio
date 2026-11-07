@@ -1,4 +1,4 @@
-/** The fashion feed's strategies and the Streamlit client's evidence summaries. */
+/** The fashion feed's strategies and their evidence summaries. */
 import type { Strategy } from "../../api/queries";
 
 export interface StrategyInfo {
@@ -40,7 +40,7 @@ export function availableStrategies(rankingEnabled: boolean): StrategyInfo[] {
   return STRATEGIES.filter((s) => rankingEnabled || s.id !== "learned");
 }
 
-/** Names in the evaluation results (scripts.evaluate), as the Streamlit client shows them. */
+/** Display names of the strategies in the evaluation results (scripts.evaluate). */
 export const EVALUATED_NAMES: Record<string, string> = {
   learned: "Personalized ranking",
   repeat: "Buy again + best-sellers",

@@ -9,7 +9,7 @@ type Toast = { id: number; message: string; tone: ToastTone };
 
 const ICONS = { success: CheckCircle2, info: Info, error: TriangleAlert };
 
-/** Brief, polite notices (role="status"), as Streamlit's toasts. */
+/** Brief, polite notices (role="status"). */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const next = useRef(0);

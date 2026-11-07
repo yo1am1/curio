@@ -67,7 +67,7 @@ describe("session state", () => {
     expect(repaired.policy).toEqual({ ask_shortlist: true, ask_memory: false });
   });
 
-  it("builds each domain's TurnContext as the Streamlit client does", () => {
+  it("builds each domain's TurnContext field for field", () => {
     const session = filled();
     expect(buildContext("fashion", session)).toEqual({
       preferences: { sections: ["Menswear"], max_price: 40 },

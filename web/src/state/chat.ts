@@ -1,5 +1,4 @@
-/** Chat transcripts per domain and the request payloads built from them (the Streamlit
- * client's `history_item` and `chat_payload`). */
+/** Chat transcripts per domain and the request payloads built from them. */
 import type {
   AgentStep,
   AssistantReply,

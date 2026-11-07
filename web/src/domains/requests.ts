@@ -1,7 +1,7 @@
 /**
- * The browse pages' filters as API request bodies, as the Streamlit client builds them.
+ * The browse pages' filters as API request bodies.
  * Each returns null while there is nothing to search yet. Remembered tastes apply: reading
- * tastes boost liked genres and filter avoided genres and authors (as in Streamlit); remembered
+ * tastes boost liked genres and filter avoided genres and authors; remembered
  * cocktail tastes filter avoided ingredients and default the alcohol filter to alcohol-free.
  */
 import type {
