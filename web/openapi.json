@@ -1,0 +1,4939 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Curio Recommendation API",
+    "version": "2.1.1"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/domains": {
+      "get": {
+        "summary": "Domains",
+        "operationId": "domains_domains_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DomainInfo"
+                  },
+                  "type": "array",
+                  "title": "Response Domains Domains Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cocktails/ingredients": {
+      "get": {
+        "summary": "Cocktail Ingredients",
+        "operationId": "cocktail_ingredients_cocktails_ingredients_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "title": "Response Cocktail Ingredients Cocktails Ingredients Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cocktails/categories": {
+      "get": {
+        "summary": "Cocktail Categories",
+        "operationId": "cocktail_categories_cocktails_categories_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "title": "Response Cocktail Categories Cocktails Categories Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cocktails/search": {
+      "post": {
+        "summary": "Search Cocktails",
+        "operationId": "search_cocktails_cocktails_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CocktailQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CocktailHit"
+                  },
+                  "type": "array",
+                  "title": "Response Search Cocktails Cocktails Search Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cocktails/pantry": {
+      "post": {
+        "summary": "Cocktail Pantry",
+        "operationId": "cocktail_pantry_cocktails_pantry_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PantryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PantryMatch"
+                  },
+                  "type": "array",
+                  "title": "Response Cocktail Pantry Cocktails Pantry Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cocktails/{drink_id}": {
+      "get": {
+        "summary": "Get Cocktail",
+        "operationId": "get_cocktail_cocktails__drink_id__get",
+        "parameters": [
+          {
+            "name": "drink_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Drink Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Cocktail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/cocktails/{drink_id}/similar": {
+      "get": {
+        "summary": "Similar Cocktails",
+        "operationId": "similar_cocktails_cocktails__drink_id__similar_get",
+        "parameters": [
+          {
+            "name": "drink_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Drink Id"
+            }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 5,
+              "title": "Top K"
+            }
+          },
+          {
+            "name": "alcohol",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "any",
+                "alcoholic",
+                "non_alcoholic"
+              ],
+              "type": "string",
+              "default": "any",
+              "title": "Alcohol"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CocktailHit"
+                  },
+                  "title": "Response Similar Cocktails Cocktails  Drink Id  Similar Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/genres": {
+      "get": {
+        "summary": "Book Genres",
+        "description": "Genres in use, most common first.",
+        "operationId": "book_genres_books_genres_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "title": "Response Book Genres Books Genres Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/moods": {
+      "get": {
+        "summary": "Book Moods",
+        "operationId": "book_moods_books_moods_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "title": "Response Book Moods Books Moods Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/index": {
+      "get": {
+        "summary": "Book Index",
+        "description": "Every book's id, title and first author, most rated first (for pickers).",
+        "operationId": "book_index_books_index_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BookRef"
+                  },
+                  "type": "array",
+                  "title": "Response Book Index Books Index Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/search": {
+      "post": {
+        "summary": "Search Books",
+        "operationId": "search_books_books_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BookHit"
+                  },
+                  "type": "array",
+                  "title": "Response Search Books Books Search Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/because": {
+      "post": {
+        "summary": "Because You Liked",
+        "description": "Books readers of the liked books also liked, with which liked book led to each.",
+        "operationId": "because_you_liked_books_because_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BecauseYouLiked"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BookHit"
+                  },
+                  "type": "array",
+                  "title": "Response Because You Liked Books Because Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{book_id}": {
+      "get": {
+        "summary": "Get Book",
+        "operationId": "get_book_books__book_id__get",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Book"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{book_id}/similar": {
+      "get": {
+        "summary": "Similar Books",
+        "description": "Readers who liked this book also liked these.",
+        "operationId": "similar_books_books__book_id__similar_get",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 5,
+              "title": "Top K"
+            }
+          },
+          {
+            "name": "other_authors_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Other Authors Only"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BookHit"
+                  },
+                  "title": "Response Similar Books Books  Book Id  Similar Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/books/{book_id}/by-author": {
+      "get": {
+        "summary": "More By Author",
+        "description": "More books by this book's first author.",
+        "operationId": "more_by_author_books__book_id__by_author_get",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 5,
+              "title": "Top K"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BookHit"
+                  },
+                  "title": "Response More By Author Books  Book Id  By Author Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pairings/book-cocktail": {
+      "post": {
+        "summary": "Pair Book Cocktail",
+        "description": "Cocktails for one book (`book_id`) or a reader's taste (`book_ids`, liked and\navoided genres), with reasons. Children's and young-adult books, `alcohol_free` and\nan alcohol-free `cocktail_preferences` get alcohol-free recipes only.",
+        "operationId": "pair_book_cocktail_pairings_book_cocktail_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookPairing"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/evening/plan": {
+      "post": {
+        "summary": "Plan Evening",
+        "description": "One evening for an occasion: an outfit (when fashion is served), a book and a drink\nthe pairer pairs with it, each with its reason, plus a 'why it works' line. A part\nthe server cannot plan is listed in `missing` with the reason.",
+        "operationId": "plan_evening_evening_plan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EveningRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EveningPlan"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/evening/swap": {
+      "post": {
+        "summary": "Swap Evening Part",
+        "description": "Change one part of the evening the client holds: another or a cheaper outfit piece,\nanother book (its drink is re-paired) or another or an alcohol-free drink.",
+        "operationId": "swap_evening_part_evening_swap_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EveningSwap"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EveningPlan"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products/{product_id}": {
+      "get": {
+        "summary": "Get Product",
+        "operationId": "get_product_products__product_id__get",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Product-Output"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products/{product_id}/image": {
+      "get": {
+        "summary": "Get Product Image",
+        "operationId": "get_product_image_products__product_id__image_get",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products/{product_id}/related": {
+      "get": {
+        "summary": "Related Products",
+        "operationId": "related_products_products__product_id__related_get",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "complement",
+                "alternative"
+              ],
+              "type": "string",
+              "default": "complement",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Top K"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProductHit"
+                  },
+                  "title": "Response Related Products Products  Product Id  Related Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products/{product_id}/similar": {
+      "get": {
+        "summary": "Similar Products",
+        "description": "Products whose photos look most like this one's (CLIP item-to-item).",
+        "operationId": "similar_products_products__product_id__similar_get",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Top K"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProductHit"
+                  },
+                  "title": "Response Similar Products Products  Product Id  Similar Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products/{product_id}/graph": {
+      "get": {
+        "summary": "Product Graph",
+        "operationId": "product_graph_products__product_id__graph_get",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Product Id"
+            }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 12,
+              "title": "Top K"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Product Graph Products  Product Id  Graph Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/outfits": {
+      "post": {
+        "summary": "Build Outfit",
+        "operationId": "build_outfit_outfits_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutfitQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Outfit"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/outfits/swap": {
+      "post": {
+        "summary": "Swap Outfit Item",
+        "operationId": "swap_outfit_item_outfits_swap_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OutfitSwap"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Outfit"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sections": {
+      "get": {
+        "summary": "Sections",
+        "operationId": "sections_sections_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "title": "Response Sections Sections Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/text": {
+      "post": {
+        "summary": "Search By Text",
+        "operationId": "search_by_text_search_text_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TextSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProductHit"
+                  },
+                  "type": "array",
+                  "title": "Response Search By Text Search Text Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/examples": {
+      "get": {
+        "summary": "Query Photos",
+        "description": "Example query photos; empty until scripts.fetch_query_photos has run.",
+        "operationId": "query_photos_search_examples_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/QueryPhoto"
+                  },
+                  "type": "array",
+                  "title": "Response Query Photos Search Examples Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/examples/{photo_id}/image": {
+      "get": {
+        "summary": "Query Photo Image",
+        "operationId": "query_photo_image_search_examples__photo_id__image_get",
+        "parameters": [
+          {
+            "name": "photo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Photo Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/search/image": {
+      "post": {
+        "summary": "Search By Image",
+        "operationId": "search_by_image_search_image_post",
+        "parameters": [
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Top K"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_search_by_image_search_image_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProductHit"
+                  },
+                  "title": "Response Search By Image Search Image Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "summary": "List Users",
+        "operationId": "list_users_users_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array",
+                  "title": "Response List Users Users Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/demo/customers": {
+      "get": {
+        "summary": "Demo Customers",
+        "operationId": "demo_customers_demo_customers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DemoCustomer"
+                  },
+                  "type": "array",
+                  "title": "Response Demo Customers Demo Customers Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{user_id}": {
+      "get": {
+        "summary": "Get User Profile",
+        "operationId": "get_user_profile_users__user_id__get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/{user_id}/recommendations": {
+      "get": {
+        "summary": "Recommend",
+        "operationId": "recommend_users__user_id__recommendations_get",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "strategy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "content",
+                "collaborative",
+                "graph",
+                "repeat",
+                "learned"
+              ],
+              "type": "string",
+              "default": "content",
+              "title": "Strategy"
+            }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Top K"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProductHit"
+                  },
+                  "title": "Response Recommend Users  User Id  Recommendations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/evaluation": {
+      "get": {
+        "summary": "Evaluation",
+        "description": "Offline evaluation results written by `scripts.evaluate --output`.",
+        "operationId": "evaluation_evaluation_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Evaluation Evaluation Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chat": {
+      "post": {
+        "summary": "Chat",
+        "description": "One agent turn in the requested domain. Send `decision` instead of a message to\nanswer a pending proposal.",
+        "operationId": "chat_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantReply"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chat/stream": {
+      "post": {
+        "summary": "Chat Stream",
+        "description": "The same turn as /chat, as NDJSON: one `step` event per agent step, then `reply`.",
+        "operationId": "chat_stream_chat_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chat/feedback": {
+      "get": {
+        "summary": "Chat Feedback Summary",
+        "operationId": "chat_feedback_summary_chat_feedback_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackSummary"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Chat Feedback",
+        "operationId": "chat_feedback_chat_feedback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatFeedback"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionDecision": {
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/PendingAction-Input"
+          },
+          "approved": {
+            "type": "boolean",
+            "title": "Approved"
+          },
+          "edited_args": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited Args"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "approved"
+        ],
+        "title": "ActionDecision"
+      },
+      "AgentStep": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "plan",
+              "tool",
+              "guardrail",
+              "approval",
+              "answer"
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "error",
+              "blocked",
+              "pending",
+              "skipped"
+            ],
+            "title": "Status",
+            "default": "ok"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Detail"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "name",
+          "summary"
+        ],
+        "title": "AgentStep",
+        "description": "One observable step of a turn, streamed to the UI as it happens."
+      },
+      "AssistantReply": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/SearchIntent"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "needs_input",
+              "needs_approval"
+            ],
+            "title": "Status",
+            "default": "complete"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/AgentStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "clarification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Clarification"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pending_action": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingAction-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "applied": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/FashionEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/CocktailEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/BookEffect"
+                },
+                {
+                  "$ref": "#/components/schemas/EveningEffect"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "kind",
+                "mapping": {
+                  "book_preferences": "#/components/schemas/BookEffect",
+                  "book_shortlist": "#/components/schemas/BookEffect",
+                  "cocktail_preferences": "#/components/schemas/CocktailEffect",
+                  "cocktail_shortlist": "#/components/schemas/CocktailEffect",
+                  "evening": "#/components/schemas/EveningEffect",
+                  "preferences": "#/components/schemas/FashionEffect",
+                  "shortlist": "#/components/schemas/FashionEffect"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Applied"
+          },
+          "grounding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundingReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Suggestions"
+          },
+          "domain": {
+            "type": "string",
+            "enum": [
+              "fashion",
+              "cocktails",
+              "books",
+              "evening"
+            ],
+            "title": "Domain",
+            "default": "fashion"
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/Product-Output"
+            },
+            "type": "array",
+            "title": "Products"
+          },
+          "cocktails": {
+            "items": {
+              "$ref": "#/components/schemas/Cocktail"
+            },
+            "type": "array",
+            "title": "Cocktails"
+          },
+          "books": {
+            "items": {
+              "$ref": "#/components/schemas/Book"
+            },
+            "type": "array",
+            "title": "Books"
+          },
+          "outfit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Outfit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pairing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BookPairing"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evening": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EveningPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "intent"
+        ],
+        "title": "AssistantReply"
+      },
+      "BecauseYouLiked": {
+        "properties": {
+          "liked": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Liked"
+          },
+          "exclude_genres": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Exclude Genres"
+          },
+          "exclude_authors": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Exclude Authors"
+          },
+          "top_k": {
+            "type": "integer",
+            "maximum": 50.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Top K",
+            "default": 10
+          }
+        },
+        "type": "object",
+        "required": [
+          "liked"
+        ],
+        "title": "BecauseYouLiked",
+        "description": "Recommendations seeded by books the reader liked (\"Because you liked …\")."
+      },
+      "Body_search_by_image_search_image_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_search_by_image_search_image_post"
+      },
+      "Book": {
+        "properties": {
+          "book_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Book Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "authors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Authors"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series"
+          },
+          "series_position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Position"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "average_rating": {
+            "type": "number",
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Average Rating"
+          },
+          "ratings_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Ratings Count"
+          },
+          "pages": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "genres": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Genres"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "isbn": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^97[89]\\d{10}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isbn"
+          },
+          "source_url": {
+            "type": "string",
+            "title": "Source Url"
+          },
+          "readers": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Readers",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "book_id",
+          "title",
+          "authors",
+          "average_rating",
+          "ratings_count",
+          "source_url"
+        ],
+        "title": "Book"
+      },
+      "BookEffect": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "book_shortlist",
+              "book_preferences"
+            ],
+            "title": "Kind"
+          },
+          "book_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Book Ids"
+          },
+          "book_preferences": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BookPreferences"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "BookEffect",
+        "description": "Approved books for the reading list, or remembered reading tastes."
+      },
+      "BookHit": {
+        "properties": {
+          "book": {
+            "$ref": "#/components/schemas/Book"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "book",
+          "score"
+        ],
+        "title": "BookHit"
+      },
+      "BookPairing": {
+        "properties": {
+          "profile": {
+            "$ref": "#/components/schemas/FlavourProfile"
+          },
+          "pairings": {
+            "items": {
+              "$ref": "#/components/schemas/Pairing"
+            },
+            "type": "array",
+            "title": "Pairings"
+          },
+          "seed": {
+            "type": "integer",
+            "title": "Seed"
+          },
+          "sets": {
+            "type": "integer",
+            "title": "Sets",
+            "default": 1
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile",
+          "pairings",
+          "seed",
+          "note"
+        ],
+        "title": "BookPairing"
+      },
+      "BookPart": {
+        "properties": {
+          "book": {
+            "$ref": "#/components/schemas/Book"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "book",
+          "reason"
+        ],
+        "title": "BookPart"
+      },
+      "BookPreferences": {
+        "properties": {
+          "liked_genres": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Liked Genres"
+          },
+          "avoided_genres": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Avoided Genres"
+          },
+          "avoided_authors": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Avoided Authors"
+          }
+        },
+        "type": "object",
+        "title": "BookPreferences",
+        "description": "Approved, session-scoped reading tastes the client sends back with each message."
+      },
+      "BookQuery": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Query",
+            "default": ""
+          },
+          "genres": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Genres"
+          },
+          "mood": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mood"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "min_rating": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 5.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Rating"
+          },
+          "max_pages": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Pages"
+          },
+          "exclude_genres": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Exclude Genres"
+          },
+          "exclude_authors": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Exclude Authors"
+          },
+          "exclude_tags": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 60,
+            "title": "Exclude Tags"
+          },
+          "boost_genres": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Boost Genres"
+          },
+          "top_k": {
+            "type": "integer",
+            "maximum": 50.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Top K",
+            "default": 10
+          }
+        },
+        "type": "object",
+        "title": "BookQuery"
+      },
+      "BookRef": {
+        "properties": {
+          "book_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Book Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "author": {
+            "type": "string",
+            "title": "Author"
+          }
+        },
+        "type": "object",
+        "required": [
+          "book_id",
+          "title",
+          "author"
+        ],
+        "title": "BookRef",
+        "description": "A book's id, title and first author, for pickers that list the whole catalog."
+      },
+      "ChatFeedback": {
+        "properties": {
+          "rating": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ],
+            "title": "Rating"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Message"
+          },
+          "answer": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Answer"
+          },
+          "product_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Product Ids"
+          },
+          "tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 12,
+            "title": "Tools"
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Comment",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "rating",
+          "message",
+          "answer"
+        ],
+        "title": "ChatFeedback",
+        "description": "A shopper's rating of one assistant answer, for offline review of agent quality."
+      },
+      "ChatRequest": {
+        "properties": {
+          "auto_approve": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "SaveToShortlist",
+                "RememberPreferences",
+                "SaveCocktails",
+                "RememberTastes",
+                "SaveBooks",
+                "RememberReadingTastes",
+                "SaveEvening"
+              ]
+            },
+            "type": "array",
+            "maxItems": 7,
+            "title": "Auto Approve"
+          },
+          "preferences": {
+            "$ref": "#/components/schemas/ShopperPreferences"
+          },
+          "shopper_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shopper Id"
+          },
+          "shortlist": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Shortlist"
+          },
+          "outfit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutfitState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cocktail_preferences": {
+            "$ref": "#/components/schemas/CocktailPreferences"
+          },
+          "cocktail_shortlist": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Cocktail Shortlist"
+          },
+          "book_preferences": {
+            "$ref": "#/components/schemas/BookPreferences"
+          },
+          "book_shortlist": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Book Shortlist"
+          },
+          "evening": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EveningState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "domain": {
+            "type": "string",
+            "enum": [
+              "fashion",
+              "cocktails",
+              "books",
+              "evening"
+            ],
+            "title": "Domain",
+            "default": "fashion"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Message",
+            "default": ""
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/ChatTurn"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "History",
+            "default": []
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ActionDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "ChatRequest"
+      },
+      "ChatTurn": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Content"
+          },
+          "product_ids": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Product Ids"
+          },
+          "drink_ids": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Drink Ids"
+          },
+          "book_ids": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Book Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "ChatTurn",
+        "description": "One earlier message, with the IDs of the cards an assistant turn showed."
+      },
+      "Clarification": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Options"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question",
+          "options"
+        ],
+        "title": "Clarification"
+      },
+      "Cocktail": {
+        "properties": {
+          "drink_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Drink Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "alcoholic": {
+            "type": "string",
+            "title": "Alcoholic"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "glass": {
+            "type": "string",
+            "title": "Glass"
+          },
+          "instructions": {
+            "type": "string",
+            "title": "Instructions"
+          },
+          "ingredients": {
+            "items": {
+              "$ref": "#/components/schemas/Ingredient"
+            },
+            "type": "array",
+            "title": "Ingredients"
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "source_url": {
+            "type": "string",
+            "title": "Source Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "drink_id",
+          "name",
+          "alcoholic",
+          "category",
+          "glass",
+          "instructions",
+          "ingredients",
+          "source_url"
+        ],
+        "title": "Cocktail"
+      },
+      "CocktailEffect": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "cocktail_shortlist",
+              "cocktail_preferences"
+            ],
+            "title": "Kind"
+          },
+          "drink_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Drink Ids"
+          },
+          "cocktail_preferences": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CocktailPreferences"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "CocktailEffect",
+        "description": "Approved drinks for the cocktail shortlist, or remembered tastes."
+      },
+      "CocktailHit": {
+        "properties": {
+          "cocktail": {
+            "$ref": "#/components/schemas/Cocktail"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cocktail",
+          "score"
+        ],
+        "title": "CocktailHit"
+      },
+      "CocktailPreferences": {
+        "properties": {
+          "alcohol_free": {
+            "type": "boolean",
+            "title": "Alcohol Free",
+            "default": false
+          },
+          "liked_ingredients": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Liked Ingredients"
+          },
+          "avoided_ingredients": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Avoided Ingredients"
+          }
+        },
+        "type": "object",
+        "title": "CocktailPreferences",
+        "description": "Approved, session-scoped cocktail tastes the client sends back with each message."
+      },
+      "CocktailQuery": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Query",
+            "default": ""
+          },
+          "ingredients": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Ingredients"
+          },
+          "alcohol": {
+            "type": "string",
+            "enum": [
+              "any",
+              "alcoholic",
+              "non_alcoholic"
+            ],
+            "title": "Alcohol",
+            "default": "any"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 60
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "exclude_ingredients": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Exclude Ingredients"
+          },
+          "top_k": {
+            "type": "integer",
+            "maximum": 50.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Top K",
+            "default": 10
+          }
+        },
+        "type": "object",
+        "title": "CocktailQuery"
+      },
+      "DemoCustomer": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "focus_product_id": {
+            "type": "integer",
+            "title": "Focus Product Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "label",
+          "description",
+          "focus_product_id"
+        ],
+        "title": "DemoCustomer"
+      },
+      "DomainInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "fashion",
+              "cocktails",
+              "books",
+              "evening"
+            ],
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "chat_enabled": {
+            "type": "boolean",
+            "title": "Chat Enabled"
+          },
+          "item_count": {
+            "type": "integer",
+            "title": "Item Count",
+            "default": 0
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "enabled",
+          "chat_enabled"
+        ],
+        "title": "DomainInfo"
+      },
+      "DrinkPart": {
+        "properties": {
+          "cocktail": {
+            "$ref": "#/components/schemas/Cocktail"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Reasons"
+          },
+          "pairs_with": {
+            "type": "string",
+            "title": "Pairs With"
+          },
+          "evening_fit": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Evening Fit"
+          },
+          "alcohol_free_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alcohol Free Reason"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cocktail",
+          "reasons",
+          "pairs_with",
+          "note"
+        ],
+        "title": "DrinkPart"
+      },
+      "EmptySlot": {
+        "properties": {
+          "slot": {
+            "type": "string",
+            "enum": [
+              "top",
+              "bottom",
+              "dress",
+              "outerwear",
+              "shoes",
+              "bag",
+              "accessory"
+            ],
+            "title": "Slot"
+          },
+          "issue": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Issue",
+            "default": ""
+          },
+          "cheapest": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cheapest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slot"
+        ],
+        "title": "EmptySlot",
+        "description": "A slot the outfit could not fill, as the server reported it. Client-supplied on the\nway back, so the issue and the cheapest price are only ever shown again."
+      },
+      "EveningEffect": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "evening",
+            "title": "Kind",
+            "default": "evening"
+          },
+          "product_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Product Ids"
+          },
+          "book_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Book Ids"
+          },
+          "drink_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Drink Ids"
+          }
+        },
+        "type": "object",
+        "title": "EveningEffect",
+        "description": "An approved evening: pieces for the shortlist, books for the reading list and drinks\nfor the saved cocktails."
+      },
+      "EveningPlan": {
+        "properties": {
+          "occasion": {
+            "type": "string",
+            "title": "Occasion"
+          },
+          "theme": {
+            "$ref": "#/components/schemas/ThemeInfo"
+          },
+          "outfit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutfitPart"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "book": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BookPart"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "drink": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DrinkPart"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "why": {
+            "type": "string",
+            "title": "Why"
+          },
+          "missing": {
+            "items": {
+              "$ref": "#/components/schemas/MissingPart"
+            },
+            "type": "array",
+            "title": "Missing"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "empty"
+            ],
+            "title": "Status"
+          },
+          "change": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change"
+          },
+          "state": {
+            "$ref": "#/components/schemas/EveningState"
+          }
+        },
+        "type": "object",
+        "required": [
+          "occasion",
+          "theme",
+          "why",
+          "status",
+          "state"
+        ],
+        "title": "EveningPlan"
+      },
+      "EveningRequest": {
+        "properties": {
+          "book_preferences": {
+            "$ref": "#/components/schemas/BookPreferences"
+          },
+          "cocktail_preferences": {
+            "$ref": "#/components/schemas/CocktailPreferences"
+          },
+          "max_item_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Item Price"
+          },
+          "occasion": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 2,
+            "pattern": "\\S",
+            "title": "Occasion"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 5000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "women",
+                  "men"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
+          },
+          "mood": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mood"
+          },
+          "alcohol_free": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alcohol Free"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "occasion"
+        ],
+        "title": "EveningRequest",
+        "description": "Plan an evening: an occasion in free text, plus optional limits and tastes.\n\nA budget (\"under €100\") or \"alcohol-free\" written in the occasion counts as if given.\n`alcohol_free` left out follows the occasion's words; an explicit false overrides them,\nexcept when they make the evening alcohol-free for safety (pregnancy, kids, driving)."
+      },
+      "EveningState": {
+        "properties": {
+          "occasion": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 2,
+            "pattern": "\\S",
+            "title": "Occasion"
+          },
+          "mood": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mood"
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "cosy",
+              "romantic",
+              "glamorous",
+              "summery",
+              "mysterious",
+              "thoughtful",
+              "adventurous",
+              "playful"
+            ],
+            "title": "Theme"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 5000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "women",
+                  "men"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
+          },
+          "alcohol_free": {
+            "type": "boolean",
+            "title": "Alcohol Free",
+            "default": false
+          },
+          "outfit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutfitState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          },
+          "drink_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Drink Id"
+          },
+          "skipped_books": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Skipped Books"
+          },
+          "skipped_drinks": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 15,
+            "title": "Skipped Drinks"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "occasion",
+          "theme"
+        ],
+        "title": "EveningState",
+        "description": "What the client sends back to swap a part or save the evening. The server re-reads\nevery product, book and recipe and re-pairs the drink; nothing here is trusted as a fact."
+      },
+      "EveningSwap": {
+        "properties": {
+          "evening": {
+            "$ref": "#/components/schemas/EveningState"
+          },
+          "part": {
+            "type": "string",
+            "enum": [
+              "outfit",
+              "book",
+              "drink"
+            ],
+            "title": "Part"
+          },
+          "slot": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "top",
+                  "bottom",
+                  "dress",
+                  "outerwear",
+                  "shoes",
+                  "bag",
+                  "accessory"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "other",
+              "cheaper",
+              "alcohol_free"
+            ],
+            "title": "Mode",
+            "default": "other"
+          },
+          "refine": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Refine",
+            "default": ""
+          },
+          "tastes": {
+            "$ref": "#/components/schemas/EveningTastes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "evening",
+          "part"
+        ],
+        "title": "EveningSwap",
+        "description": "Change one part of the evening the client holds."
+      },
+      "EveningTastes": {
+        "properties": {
+          "book_preferences": {
+            "$ref": "#/components/schemas/BookPreferences"
+          },
+          "cocktail_preferences": {
+            "$ref": "#/components/schemas/CocktailPreferences"
+          },
+          "max_item_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Item Price"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "EveningTastes",
+        "description": "The reader's remembered tastes from the other domains, applied to every part: avoided\ngenres and authors, liked genres, an alcohol-free taste and avoided ingredients, and a\nper-piece price limit."
+      },
+      "FashionEffect": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "shortlist",
+              "preferences"
+            ],
+            "title": "Kind"
+          },
+          "product_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Product Ids"
+          },
+          "preferences": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShopperPreferences"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "FashionEffect",
+        "description": "An approved shortlist addition or remembered shopping preferences."
+      },
+      "FeedbackSummary": {
+        "properties": {
+          "up": {
+            "type": "integer",
+            "title": "Up"
+          },
+          "down": {
+            "type": "integer",
+            "title": "Down"
+          },
+          "recent_down": {
+            "items": {
+              "$ref": "#/components/schemas/ChatFeedback"
+            },
+            "type": "array",
+            "title": "Recent Down"
+          }
+        },
+        "type": "object",
+        "required": [
+          "up",
+          "down",
+          "recent_down"
+        ],
+        "title": "FeedbackSummary"
+      },
+      "FlavourProfile": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "themes": {
+            "items": {
+              "$ref": "#/components/schemas/ThemeWeight"
+            },
+            "type": "array",
+            "title": "Themes"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "alcohol_free": {
+            "type": "boolean",
+            "title": "Alcohol Free"
+          },
+          "alcohol_free_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alcohol Free Reason"
+          },
+          "book_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Book Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "themes",
+          "summary",
+          "alcohol_free"
+        ],
+        "title": "FlavourProfile"
+      },
+      "GroundingReport": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "repaired",
+              "fallback",
+              "not_applicable"
+            ],
+            "title": "Status"
+          },
+          "checked": {
+            "type": "integer",
+            "title": "Checked",
+            "default": 0
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "GroundingReport",
+        "description": "Result of checking the final answer's claims against tool evidence."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status",
+            "default": "ok"
+          },
+          "indexed_products": {
+            "type": "integer",
+            "title": "Indexed Products"
+          },
+          "catalog_products": {
+            "type": "integer",
+            "title": "Catalog Products"
+          },
+          "chat_enabled": {
+            "type": "boolean",
+            "title": "Chat Enabled"
+          },
+          "ranking_enabled": {
+            "type": "boolean",
+            "title": "Ranking Enabled"
+          },
+          "fashion_enabled": {
+            "type": "boolean",
+            "title": "Fashion Enabled"
+          },
+          "cocktails_enabled": {
+            "type": "boolean",
+            "title": "Cocktails Enabled"
+          },
+          "cocktail_count": {
+            "type": "integer",
+            "title": "Cocktail Count"
+          },
+          "books_enabled": {
+            "type": "boolean",
+            "title": "Books Enabled",
+            "default": false
+          },
+          "book_count": {
+            "type": "integer",
+            "title": "Book Count",
+            "default": 0
+          },
+          "llm_configured": {
+            "type": "boolean",
+            "title": "Llm Configured"
+          },
+          "domains": {
+            "items": {
+              "$ref": "#/components/schemas/DomainInfo"
+            },
+            "type": "array",
+            "title": "Domains"
+          }
+        },
+        "type": "object",
+        "required": [
+          "indexed_products",
+          "catalog_products",
+          "chat_enabled",
+          "ranking_enabled",
+          "fashion_enabled",
+          "cocktails_enabled",
+          "cocktail_count",
+          "llm_configured",
+          "domains"
+        ],
+        "title": "Health",
+        "description": "Service status. The flat fashion and cocktail fields predate `domains` and stay for\nexisting clients; they read 0/False when that domain is not served."
+      },
+      "Ingredient": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "Ingredient"
+      },
+      "MissingPart": {
+        "properties": {
+          "part": {
+            "type": "string",
+            "enum": [
+              "outfit",
+              "book",
+              "drink"
+            ],
+            "title": "Part"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "part",
+          "reason"
+        ],
+        "title": "MissingPart"
+      },
+      "Outfit": {
+        "properties": {
+          "occasion": {
+            "type": "string",
+            "title": "Occasion"
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "women",
+                  "men",
+                  "kids"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "total": {
+            "type": "number",
+            "title": "Total"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "complete",
+              "partial",
+              "empty"
+            ],
+            "title": "Status"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/OutfitSlot"
+            },
+            "type": "array",
+            "title": "Slots"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "notes_carried": {
+            "type": "boolean",
+            "title": "Notes Carried",
+            "default": false
+          },
+          "minimum": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum"
+          },
+          "minimum_carried": {
+            "type": "boolean",
+            "title": "Minimum Carried",
+            "default": false
+          },
+          "state": {
+            "$ref": "#/components/schemas/OutfitState"
+          }
+        },
+        "type": "object",
+        "required": [
+          "occasion",
+          "total",
+          "status",
+          "slots",
+          "state"
+        ],
+        "title": "Outfit"
+      },
+      "OutfitPart": {
+        "properties": {
+          "outfit": {
+            "$ref": "#/components/schemas/Outfit"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "outfit",
+          "reason"
+        ],
+        "title": "OutfitPart"
+      },
+      "OutfitPiece": {
+        "properties": {
+          "slot": {
+            "type": "string",
+            "enum": [
+              "top",
+              "bottom",
+              "dress",
+              "outerwear",
+              "shoes",
+              "bag",
+              "accessory"
+            ],
+            "title": "Slot"
+          },
+          "product_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Product Id"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Reason",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "slot",
+          "product_id"
+        ],
+        "title": "OutfitPiece"
+      },
+      "OutfitQuery": {
+        "properties": {
+          "occasion": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 2,
+            "pattern": "\\S",
+            "title": "Occasion"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "women",
+                  "men",
+                  "kids"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
+          },
+          "slots": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "top",
+                    "bottom",
+                    "dress",
+                    "outerwear",
+                    "shoes",
+                    "bag",
+                    "accessory"
+                  ]
+                },
+                "type": "array",
+                "maxItems": 5,
+                "minItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slots"
+          },
+          "max_item_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Item Price"
+          }
+        },
+        "type": "object",
+        "required": [
+          "occasion"
+        ],
+        "title": "OutfitQuery",
+        "description": "Build an outfit without the assistant: the same planner the BuildOutfit tool uses."
+      },
+      "OutfitSlot": {
+        "properties": {
+          "slot": {
+            "type": "string",
+            "enum": [
+              "top",
+              "bottom",
+              "dress",
+              "outerwear",
+              "shoes",
+              "bag",
+              "accessory"
+            ],
+            "title": "Slot"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "product": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Product-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": ""
+          },
+          "carried": {
+            "type": "boolean",
+            "title": "Carried",
+            "default": false
+          },
+          "issue": {
+            "type": "string",
+            "title": "Issue",
+            "default": ""
+          },
+          "cheapest": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cheapest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slot",
+          "label"
+        ],
+        "title": "OutfitSlot"
+      },
+      "OutfitState": {
+        "properties": {
+          "occasion": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Occasion"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "audience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "women",
+                  "men",
+                  "kids"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audience"
+          },
+          "pieces": {
+            "items": {
+              "$ref": "#/components/schemas/OutfitPiece"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Pieces"
+          },
+          "skipped": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Skipped"
+          },
+          "notes": {
+            "items": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Notes"
+          },
+          "empty": {
+            "items": {
+              "$ref": "#/components/schemas/EmptySlot"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Empty"
+          },
+          "slot_order": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "top",
+                "bottom",
+                "dress",
+                "outerwear",
+                "shoes",
+                "bag",
+                "accessory"
+              ]
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Slot Order"
+          },
+          "minimum": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 50000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum"
+          }
+        },
+        "type": "object",
+        "required": [
+          "occasion"
+        ],
+        "title": "OutfitState",
+        "description": "What the client sends back to swap or save pieces of the current outfit.\n\nThe server re-reads every product (and so every price) from the catalog; the client only\nsays which piece fills which slot. The reasons and notes it carries are display-only."
+      },
+      "OutfitSwap": {
+        "properties": {
+          "outfit": {
+            "$ref": "#/components/schemas/OutfitState"
+          },
+          "slot": {
+            "type": "string",
+            "enum": [
+              "top",
+              "bottom",
+              "dress",
+              "outerwear",
+              "shoes",
+              "bag",
+              "accessory"
+            ],
+            "title": "Slot"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "other",
+              "cheaper"
+            ],
+            "title": "Mode",
+            "default": "other"
+          },
+          "refine": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Refine",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "outfit",
+          "slot"
+        ],
+        "title": "OutfitSwap"
+      },
+      "Pairing": {
+        "properties": {
+          "cocktail": {
+            "$ref": "#/components/schemas/Cocktail"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "theme": {
+            "type": "string",
+            "title": "Theme"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cocktail",
+          "score",
+          "theme",
+          "reasons"
+        ],
+        "title": "Pairing"
+      },
+      "PairingRequest": {
+        "properties": {
+          "book_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Book Id"
+          },
+          "book_ids": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Book Ids"
+          },
+          "liked_genres": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Liked Genres"
+          },
+          "avoided_genres": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Avoided Genres"
+          },
+          "alcohol_free": {
+            "type": "boolean",
+            "title": "Alcohol Free",
+            "default": false
+          },
+          "cocktail_preferences": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CocktailPreferences"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "exclude_drink_ids": {
+            "items": {
+              "type": "integer",
+              "exclusiveMinimum": 0.0
+            },
+            "type": "array",
+            "maxItems": 15,
+            "title": "Exclude Drink Ids"
+          },
+          "seed": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Seed",
+            "default": 0
+          },
+          "top_k": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Top K",
+            "default": 3
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "PairingRequest",
+        "description": "Pair one book (`book_id`) or a reader's taste (`book_ids` and liked genres).\n\n`alcohol_free` and an alcohol-free `cocktail_preferences` (the cocktail domain's\nremembered taste) keep only alcohol-free recipes; a children's or young-adult book always\ndoes. Avoided genres never drive the profile; avoided ingredients are left out."
+      },
+      "PantryMatch": {
+        "properties": {
+          "cocktail": {
+            "$ref": "#/components/schemas/Cocktail"
+          },
+          "have": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Have"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing"
+          },
+          "coverage": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Coverage"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cocktail",
+          "have",
+          "missing",
+          "coverage"
+        ],
+        "title": "PantryMatch",
+        "description": "A recipe scored by how much of it the shopper's pantry covers."
+      },
+      "PantryRequest": {
+        "properties": {
+          "ingredients": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Ingredients"
+          },
+          "alcohol": {
+            "type": "string",
+            "enum": [
+              "any",
+              "alcoholic",
+              "non_alcoholic"
+            ],
+            "title": "Alcohol",
+            "default": "any"
+          },
+          "max_missing": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Max Missing",
+            "default": 2
+          },
+          "top_k": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Top K",
+            "default": 10
+          }
+        },
+        "type": "object",
+        "required": [
+          "ingredients"
+        ],
+        "title": "PantryRequest"
+      },
+      "PendingAction-Input": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "tool": {
+            "type": "string",
+            "enum": [
+              "SaveToShortlist",
+              "RememberPreferences",
+              "SaveCocktails",
+              "RememberTastes",
+              "SaveBooks",
+              "RememberReadingTastes",
+              "SaveEvening"
+            ],
+            "title": "Tool"
+          },
+          "args": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Args"
+          },
+          "request": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Request"
+          },
+          "issued_at": {
+            "type": "integer",
+            "title": "Issued At"
+          },
+          "signature": {
+            "type": "string",
+            "title": "Signature"
+          },
+          "intent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchIntent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": ""
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/Product-Input"
+            },
+            "type": "array",
+            "title": "Products"
+          },
+          "cocktails": {
+            "items": {
+              "$ref": "#/components/schemas/Cocktail"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Cocktails"
+          },
+          "books": {
+            "items": {
+              "$ref": "#/components/schemas/Book"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Books"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tool",
+          "args",
+          "request",
+          "issued_at",
+          "signature"
+        ],
+        "title": "PendingAction",
+        "description": "A proposal as the API sends it: the signed fields plus display-only cards.\n\nThe server signs everything except `products`, `cocktails`, `books` and `summary`."
+      },
+      "PendingAction-Output": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "tool": {
+            "type": "string",
+            "enum": [
+              "SaveToShortlist",
+              "RememberPreferences",
+              "SaveCocktails",
+              "RememberTastes",
+              "SaveBooks",
+              "RememberReadingTastes",
+              "SaveEvening"
+            ],
+            "title": "Tool"
+          },
+          "args": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Args"
+          },
+          "request": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Request"
+          },
+          "issued_at": {
+            "type": "integer",
+            "title": "Issued At"
+          },
+          "signature": {
+            "type": "string",
+            "title": "Signature"
+          },
+          "intent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchIntent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": ""
+          },
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/Product-Output"
+            },
+            "type": "array",
+            "title": "Products"
+          },
+          "cocktails": {
+            "items": {
+              "$ref": "#/components/schemas/Cocktail"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Cocktails"
+          },
+          "books": {
+            "items": {
+              "$ref": "#/components/schemas/Book"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Books"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "tool",
+          "args",
+          "request",
+          "issued_at",
+          "signature"
+        ],
+        "title": "PendingAction",
+        "description": "A proposal as the API sends it: the signed fields plus display-only cards.\n\nThe server signs everything except `products`, `cocktails`, `books` and `summary`."
+      },
+      "Product-Input": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "product_type": {
+            "type": "string",
+            "title": "Product Type"
+          },
+          "product_group": {
+            "type": "string",
+            "title": "Product Group"
+          },
+          "section": {
+            "type": "string",
+            "title": "Section"
+          },
+          "colour": {
+            "type": "string",
+            "title": "Colour"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
+          },
+          "shopify_category": {
+            "type": "string",
+            "title": "Shopify Category",
+            "default": "Uncategorized"
+          },
+          "shopify_attributes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Shopify Attributes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "name",
+          "product_type",
+          "product_group",
+          "section",
+          "colour",
+          "description",
+          "price"
+        ],
+        "title": "Product"
+      },
+      "Product-Output": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "product_type": {
+            "type": "string",
+            "title": "Product Type"
+          },
+          "product_group": {
+            "type": "string",
+            "title": "Product Group"
+          },
+          "section": {
+            "type": "string",
+            "title": "Section"
+          },
+          "colour": {
+            "type": "string",
+            "title": "Colour"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
+          },
+          "shopify_category": {
+            "type": "string",
+            "title": "Shopify Category",
+            "default": "Uncategorized"
+          },
+          "shopify_attributes": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Shopify Attributes"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name",
+            "description": "The name for the UI and the agents' text (\"PQ BOSTON SILK SKIRT\" -> \"Boston Silk\nSkirt\"); `name` stays the raw catalog name.",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "name",
+          "product_type",
+          "product_group",
+          "section",
+          "colour",
+          "description",
+          "price",
+          "display_name"
+        ],
+        "title": "Product"
+      },
+      "ProductHit": {
+        "properties": {
+          "product": {
+            "$ref": "#/components/schemas/Product-Output"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product",
+          "score"
+        ],
+        "title": "ProductHit"
+      },
+      "PurchasedProduct": {
+        "properties": {
+          "purchase_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Purchase Date"
+          },
+          "product": {
+            "$ref": "#/components/schemas/Product-Output"
+          }
+        },
+        "type": "object",
+        "required": [
+          "purchase_date",
+          "product"
+        ],
+        "title": "PurchasedProduct"
+      },
+      "QueryPhoto": {
+        "properties": {
+          "photo_id": {
+            "type": "integer",
+            "title": "Photo Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "product_type": {
+            "type": "string",
+            "title": "Product Type"
+          },
+          "colour": {
+            "type": "string",
+            "title": "Colour"
+          }
+        },
+        "type": "object",
+        "required": [
+          "photo_id",
+          "name",
+          "product_type",
+          "colour"
+        ],
+        "title": "QueryPhoto",
+        "description": "A photo of an H&M garment outside the catalog, to try image search with."
+      },
+      "SearchIntent": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query",
+            "description": "Visual description of the wanted item for image search, e.g. 'red floral summer dress'. Leave out price and audience."
+          },
+          "product_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Product Types",
+            "description": "Only known product types."
+          },
+          "sections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sections",
+            "description": "Only known sections."
+          },
+          "colours": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Colours",
+            "description": "Only known colours."
+          },
+          "min_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Price",
+            "description": "Minimum price in euros."
+          },
+          "max_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Price",
+            "description": "Maximum price in euros."
+          },
+          "wants_products": {
+            "type": "boolean",
+            "title": "Wants Products",
+            "description": "False for small talk or questions that need no product search.",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "SearchIntent",
+        "description": "A product search request: a visual description plus metadata constraints."
+      },
+      "ShopperPreferences": {
+        "properties": {
+          "sections": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Sections"
+          },
+          "colours": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "title": "Colours"
+          },
+          "max_price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 10000.0,
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Price"
+          }
+        },
+        "type": "object",
+        "title": "ShopperPreferences",
+        "description": "Approved, session-scoped preferences the client sends back with each message."
+      },
+      "TextSearchRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Query"
+          },
+          "top_k": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Top K",
+            "default": 10
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section",
+            "description": "Only this section, e.g. Menswear."
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "TextSearchRequest"
+      },
+      "ThemeInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "cosy",
+              "romantic",
+              "glamorous",
+              "summery",
+              "mysterious",
+              "thoughtful",
+              "adventurous",
+              "playful"
+            ],
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "icon": {
+            "type": "string",
+            "title": "Icon"
+          },
+          "feeling": {
+            "type": "string",
+            "title": "Feeling"
+          },
+          "evidence": {
+            "type": "string",
+            "title": "Evidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "icon",
+          "feeling",
+          "evidence"
+        ],
+        "title": "ThemeInfo"
+      },
+      "ThemeWeight": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "style": {
+            "type": "string",
+            "title": "Style"
+          },
+          "weight": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Weight"
+          },
+          "evidence": {
+            "type": "string",
+            "title": "Evidence"
+          },
+          "books": {
+            "type": "integer",
+            "title": "Books",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "style",
+          "weight",
+          "evidence"
+        ],
+        "title": "ThemeWeight",
+        "description": "One flavour theme of a profile: what the books say and what it pours."
+      },
+      "User": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "age": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "age"
+        ],
+        "title": "User"
+      },
+      "UserProfile": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/User"
+          },
+          "purchases": {
+            "items": {
+              "$ref": "#/components/schemas/PurchasedProduct"
+            },
+            "type": "array",
+            "title": "Purchases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user",
+          "purchases"
+        ],
+        "title": "UserProfile"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

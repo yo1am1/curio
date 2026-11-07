@@ -47,6 +47,10 @@ class Settings(BaseSettings):
 
     # --- UI ---------------------------------------------------------------
     api_url: str = "http://localhost:8000"
+    # The built React app (`npm run build` in web/). The API serves it beside its own routes
+    # whenever the folder holds a build; SERVE_WEB=false turns that off.
+    web_dist: Path = Path("web/dist")
+    serve_web: bool = True
 
     @field_validator("enabled_domains", mode="before")
     @classmethod

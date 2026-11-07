@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator, Iterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import date
 from importlib.metadata import version
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, UploadFile
@@ -37,6 +38,7 @@ from curio.app.services import (
     build_services,
     domain_spec,
 )
+from curio.app.web import serve_web
 from curio.domains.books.models import (
     BecauseYouLiked,
     Book,
@@ -283,8 +285,12 @@ def _read_image(upload: UploadFile) -> Image.Image:
     return image
 
 
-def create_app(services: Services | None = None) -> FastAPI:
-    """Build the app. Tests pass ready-made `services`; production builds them at startup."""
+def create_app(services: Services | None = None, *, web_dist: Path | None = None) -> FastAPI:
+    """Build the app. Tests pass ready-made `services`; production builds them at startup.
+
+    `web_dist` is the built React app to serve beside the API (`curio.app.web`). Production
+    (no `services`) takes it from the settings (`WEB_DIST`, on unless `SERVE_WEB=false`).
+    """
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
@@ -701,6 +707,11 @@ def create_app(services: Services | None = None) -> FastAPI:
             recent_down=[item for item in feedback if item.rating == "down"][-10:],
         )
 
+    if web_dist is None and services is None:
+        settings = get_settings()
+        web_dist = settings.web_dist if settings.serve_web else None
+    if web_dist is not None:
+        serve_web(app, web_dist)
     return app
 
 
