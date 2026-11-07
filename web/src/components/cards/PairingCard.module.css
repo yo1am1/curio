@@ -1,0 +1,79 @@
+.pairing {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.summary {
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+.drinks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+  gap: 0.9rem;
+}
+
+.drink {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.photo :global(img),
+.photo > div {
+  border-radius: 0;
+}
+
+.body {
+  display: grid;
+  gap: 0.45rem;
+  align-content: start;
+  justify-items: start;
+  padding: 0.8rem 0.9rem 0.5rem;
+}
+
+.name {
+  font: 600 1.05rem/1.25 var(--font-serif);
+  margin: 0;
+}
+
+.reasons {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.3rem;
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: -0.5rem;
+}
+
+.empty,
+.note {
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 640px) {
+  .drink {
+    grid-template-columns: 6.5rem 1fr;
+    grid-template-rows: none;
+  }
+
+  .photo > div {
+    height: 100%;
+  }
+}

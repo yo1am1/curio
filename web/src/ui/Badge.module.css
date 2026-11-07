@@ -1,0 +1,56 @@
+.badge {
+  --tone: var(--gray);
+  --tone-soft: var(--gray-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-xs);
+  background: var(--tone-soft);
+  color: var(--tone);
+  font-size: 0.8125rem;
+  font-weight: 550;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.icon svg {
+  width: 0.95em;
+  height: 0.95em;
+}
+
+.green {
+  --tone: var(--green);
+  --tone-soft: var(--green-soft);
+}
+
+.orange {
+  --tone: var(--orange);
+  --tone-soft: var(--orange-soft);
+}
+
+.red {
+  --tone: var(--red);
+  --tone-soft: var(--red-soft);
+}
+
+.violet {
+  --tone: var(--violet);
+  --tone-soft: var(--violet-soft);
+}
+
+.blue {
+  --tone: var(--blue);
+  --tone-soft: var(--blue-soft);
+}
+
+.accent {
+  --tone: var(--accent);
+  --tone-soft: var(--accent-soft);
+}

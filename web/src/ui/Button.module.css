@@ -1,0 +1,141 @@
+.button {
+  --button-bg: transparent;
+  --button-ink: var(--ink);
+  --button-line: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  border: 1px solid var(--button-line);
+  border-radius: var(--radius-sm);
+  background: var(--button-bg);
+  color: var(--button-ink);
+  font-weight: 550;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition:
+    background-color 160ms var(--ease),
+    border-color 160ms var(--ease),
+    color 160ms var(--ease),
+    box-shadow 160ms var(--ease),
+    transform 120ms var(--ease);
+}
+
+.button:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.icon {
+  display: inline-flex;
+  flex: none;
+}
+
+.icon svg {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.primary {
+  --button-bg: var(--accent);
+  --button-ink: var(--accent-ink);
+  --button-line: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.primary:hover:not(:disabled) {
+  --button-bg: var(--accent-strong);
+  --button-line: var(--accent-strong);
+}
+
+.secondary {
+  --button-bg: var(--surface);
+  --button-line: var(--line);
+}
+
+.secondary:hover:not(:disabled) {
+  --button-line: var(--accent-line);
+  --button-ink: var(--accent);
+}
+
+.ghost {
+  --button-ink: var(--ink-soft);
+  padding-inline: 0.6rem;
+}
+
+.ghost:hover:not(:disabled) {
+  --button-bg: var(--accent-soft);
+  --button-ink: var(--accent);
+}
+
+.pill {
+  --button-bg: var(--surface);
+  --button-line: var(--line);
+  border-radius: var(--radius-pill);
+  font-weight: 500;
+}
+
+.pill:hover:not(:disabled) {
+  --button-line: var(--accent-line);
+  --button-ink: var(--accent);
+}
+
+.pill[data-pressed="true"] {
+  --button-bg: var(--accent-soft);
+  --button-line: var(--accent);
+  --button-ink: var(--accent);
+}
+
+.link {
+  --button-ink: var(--accent);
+  min-height: 2rem;
+  padding-inline: 0.25rem;
+  font-weight: 500;
+  white-space: normal;
+  text-align: left;
+}
+
+.link:hover:not(:disabled) .label {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.sm {
+  min-height: 2.15rem;
+  padding-inline: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.lg {
+  min-height: 3rem;
+  padding-inline: 1.4rem;
+  font-size: 1rem;
+}
+
+.block {
+  width: 100%;
+}
+
+.iconOnly {
+  padding: 0;
+  width: 2.5rem;
+}
+
+.iconOnly.sm {
+  width: 2.15rem;
+}

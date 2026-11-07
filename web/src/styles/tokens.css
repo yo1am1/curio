@@ -1,0 +1,101 @@
+/*
+ * Curio's design tokens, ported from the Streamlit theme (.streamlit/config.toml) and
+ * src/curio/app/ui/ui.css: warm paper, ink, terracotta, serif display headings.
+ * Dark mode follows the system (prefers-color-scheme) with the same hues, lifted.
+ */
+:root {
+  color-scheme: light;
+
+  --font-sans:
+    "Source Sans 3 Variable", "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, "Times New Roman", serif;
+
+  /* Surfaces and ink */
+  --bg: #faf9f6;
+  --bg-sunk: #f0eee8;
+  --surface: #fffefb;
+  --surface-raised: #ffffff;
+  --ink: #252723;
+  --ink-soft: #4a4c46;
+  --ink-muted: #6f706a;
+  --line: #d8d5cd;
+  --line-soft: #e7e4dd;
+  --photo-bg: #ecebe8;
+
+  /* Accent: the Streamlit primary colour */
+  --accent: #9c4935;
+  --accent-strong: #823a29;
+  --accent-ink: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--accent) 9%, transparent);
+  --accent-line: color-mix(in srgb, var(--accent) 38%, transparent);
+  --focus: color-mix(in srgb, var(--accent) 70%, #ffffff);
+
+  /* Status tones (badges, step statuses) */
+  --green: #1d7a46;
+  --green-soft: #e3f2e8;
+  --orange: #a85a07;
+  --orange-soft: #fbeedb;
+  --red: #b3261e;
+  --red-soft: #fbe5e3;
+  --violet: #6b3fb5;
+  --violet-soft: #efe8fa;
+  --blue: #22609e;
+  --blue-soft: #e3eef9;
+  --gray: #5f605a;
+  --gray-soft: #ecebe6;
+
+  /* Shape, depth and motion */
+  --radius-xs: 0.35rem;
+  --radius-sm: 0.5rem;
+  --radius: 0.65rem;
+  --radius-lg: 1rem;
+  --radius-pill: 999px;
+  --shadow-sm: 0 1px 2px rgb(37 39 35 / 6%);
+  --shadow: 0 1px 2px rgb(37 39 35 / 5%), 0 6px 20px -8px rgb(37 39 35 / 14%);
+  --shadow-lg: 0 2px 6px rgb(37 39 35 / 6%), 0 24px 60px -16px rgb(37 39 35 / 28%);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --page-max: 1180px;
+  --gutter: clamp(1rem, 4vw, 2rem);
+  --header-h: 4.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #181715;
+    --bg-sunk: #121110;
+    --surface: #211f1c;
+    --surface-raised: #2a2824;
+    --ink: #ece9e2;
+    --ink-soft: #cdc9bf;
+    --ink-muted: #a19d93;
+    --line: #3b3934;
+    --line-soft: #2e2c28;
+    --photo-bg: #e6e4df;
+
+    --accent: #d98a72;
+    --accent-strong: #e7a08a;
+    --accent-ink: #1d1410;
+    --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+    --accent-line: color-mix(in srgb, var(--accent) 45%, transparent);
+    --focus: #f0b39f;
+
+    --green: #6fd09a;
+    --green-soft: rgb(111 208 154 / 13%);
+    --orange: #f0b061;
+    --orange-soft: rgb(240 176 97 / 13%);
+    --red: #f2958d;
+    --red-soft: rgb(242 149 141 / 14%);
+    --violet: #c4a6f5;
+    --violet-soft: rgb(196 166 245 / 14%);
+    --blue: #8fbdf0;
+    --blue-soft: rgb(143 189 240 / 13%);
+    --gray: #bdb9b0;
+    --gray-soft: rgb(189 185 176 / 12%);
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 30%);
+    --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px -10px rgb(0 0 0 / 55%);
+    --shadow-lg: 0 2px 6px rgb(0 0 0 / 35%), 0 28px 70px -20px rgb(0 0 0 / 70%);
+  }
+}

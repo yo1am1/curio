@@ -1,0 +1,58 @@
+.setup {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 46rem;
+}
+
+.card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1.4rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.title {
+  font-size: 1.3rem;
+}
+
+.code {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunk);
+  font-size: 0.9rem;
+  overflow-x: auto;
+}
+
+.note {
+  color: var(--ink-muted);
+  font-size: 0.875rem;
+}
+
+.domains {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.domain {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  color: var(--ink-soft);
+}
+
+.domain svg {
+  flex: none;
+  margin-top: 0.2rem;
+  color: var(--accent);
+}
+
+.domain p {
+  color: var(--ink-muted);
+  font-size: 0.925rem;
+}

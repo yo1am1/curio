@@ -1,0 +1,50 @@
+.markdown {
+  font-size: 1rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.markdown > * + * {
+  margin-top: 0.6rem;
+}
+
+.markdown p {
+  margin: 0;
+}
+
+.markdown ul,
+.markdown ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.markdown li + li {
+  margin-top: 0.25rem;
+}
+
+.markdown li::marker {
+  color: var(--accent);
+}
+
+.markdown strong {
+  font-weight: 650;
+}
+
+.markdown code {
+  padding: 0.1rem 0.3rem;
+  border-radius: var(--radius-xs);
+  background: var(--bg-sunk);
+  font-size: 0.9em;
+}
+
+.markdown table {
+  border-collapse: collapse;
+  font-size: 0.925rem;
+}
+
+.markdown th,
+.markdown td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+}

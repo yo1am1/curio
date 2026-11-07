@@ -1,0 +1,63 @@
+{
+  "name": "curio-web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Curio's React single-page app over the FastAPI API.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "openapi:export": "cd .. && uv run python -m scripts.export_openapi --out web/openapi.json",
+    "gen:api": "openapi-typescript openapi.json -o src/api/schema.d.ts && prettier --write src/api/schema.d.ts",
+    "gen:api:live": "openapi-typescript ${CURIO_API_URL:-http://127.0.0.1:8000}/openapi.json -o src/api/schema.d.ts && prettier --write src/api/schema.d.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/source-sans-3": "5.3.1",
+    "@fontsource-variable/source-serif-4": "5.3.1",
+    "@tanstack/react-query": "5.107.1",
+    "lucide-react": "1.70.0",
+    "motion": "14.10.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-markdown": "10.1.0",
+    "react-router": "8.5.1",
+    "remark-gfm": "4.0.1"
+  },
+  "devDependencies": {
+    "vite": "8.3.6",
+    "@vitejs/plugin-react": "6.2.1",
+    "typescript": "6.0.3",
+    "vitest": "5.1.0",
+    "jsdom": "31.0.0",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/user-event": "14.6.8",
+    "eslint": "10.14.0",
+    "@eslint/js": "10.0.1",
+    "typescript-eslint": "8.72.1",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.7",
+    "globals": "17.14.0",
+    "prettier": "3.9.10",
+    "eslint-config-prettier": "10.1.8",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/node": "26.6.6",
+    "openapi-typescript": "7.13.0"
+  },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
+  }
+}

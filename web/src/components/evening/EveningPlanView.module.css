@@ -1,0 +1,304 @@
+.plan {
+  display: grid;
+  gap: 1rem;
+}
+
+.theme {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.85rem;
+}
+
+.themeBadge {
+  font-size: 0.9rem;
+  padding: 0.25rem 0.7rem;
+}
+
+.evidence {
+  color: var(--ink-muted);
+  font-size: 0.95rem;
+}
+
+.why {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.9rem 1.1rem;
+  border-radius: var(--radius);
+  background: var(--bg-sunk);
+  border-left: 3px solid var(--accent);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.why strong {
+  font-family: var(--font-serif);
+  font-weight: 650;
+}
+
+.whyIcon {
+  flex: none;
+  margin-top: 0.15rem;
+  color: var(--accent);
+}
+
+.parts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.inChat .parts {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.inChat .outfit {
+  grid-column: 1 / -1;
+}
+
+.inChat .pieces {
+  grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+  padding: 1.1rem 1.15rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.cardIcon {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.cardTitle {
+  font-size: 1.2rem;
+}
+
+.pieces {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.piece {
+  min-width: 0;
+}
+
+.pieceRow {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.pieceThumb,
+.featureMedia {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: transform 220ms var(--ease);
+}
+
+.pieceThumb:hover,
+.featureMedia:hover {
+  transform: translateY(-2px);
+}
+
+.pieceThumb > div {
+  box-shadow: 0 0 0 1px var(--line-soft);
+}
+
+.pieceText {
+  min-width: 0;
+}
+
+.pieceName {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.pieceMeta {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.pieceActions {
+  display: flex;
+  gap: 0.15rem;
+  margin: 0.1rem 0 0 -0.6rem;
+}
+
+.pieceActions button {
+  min-height: 1.9rem;
+  font-size: 0.8125rem;
+}
+
+.pieceGap {
+  grid-column: 1 / -1;
+  color: var(--ink-muted);
+  font-size: 0.875rem;
+}
+
+.budget {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.meter {
+  height: 0.4rem;
+  border-radius: var(--radius-pill);
+  background: var(--bg-sunk);
+  overflow: hidden;
+}
+
+.meterFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.meter[data-over="true"] .meterFill {
+  background: var(--red);
+}
+
+.feature {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.featureMedia {
+  width: min(9rem, 60%);
+}
+
+.drink .featureMedia {
+  width: min(11rem, 75%);
+}
+
+.featureText {
+  display: grid;
+  gap: 0.4rem;
+  justify-items: start;
+}
+
+.featureName {
+  font: 600 1.25rem/1.25 var(--font-serif);
+  letter-spacing: -0.015em;
+}
+
+.featureMeta {
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+}
+
+.reason {
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.note,
+.missing {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+  color: var(--ink-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.note svg,
+.missing svg {
+  flex: none;
+  margin-top: 0.2rem;
+}
+
+.missing {
+  padding: 0.85rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+}
+
+.partActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: auto;
+}
+
+.save {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 960px) {
+  .parts {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .outfit {
+    grid-column: 1 / -1;
+  }
+
+  .pieces {
+    grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .parts,
+  .inChat .parts {
+    grid-template-columns: 1fr;
+  }
+
+  .feature {
+    grid-template-columns: 6.5rem 1fr;
+    align-items: start;
+  }
+
+  .featureMedia,
+  .drink .featureMedia {
+    width: 100%;
+  }
+
+  .featureName {
+    font-size: 1.1rem;
+  }
+}
