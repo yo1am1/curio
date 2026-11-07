@@ -1,16 +1,18 @@
 """Record the README overview animation (docs/screenshots/curio-overview.webp) from a stack.
 
-Start the stack as in scripts/capture_readme.py (the scripted LLM stub, the API and the UI),
-then run:
+Start the stack as in scripts/capture_readme.py (the scripted LLM stub and the API serving
+the built React app), then run:
 
     uv run python -m scripts.record_overview --out docs/screenshots/curio-overview.webp
 
 The tour opens on Plan my evening (a date night under €100: three cards, why it works and
-one swap), then shows the agent's step trace and grounding check, then pairs The Great
-Gatsby with a drink. Chrome's screencast (over CDP) records the frames, and ffmpeg turns them into
-an animated WebP with transparent rounded corners (like every README image), keeping each
-frame's real duration. GIF would need a 1-bit alpha that defeats its frame-diff compression.
-Each scene shows a caption so the animation reads without sound or narration.
+one swap), then asks the fashion agent and opens its step trace with the grounding check,
+narrows and approves a save in the approval drawer, pairs The Great Gatsby with a drink and
+ends on the same dialog in dark mode. Chrome's screencast (over CDP) records the frames, and
+ffmpeg turns them into an animated WebP with transparent rounded corners (like every README
+image), keeping each frame's real duration. GIF would need a 1-bit alpha that defeats its
+frame-diff compression. Each scene shows a caption so the animation reads without sound or
+narration.
 """
 
 import argparse
@@ -22,28 +24,31 @@ import tempfile
 import time
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Page, expect, sync_playwright
 
 from scripts.readme_images import corner_mask
 
 parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-parser.add_argument("--ui-url", default="http://127.0.0.1:8501")
+parser.add_argument("--url", default="http://127.0.0.1:8000", help="The API serving the app.")
 parser.add_argument("--out", type=Path, default=Path("docs/screenshots/curio-overview.webp"))
 parser.add_argument("--executable-path", help="Chromium binary (default: Playwright's).")
 parser.add_argument("--width", type=int, default=960, help="Animation width in pixels.")
 parser.add_argument("--fps", type=int, default=10)
 ARGS = parser.parse_args()
-UI = ARGS.ui_url
+URL = ARGS.url.rstrip("/")
 OCCASION = "Date night under €100"
+QUESTION = "Black trousers under €30"
 VIEWPORT = {"width": 1280, "height": 800}
 MAX_FRAME_SECONDS = 4.0
-DONE = """() =>
-    !document.querySelector('[data-stale="true"]') &&
-    !document.querySelector('[data-testid="stStatusWidgetRunningIcon"]')"""
-PHOTOS = """() =>
-    [...document.querySelectorAll('[data-testid="stImage"] img')]
-        .filter(i => i.offsetParent !== null)
-        .every(i => i.complete && i.naturalWidth > 0)"""
+# Nothing loading, no turn streaming, and every photo in view loaded (or given up on).
+SETTLED = """() =>
+    !document.querySelector('[aria-busy="true"], [data-testid="running-turn"]') &&
+    [...document.querySelectorAll('img')]
+        .filter(i => {
+            const box = i.getBoundingClientRect();
+            return i.offsetParent !== null && box.bottom > 0 && box.top < window.innerHeight;
+        })
+        .every(i => i.complete)"""
 CAPTION = """text => {
     let el = document.getElementById('curio-tour-caption');
     if (!el) {
@@ -59,110 +64,131 @@ CAPTION = """text => {
 }"""
 
 
-def settle(p) -> None:
-    p.wait_for_timeout(400)
-    p.wait_for_function(DONE, timeout=120000)
-    p.wait_for_function(PHOTOS, timeout=120000)
+def settle(p: Page) -> None:
+    p.wait_for_timeout(300)
+    p.wait_for_function(SETTLED, timeout=120_000)
     p.wait_for_timeout(300)
 
 
-def caption(p, text: str) -> None:
+def caption(p: Page, text: str) -> None:
     p.evaluate(CAPTION, text)
 
 
-def ask(p, text: str) -> None:
-    box = p.get_by_test_id("stChatInputTextArea").first
-    box.click()
-    box.press_sequentially(text, delay=35)
-    p.wait_for_timeout(300)
-    box.press("Enter")
-    settle(p)
-
-
-def scroll_chat_to_last(p) -> None:
-    p.evaluate("""() => {
-        const log = document.querySelector('[class*="st-key-chat_log_home"]');
-        if (!log) return;
-        const scroller = [log, ...log.querySelectorAll('*')].find(
-            el => el.scrollHeight > el.clientHeight + 4
-                && getComputedStyle(el).overflowY !== 'visible');
-        const msgs = log.querySelectorAll('[data-testid="stChatMessage"]');
-        const last = msgs[msgs.length - 1];
-        if (!scroller || !last) return;
-        const offset = last.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-        scroller.scrollTo({top: scroller.scrollTop + offset - 8, behavior: 'smooth'});
-    }""")
+def glide_to(p: Page, locator, offset: int = 24) -> None:
+    """Scroll the page smoothly so `locator` starts `offset` pixels from the top."""
+    locator.evaluate(
+        """(el, offset) => window.scrollTo({
+            top: el.getBoundingClientRect().top + window.scrollY - offset,
+            behavior: 'smooth'})""",
+        offset,
+    )
     p.wait_for_timeout(900)
 
 
-def switch_to(p, domain: str) -> None:
-    """Choose a domain in the header switch; Fashion lands on its chat (Ask Curio)."""
-    p.get_by_test_id("stButtonGroup").first.get_by_text(domain, exact=True).click()
+def ask(p: Page, text: str, *, typed: bool = True) -> None:
+    turns = p.get_by_test_id("assistant-turn")
+    before = turns.count()
+    box = p.get_by_label("Message Curio")
+    box.click()
+    if typed:
+        box.press_sequentially(text, delay=28)
+        p.wait_for_timeout(300)
+    else:
+        box.fill(text)
+    box.press("Enter")
+    expect(turns).to_have_count(before + 1, timeout=120_000)
     settle(p)
 
 
-def tour(p) -> None:
+def plan(p: Page, *, typed: bool = True) -> None:
+    box = p.get_by_label("Occasion", exact=True)
+    box.click()
+    if typed:
+        box.press_sequentially(OCCASION, delay=30)
+    else:
+        box.fill(OCCASION)
+    box.press("Enter")
+    expect(p.get_by_test_id("evening-plan")).to_be_visible(timeout=120_000)
+    settle(p)
+
+
+def pages_of(p: Page, domain: str):
+    return p.get_by_role("navigation", name=f"{domain} pages")
+
+
+def switch_to(p: Page, domain: str) -> None:
+    """Choose a domain in the header switch (it opens on the domain's main page)."""
+    p.get_by_role("navigation", name="Catalog").get_by_role("link", name=domain).click()
+    settle(p)
+
+
+def tour(p: Page) -> None:
     # 1. Plan my evening: three domains composed into one plan (a visit opens here).
     caption(p, "Plan my evening: one occasion, three domains composed")
-    p.wait_for_timeout(1200)
-    box = p.locator(".st-key-evening_occasion input")
-    box.click()
-    box.press_sequentially(OCCASION, delay=40)
-    box.press("Enter")
-    settle(p)
-    p.locator(".st-key-evening_plan_button button").click()
-    settle(p)
-    caption(p, "An outfit, a book and a drink paired with that book, each with its reason")
-    p.locator(".st-key-evening_theme_page").evaluate(
-        "el => el.scrollIntoView({block: 'start', behavior: 'smooth'})"
-    )
-    p.wait_for_timeout(4200)
-    caption(p, "Why it works: one line that cites each part's evidence")
-    p.wait_for_timeout(2600)
-    caption(p, "Swap any part: another drink, paired with the same book")
-    p.get_by_role("button", name="Another drink").first.click()
-    settle(p)
-    p.locator(".st-key-evening_theme_page").evaluate(
-        "el => el.scrollIntoView({block: 'start', behavior: 'smooth'})"
-    )
-    p.wait_for_timeout(3400)
-
-    # 2. The agent: plan, tools, verified answer.
-    p.evaluate("window.scrollTo({top: 0, behavior: 'smooth'})")
-    switch_to(p, "Fashion")
-    caption(p, "Ask in plain words: the agent plans, calls catalog tools and verifies")
     p.wait_for_timeout(1000)
-    ask(p, "Black trousers under €30")
-    p.get_by_text(re.compile(r"How Curio worked")).last.click()
+    plan(p)
+    caption(p, "An outfit, a book and a drink paired with that book, each with its reason")
+    glide_to(p, p.get_by_test_id("evening-plan"))
+    p.wait_for_timeout(2700)
+    caption(p, "Swap any part: another drink, paired with the same book")
+    drink = p.get_by_test_id("evening-drink")
+    drink.get_by_role("button", name="Another drink").click()
     settle(p)
-    scroll_chat_to_last(p)
-    caption(p, "Every step is shown; the grounding check verifies prices and IDs")
-    p.wait_for_timeout(4200)
+    p.wait_for_timeout(2200)
 
-    # 3. Book → drink pairing (through the menu, so the page never goes blank).
-    switch_to(p, "Books")
-    p.get_by_role("link", name="Books", exact=True).click()
+    # 2. The agent: plan, tools, a verified answer, every step shown.
+    switch_to(p, "Fashion")
+    pages_of(p, "Fashion").get_by_role("link", name="Ask Curio").click()
     settle(p)
-    caption(p, "Books: collaborative filtering on 6M ratings")
-    p.get_by_label("Describe a book").press_sequentially("The Great Gatsby", delay=35)
-    p.get_by_role("button", name="Find books").click()
-    settle(p)
-    p.wait_for_timeout(600)
-    p.locator('[class*="st-key-book_card_search_"]').first.get_by_role(
-        "button", name="View The Great Gatsby"
-    ).click()
-    settle(p)
-    p.wait_for_timeout(600)
-    caption(p, "Book → drink: Tom Buchanan's gin rickeys, with the evidence")
-    dialog = p.get_by_role("dialog")
-    dialog.get_by_role("button", name="Pair a drink").click()
-    settle(p)
+    caption(p, "Ask in plain words: the agent plans, calls catalog tools and verifies")
     p.wait_for_timeout(800)
-    # Bring the drinks and their reasons into view, down to "Another pairing".
-    dialog.get_by_role("button", name="Another pairing").evaluate(
-        "el => el.scrollIntoView({block: 'end', behavior: 'smooth'})"
-    )
-    p.wait_for_timeout(4500)
+    ask(p, QUESTION)
+    turn = p.get_by_test_id("assistant-turn").last
+    turn.get_by_role("button", name=re.compile(r"How Curio worked")).click()
+    p.wait_for_timeout(300)
+    glide_to(p, p.get_by_text(QUESTION, exact=True).last)
+    caption(p, "Every step is shown; the grounding check verifies prices and IDs")
+    p.wait_for_timeout(3300)
+
+    # 3. Approval: saving is only proposed; untick a piece, then approve.
+    turn.get_by_role("button", name=re.compile("^Shortlist the")).first.click()
+    drawer = p.get_by_test_id("approval-drawer")
+    expect(drawer.get_by_role("heading", name="Needs your approval")).to_be_visible(timeout=120_000)
+    settle(p)
+    caption(p, "Nothing is saved until you approve; untick what you don't want")
+    p.wait_for_timeout(1300)
+    drawer.get_by_role("checkbox").last.uncheck()
+    p.wait_for_timeout(1100)
+    drawer.get_by_role("button", name="Approve").click()
+    expect(drawer).to_be_hidden(timeout=120_000)
+    settle(p)
+    caption(p, "Approved: one piece saved, the other left out")
+    p.wait_for_timeout(1800)
+
+    # 4. Book → drink pairing.
+    switch_to(p, "Books")
+    caption(p, "Books: collaborative filtering on 6M ratings")
+    p.get_by_label("Describe a book").press_sequentially("The Great Gatsby", delay=25)
+    p.get_by_role("button", name="Find books").click()
+    found = p.get_by_role("region", name="Matching books")
+    expect(found).to_have_attribute("aria-busy", "false", timeout=120_000)
+    settle(p)
+    p.wait_for_timeout(300)
+    found.get_by_role("button", name="View The Great Gatsby", exact=True).first.click()
+    dialog = p.get_by_role("dialog")
+    settle(p)
+    caption(p, "Book → drink: Tom Buchanan's gin rickeys, with the evidence")
+    dialog.get_by_role("button", name="Pair a drink").click()
+    drinks = dialog.get_by_test_id("pairing-drink")
+    expect(drinks).to_have_count(3, timeout=120_000)
+    settle(p)
+    drinks.last.evaluate("el => el.scrollIntoView({block: 'end', behavior: 'smooth'})")
+    p.wait_for_timeout(3000)
+
+    # 5. A glimpse of dark mode, which follows the system.
+    p.emulate_media(color_scheme="dark")
+    caption(p, "Light and dark themes follow your system")
+    p.wait_for_timeout(2600)
 
 
 def to_webp(frames: list[tuple[Path, float]], stop: float, out: Path, workdir: Path) -> None:
@@ -227,20 +253,18 @@ def main() -> None:
         browser = pw.chromium.launch(executable_path=ARGS.executable_path)
         # Warm the models and caches first, so the recording shows answers, not cold starts.
         warm = browser.new_context(viewport=VIEWPORT).new_page()
-        warm.goto(UI)
-        settle(warm)
-        warm.locator(".st-key-evening_occasion input").fill(OCCASION)
-        warm.locator(".st-key-evening_occasion input").press("Enter")
-        settle(warm)
-        warm.locator(".st-key-evening_plan_button button").click()
-        settle(warm)
-        switch_to(warm, "Fashion")
-        ask(warm, "Black trousers under €30")
+        warm.goto(f"{URL}/evening")
+        plan(warm, typed=False)
+        warm.goto(f"{URL}/ask/fashion")
+        ask(warm, QUESTION, typed=False)
         warm.context.close()
-        page = browser.new_context(viewport=VIEWPORT).new_page()
+        page = browser.new_context(viewport=VIEWPORT, color_scheme="light").new_page()
         # Open the app before recording, so the first frame is Plan my evening, not a skeleton.
-        page.goto(UI)
+        page.goto(f"{URL}/")
+        expect(page.get_by_role("heading", name="Plan my evening", level=1)).to_be_visible()
         settle(page)
+        page.wait_for_timeout(800)  # the page's entrance animation
+        page.evaluate("window.scrollTo(0, 0)")
         cdp = page.context.new_cdp_session(page)
 
         def on_frame(event: dict) -> None:
