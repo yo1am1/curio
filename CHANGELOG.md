@@ -57,6 +57,8 @@ All notable changes to Curio are recorded here. The format follows
 - The Dockerfile pins every base image by exact version and digest: `node:26.12.1`,
   `python:3.13.17-slim` (was the floating `3.13-slim`) and `uv:0.11.32` (was the floating
   `0.11`, now the same uv as CI).
+- The web build no longer writes source maps, so the image and the API stop serving
+  `/assets/*.js.map`.
 
 ### Changed (wire)
 

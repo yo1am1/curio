@@ -481,3 +481,20 @@ def test_shopper_profiles_leave_out_the_age(services) -> None:
         dates = [p["purchase_date"] for p in profile["purchases"]]
         assert dates == ["2020-09-04", "2020-09-03"]
         assert client.get("/users/1").json()["user"] == {"user_id": 1}
+
+
+def test_health_discloses_no_configuration(cocktail_catalog) -> None:
+    """/health carries what the web app shows (catalog sizes, which features are on); never
+    the model, provider, URLs, paths or keys."""
+    cocktails = CocktailServices(cocktail_catalog, CocktailRecommender(cocktail_catalog))
+    configured = settings(
+        llm_model="secret-model-name",
+        llm_base_url="http://10.0.0.5:4000/v1",
+        llm_api_key="sk-not-for-clients",
+        agent_signing_key="k" * 40,
+    )
+    app = create_app(serve(cocktails=cocktails, llm_configured=True), settings=configured)
+    with TestClient(app) as client:
+        body = client.get("/health").text
+    for secret in ("secret-model-name", "10.0.0.5", "sk-not", "kkkk", "/home/", "/tmp/"):
+        assert secret not in body

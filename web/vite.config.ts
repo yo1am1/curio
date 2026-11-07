@@ -33,7 +33,9 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       target: "es2023",
-      sourcemap: true,
+      // No source maps in the build the API serves (and the image ships): they add bytes
+      // and expose nothing users need. `vite` (the dev server) maps sources on its own.
+      sourcemap: false,
       rolldownOptions: {
         output: {
           // Long-lived vendor chunks, so an app change does not re-download React.
