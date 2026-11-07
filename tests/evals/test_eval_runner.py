@@ -228,16 +228,14 @@ def test_a_whole_run_through_the_relay(tmp_path, isolated_process_state, monkeyp
     assert json.loads((run / "summary.json").read_text())["tasks"] == summary["tasks"]
 
 
-def test_a_relay_token_is_sent_as_the_api_key(monkeypatch):
+def test_a_relay_token_is_sent_as_the_api_key(monkeypatch, isolated_process_state):
+    # configure_environment writes the deadline, timeout, signing key, domains and proxy
+    # variables; `isolated_process_state` restores the whole environment afterwards, so none
+    # of them leaks into later tests (monkeypatch.delenv of an unset name records nothing).
     from evals.run_eval import configure_environment, parse_args
 
     for name in ("RELAY_TOKEN", "LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "LLM_PROVIDER"):
         monkeypatch.delenv(name, raising=False)
-    for name in ("AGENT_TURN_DEADLINE_SECONDS", "LLM_TIMEOUT_SECONDS", "AGENT_SIGNING_KEY"):
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.setenv("ENABLED_DOMAINS", "")
-    for name in ("NO_PROXY", "no_proxy"):  # restored after the test
-        monkeypatch.setenv(name, os.environ.get(name, ""))
     args = parse_args(["--relay-url", "http://127.0.0.1:8791/v1"])
     configure_environment(args, {"cocktails"})
     assert os.environ["LLM_API_KEY"] == "relay-not-a-secret"
