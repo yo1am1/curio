@@ -164,6 +164,18 @@ def test_forged_or_modified_proposals_are_rejected(tamper, chat_model_replying, 
         assistant.resume(ActionDecision(action=forged, approved=True), [])
 
 
+def test_a_proposal_survives_a_javascript_json_round_trip():
+    """A browser parses `40.0` and sends back `40`; the signature must still verify, while a
+    changed number never does."""
+    signer = ActionSigner(b"k" * 32)
+    pending = signer.issue("RememberPreferences", {"max_price": 40.0, "min_price": 9.5}, "x")
+    sent_back = pending.model_copy(update={"args": {"max_price": 40, "min_price": 9.5}})
+    assert signer.verify(sent_back) is sent_back
+    changed = pending.model_copy(update={"args": {"max_price": 41, "min_price": 9.5}})
+    with pytest.raises(InvalidActionError):
+        signer.verify(changed)
+
+
 @pytest.mark.parametrize(
     "edits",
     [{"product_ids": [1, 2]}, {"note": "x"}, {"product_ids": "1"}],
