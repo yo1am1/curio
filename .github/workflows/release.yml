@@ -102,6 +102,8 @@ jobs:
         if: steps.published.outputs.done == 'false'
         run: |
           docker run --rm "$IMAGE:$VERSION" python -c "import curio.app.api, curio.domains.pairings; print('ok')"
+          # The one container serves the React app too: the build must be in the image.
+          docker run --rm "$IMAGE:$VERSION" test -s web/dist/index.html
       - name: Push to ghcr.io
         if: steps.published.outputs.done == 'false'
         run: |

@@ -16,3 +16,7 @@ docs/
 tests
 CHANGELOG.md
 web/node_modules
+web/dist
+**/*.tsbuildinfo
+e2e-artifacts
+evals
