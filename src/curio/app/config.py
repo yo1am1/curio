@@ -45,8 +45,7 @@ class Settings(BaseSettings):
     # proposals expire on restart. Set it when running several API workers.
     agent_signing_key: SecretStr | None = None
 
-    # --- UI ---------------------------------------------------------------
-    api_url: str = "http://localhost:8000"
+    # --- Web app ----------------------------------------------------------
     # The built React app (`npm run build` in web/). The API serves it beside its own routes
     # whenever the folder holds a build; SERVE_WEB=false turns that off.
     web_dist: Path = Path("web/dist")
