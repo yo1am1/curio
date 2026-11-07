@@ -477,7 +477,8 @@ def configure_environment(args: argparse.Namespace, domains: set[str]) -> None:
     if args.relay_url:
         env["LLM_PROVIDER"] = "openai"
         env["LLM_BASE_URL"] = args.relay_url
-        env["LLM_API_KEY"] = "relay-not-a-secret"
+        # The relay's bearer token when it requires one (RELAY_TOKEN), sent as the API key.
+        env["LLM_API_KEY"] = env.get("RELAY_TOKEN") or "relay-not-a-secret"
         env["LLM_MODEL"] = args.model or "relay"
     elif args.model:
         env["LLM_MODEL"] = args.model

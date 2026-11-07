@@ -11,6 +11,9 @@ All notable changes to Curio are recorded here. The format follows
 - `docker compose` publishes port 8000 on `127.0.0.1` only, as `scripts/quickstart.sh`
   already did. `CURIO_HOST` (and `CURIO_PORT`) opt in to another address; Qdrant (no API key)
   is no longer published at all, since only the API needs it on the compose network.
+- The eval relay (`evals/relay.py`) takes an optional bearer token (`RELAY_TOKEN` or
+  `--token`; `run_eval` sends it as the API key) and refuses to listen on a non-loopback
+  address without one.
 
 ### Changed
 

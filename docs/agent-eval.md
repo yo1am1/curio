@@ -124,6 +124,11 @@ Qdrant index.
    uv run python -m evals.relay --port 8791 --queue evals/relay_queue --timeout 3600
    ```
 
+   It listens on 127.0.0.1. Anyone who reaches it can read every queued prompt and answer
+   as the model, so it can require a bearer token: export `RELAY_TOKEN=<a long random
+   value>` for both the relay and the runner (the runner sends it as the API key), or pass
+   `--token`. The relay refuses a non-loopback `--host` (such as `0.0.0.0`) without one.
+
 2. The runner, pointed at the relay. `--model` is only a label for the report:
 
    ```bash

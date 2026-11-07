@@ -13,7 +13,15 @@ from langchain_openai import ChatOpenAI
 from curio.domains.cocktails.agent.tools import COCKTAIL_TOOLS
 from curio.domains.fashion.agent.intent import SearchIntent
 from evals import relay_answer
-from evals.relay import RelayQueue, completion, serve, stream_chunks, write_json_atomic
+from evals.relay import (
+    RelayQueue,
+    completion,
+    is_loopback,
+    serve,
+    stream_chunks,
+    write_json_atomic,
+)
+from evals.relay import main as relay_main
 from evals.relay_answer import AnswerError, answer, build_answer, render
 
 
@@ -145,6 +153,56 @@ def test_models_and_health_endpoints(relay):
     url, _ = relay
     assert httpx.get(f"{url}/models", trust_env=False).json()["data"][0]["id"] == "relay"
     assert httpx.get(url, trust_env=False).json()["status"] == "ok"
+
+
+def test_a_token_is_required_on_every_request_when_set(tmp_path):
+    port = _free_port()
+    server = serve(port, tmp_path / "queue", timeout=1.5, poll=0.02, token="s3cret")
+    url = f"http://127.0.0.1:{port}/v1"
+    try:
+        assert httpx.get(f"{url}/models", trust_env=False).status_code == 401
+        wrong = {"Authorization": "Bearer nope"}
+        assert httpx.get(url, headers=wrong, trust_env=False).status_code == 401
+        posted = httpx.post(f"{url}/chat/completions", json={"model": "m"}, trust_env=False)
+        assert posted.status_code == 401
+        assert not RelayQueue(tmp_path / "queue").sequences()  # nothing was queued
+        right = {"Authorization": "Bearer s3cret"}
+        assert httpx.get(url, headers=right, trust_env=False).json()["status"] == "ok"
+    finally:
+        server.shutdown()
+
+
+def test_a_token_reaches_the_relay_through_the_openai_client(tmp_path):
+    port = _free_port()
+    server = serve(port, tmp_path / "queue", timeout=1.5, poll=0.02, token="s3cret")
+    queue = RelayQueue(tmp_path / "queue")
+    responder = Responder(queue, lambda request: ("Hello.", None))
+    try:
+        model = ChatOpenAI(
+            model="relay", base_url=f"http://127.0.0.1:{port}/v1", api_key="s3cret", max_retries=0
+        )
+        assert model.invoke("hi").content == "Hello."
+    finally:
+        responder.stop()
+        server.shutdown()
+
+
+@pytest.mark.parametrize("host", ["0.0.0.0", "192.168.1.20", "::"])
+def test_a_non_loopback_relay_needs_a_token(tmp_path, host):
+    with pytest.raises(ValueError, match="without a token"):
+        serve(_free_port(), tmp_path / "queue", host=host)
+
+
+def test_the_cli_refuses_a_public_relay_without_a_token(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("RELAY_TOKEN", raising=False)
+    with pytest.raises(SystemExit):
+        relay_main(["--host", "0.0.0.0", "--port", str(_free_port()), "--queue", str(tmp_path)])
+    assert "without a token" in capsys.readouterr().err
+
+
+def test_loopback_hosts():
+    assert is_loopback("127.0.0.1") and is_loopback("localhost") and is_loopback("::1")
+    assert not is_loopback("0.0.0.0") and not is_loopback("example.org")
 
 
 def test_sequence_numbers_continue_after_a_restart(tmp_path):
