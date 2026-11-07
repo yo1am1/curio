@@ -68,7 +68,7 @@ The second and third domains forced the engine to generalise:
   budget or limit, and allergen, health, stock and foreign-currency claims are reported.
   Clarifying questions are checked like answers. A failed check gets one self-correction,
   then a deterministic fallback built from catalog facts. On a labelled corpus of 212
-  answers the check catches 63 of 66 false ones and flags none of 146 correct ones; colours,
+  answers the check catches 63 of 66 false ones and flags 1 of 146 correct ones; colours,
   genres and descriptions are not checked ([details](docs/agent-architecture.md#grounding-guardrail)).
 - **Budgets and streaming.** A turn allows five tool calls and 90 seconds. Every step
   streams to the web app as NDJSON, so you see what the agent did.

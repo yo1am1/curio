@@ -18,8 +18,8 @@ All notable changes to Curio are recorded here. The format follows
   limit, or where the answer contradicts it, so "Yes, it's €4.99" for an €8.99 dress is
   caught. Bold, italic or quoted names (and "<Title> by <Author>") that no tool returned,
   wrong authors, wrong alcohol labels, allergen, diet, health and age-safety promises,
-  stock and delivery promises, percentages not in the description and non-euro prices in
-  fashion and evening answers are reported.
+  stock and delivery promises, percentages not in the description and non-euro amounts in
+  fashion and evening answers (as before, even the shopper's own "$150") are reported.
 - Clarifying questions and their quick replies are grounded like answers: an unverified
   question goes back to the model once, then becomes a general question without quick
   replies.
@@ -38,7 +38,7 @@ All notable changes to Curio are recorded here. The format follows
 - Prompts ask for each price, rating and amount next to the item it belongs to, and never
   to confirm a price or rating the shopper states unless the catalog shows it.
 - A labelled grounding corpus (`tests/agents/grounding_corpus/`) gates the check in CI:
-  recall 63/66 on false answers, 0/146 false alarms on correct ones (real-model, scripted
+  recall 63/66 on false answers, 1/146 false alarms on correct ones (real-model, scripted
   and written answers). docs/agent-architecture.md lists what is and is not checked.
 
 - CI: a "Docker image" workflow builds and smoke-tests the image on pull requests that can

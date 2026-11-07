@@ -977,15 +977,10 @@ OTHER_CURRENCY = re.compile(
 )
 
 
-def check_currency(text: str, tally: Tally, typed: str = "") -> None:
-    """Amounts in dollars, pounds or yen: never a catalog price. The shopper's own figure
-    may be repeated as a budget or where the answer corrects it ("your $150 budget")."""
-    numbers = amounts_in(typed)
+def check_currency(text: str, tally: Tally) -> None:
+    """Amounts in dollars, pounds or yen: never a catalog price, and answers quote euros, so
+    each one is reported, even the shopper's own figure ("your $150 budget"): the answer
+    says how it was read in euros instead."""
     for match in OTHER_CURRENCY.finditer(text):
         raw = match.group(0)
-        sentence = (max(0, text.rfind("\n", 0, match.start())), len(text))
-        framing = qualifier(text, match.start(), match.end(), sentence)
-        value = amounts_in(raw)
-        typed_figure = bool(value) and any(abs(value[0] - n) < 1e-9 for n in numbers)
-        ok = typed_figure and (framing.budget or framing.contradicted or framing.mode != "exact")
-        tally.add("price", ok, f"{raw} is not a price in euros, the catalog's currency")
+        tally.add("price", False, f"{raw} is not a price in euros, the catalog's currency")

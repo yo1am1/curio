@@ -133,9 +133,12 @@ def test_fashion_reports_currency_stock_and_material_claims(text, status, catalo
     assert check_grounding(text, catalog.get_many([3, 1])).status == status
 
 
-def test_fashion_lets_the_shopper_repeat_a_dollar_budget(catalog):
+def test_fashion_reports_even_the_shoppers_own_dollar_figure(catalog):
     typed = "Something under $40"
     text = "Prices are in euros, so I used your $40 budget as €40: the **Slim Jeans** are €29.99."
+    report = check_grounding(text, catalog.get_many([1]), [40.0], typed)
+    assert report.issues == ["$40 is not a price in euros, the catalog's currency"]
+    text = "Prices are in euros, so I read your budget as €40: the **Slim Jeans** are €29.99."
     assert check_grounding(text, catalog.get_many([1]), [40.0], typed).status == "verified"
 
 

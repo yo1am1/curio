@@ -371,7 +371,8 @@ name. So a book, drink or brand outside the catalog ("**Paper Plane**", "**Nike 
 delivery and discount promises ("in stock", "ships tomorrow", "20% off") in fashion and
 evening answers, are always reported, unless the clause negates or hedges them ("I can't
 guarantee it's nut-free", "check whether it's gluten-free"). Amounts in dollars, pounds or
-yen are reported in fashion and evening answers, except the shopper's own figure as a budget.
+yen are reported in fashion and evening answers, even the shopper's own figure: the answer
+should say how the budget was read in euros.
 A sentence that repeats tool text word for word (an evening swap's "An alcohol-free drink:
 Figgy Thyme → Masala Chai") is the tool's own.
 
@@ -413,20 +414,23 @@ prepared catalogs, and the euro figures the tools stated without an item), by
 |---|---|---|---|---|
 | The audit's 13 probes (F1), on the test fixtures | 13 | 13 | | |
 | Real-model texts of the first evaluation run (39 answers, 4 questions) | | | 43 | 0 |
-| Scripted end-to-end model, eval dry run plus its e2e scenarios | 4 (its deliberate inventions) | 4 | 68 | 0 |
+| Scripted end-to-end model, eval dry run plus its e2e scenarios | 4 (its deliberate inventions) | 4 | 68 | 1 |
 | Written for this corpus, on the evidence of real turns | 49 | 46 | 35 | 0 |
-| **Total** | **66** | **63 (recall 0.955)** | **146** | **0 (false-alarm rate 0.000)** |
+| **Total** | **66** | **63 (recall 0.955)** | **146** | **1 (false-alarm rate 0.007)** |
 
 The three misses are kept on purpose and are misses by design: a wrong colour, a wrong
 glass and a wrong genre ("Gone Girl is a gentle cosy mystery"). Colours, glasses, genres,
-descriptions, plot and shelves are not checked. On the same corpus the previous check
+descriptions, plot and shelves are not checked. The false alarm is the scripted model's
+evening answer for "budget $150", whose "why it works" line repeats the shopper's "$150":
+nothing in it is false, but every non-euro amount is reported, so it is rewritten (the
+evaluation's dollar-budget task wants no "$" in the answer either). On the same corpus the previous check
 (v1) caught 17 of the 66 false answers (0.258), none of the 13 probes, and flagged 3 of the
 146 correct texts (two of them questions, which v1 did not check in production).
 
 Read these numbers with their limits. The written cases were written by the same person who
 wrote the check, after it existed, and the heading and binding rules were calibrated on the
 relay and stub texts, so the corpus is not a held-out test: it shows the check catches the
-listed failure classes and does not flag these 146 texts, not how it does on a new model's
+listed failure classes and flags only one of these 146 texts, not how it does on a new model's
 answers. The real-model sample is one run of 39 answers.
 
 ### Limits

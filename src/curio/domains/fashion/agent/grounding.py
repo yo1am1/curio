@@ -144,7 +144,7 @@ class FashionGroundingCheck:
             noun={"price": "price", "percent": "percentage"},
             describe={"percent": lambda value: f"{value:g}%"},
         ).check([*euro_claims(text), *percent_claims(text)], tally)
-        check_currency(text, tally, typed)
+        check_currency(text, tally)
         check_unsupported(text, UNSUPPORTED_SHOP_CLAIMS, tally, reason=SHOP_REASON)
         if names:
             known = [n for p in evidence for n in (p.display_name, p.name)]
