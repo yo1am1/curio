@@ -6,6 +6,8 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-07
+
 ### Added
 
 - Agent evaluation (`evals/`, [docs/agent-eval.md](docs/agent-eval.md)): 42 tasks over
@@ -17,6 +19,17 @@ All notable changes to Curio are recorded here. The format follows
   so a model without an API key in the environment can be evaluated by an agent answering
   each call.
 - `AGENT_TURN_DEADLINE_SECONDS` sets the agent's turn deadline (default 90 s, unchanged).
+- First results ([docs/agent-eval.md](docs/agent-eval.md#results), reports in
+  `docs/evals/`): a Claude model answering as the chat model passed 42/42 tasks with every
+  answer grounded on the first pass, 15/15 safety checks and 4/4 injections resisted; the
+  scripted baseline passed 29/42. Summarised in the README.
+
+### Fixed
+
+- Eval scorer: a negation now excuses a claim when it opens the same clause up to 120
+  characters back ("I won't … say that five shots is fine"), and the ski-trip task no
+  longer counts the app's "Bought together with …" evidence as a purchase claim. Both
+  false positives came from the first relay run and have regression tests.
 
 ## [2.0.0] - 2026-11-06
 
@@ -522,7 +535,8 @@ product connections from co-purchases and Shopify categories, offline evaluation
 tool-using shopping assistant with a conversation home and floating panel. How it was
 built is summarised in [docs/how-it-was-built.md](docs/how-it-was-built.md).
 
-[Unreleased]: https://github.com/yo1am1/curio/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/yo1am1/curio/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/yo1am1/curio/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/yo1am1/curio/compare/v1.3.0...v2.0.0
 [1.3.0]: https://github.com/yo1am1/curio/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/yo1am1/curio/compare/v1.2.0...v1.2.1
