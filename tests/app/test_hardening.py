@@ -1,11 +1,14 @@
-"""HTTP hardening: the cap on concurrent agent turns, and what stays responsive under it."""
+"""HTTP hardening: body limits, uploads, and the cap on concurrent agent turns."""
 
+import io
 import threading
 import time
 from collections.abc import Iterator
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from curio.app import api as api_module
 from curio.app.api import create_app
@@ -186,3 +189,105 @@ def test_production_app_reads_the_cap_from_the_environment(monkeypatch, cocktail
         assert client.post("/chat", json=CHAT).status_code == 503
         slow.release.set()
         thread.join(10)
+
+
+# --- Request-body limits ------------------------------------------------------------------
+
+
+@pytest.fixture
+def cocktail_client(cocktail_catalog) -> Iterator[TestClient]:
+    with TestClient(_app(cocktail_catalog, None, max_body_bytes=64 * 1024)) as client:
+        yield client
+
+
+def test_json_bodies_over_the_limit_get_413_before_parsing(cocktail_client) -> None:
+    """The auditor sent 200 MB of unknown fields to /cocktails/search and got 200."""
+    padded = b'{"query":"mojito","junk":"' + b"x" * (65 * 1024) + b'"}'
+    response = cocktail_client.post(
+        "/cocktails/search", content=padded, headers={"content-type": "application/json"}
+    )
+    assert response.status_code == 413
+    assert response.json() == {"detail": "Request body is too large: the limit is 65,536 bytes."}
+    small = cocktail_client.post("/cocktails/search", json={"query": "mojito"})
+    assert small.status_code == 200
+
+
+def test_a_streamed_body_without_length_is_cut_off_at_the_limit(cocktail_client) -> None:
+    sent = 0
+
+    def chunks() -> Iterator[bytes]:
+        nonlocal sent
+        yield b'{"query":"mojito","junk":"'
+        for _ in range(64):  # 4 MiB in 64 KiB chunks, no Content-Length
+            sent += 1
+            yield b"x" * (64 * 1024)
+        yield b'"}'
+
+    response = cocktail_client.post(
+        "/cocktails/search", content=chunks(), headers={"content-type": "application/json"}
+    )
+    assert response.status_code == 413
+    assert "too large" in response.json()["detail"]
+
+
+def test_the_largest_valid_chat_request_fits_the_default_limit() -> None:
+    history = [{"role": "user", "content": "é" * 4000} for _ in range(50)]
+    body = httpx.Request("POST", "/", json={"message": "m" * 2000, "history": history}).content
+    assert len(body) < Settings(_env_file=None).max_body_bytes
+
+
+def _png(size=(4, 4)) -> bytes:
+    out = io.BytesIO()
+    Image.new("RGB", size, "red").save(out, format="PNG")
+    return out.getvalue()
+
+
+def test_an_oversized_upload_is_refused_before_it_is_spooled(services) -> None:
+    """The upload limit applies while the body streams in: a 30 MB part is cut off just past
+    10 MB instead of being written to a temporary file in full."""
+    read = 0
+
+    def body() -> Iterator[bytes]:
+        nonlocal read
+        yield (
+            b'--B\r\nContent-Disposition: form-data; name="file"; filename="a.png"\r\n'
+            b"Content-Type: image/png\r\n\r\n"
+        )
+        for _ in range(30):
+            read += 1
+            yield b"\0" * (1024 * 1024)
+        yield b"\r\n--B--\r\n"
+
+    with TestClient(create_app(services, settings=settings())) as client:
+        response = client.post(
+            "/search/image",
+            content=body(),
+            headers={"content-type": "multipart/form-data; boundary=B"},
+        )
+        assert response.status_code == 413
+        assert response.json() == {"detail": "Image must be at most 10 MB."}
+        # A declared length over the limit is refused without reading anything.
+        declared = client.post(
+            "/search/image",
+            content=b"x",
+            headers={
+                "content-type": "multipart/form-data; boundary=B",
+                "content-length": "99999999",
+            },
+        )
+        assert declared.status_code == 413
+        assert client.post("/search/image", files={"file": ("a.png", _png())}).status_code == 200
+
+
+@pytest.mark.parametrize("fmt", ["TIFF", "BMP", "GIF", "ICO"])
+def test_uploads_are_decoded_only_as_png_or_jpeg(services, fmt) -> None:
+    raw = io.BytesIO()
+    Image.new("RGB", (8, 8), "red").save(raw, format=fmt)
+    with TestClient(create_app(services, settings=settings())) as client:
+        response = client.post("/search/image", files={"file": ("a.img", raw.getvalue())})
+        assert response.status_code == 400
+        assert response.json() == {"detail": "Upload a valid PNG or JPEG image."}
+        jpeg = io.BytesIO()
+        Image.new("RGB", (8, 8), "red").save(jpeg, format="JPEG")
+        ok = client.post("/search/image", files={"file": ("a.jpg", jpeg.getvalue())})
+        assert ok.status_code == 200

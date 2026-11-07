@@ -1,19 +1,27 @@
-"""HTTP hardening around the API: a cap on concurrent agent turns.
+"""HTTP hardening around the API: request-body limits and a cap on concurrent agent turns.
 
-Every route is a sync function, so it runs in AnyIO's worker-thread pool (40 threads). An
-agent turn holds its thread for as long as the model takes, up to the turn deadline, so a
-few dozen slow chats used to stall every endpoint, `/health` included. `TurnSlots` caps the
-turns in flight well below the pool size; a turn over the cap is refused at once with 503
-and `Retry-After`, and the other routes always find a free thread.
+Request bodies: pydantic bounds every field the API reads, but it ignores unknown fields, so
+a 200 MB JSON body used to be parsed in full, and Starlette spooled a whole multipart upload
+to disk before the route could look at its size. `BodySizeLimit` refuses a body over its
+route's limit with 413: at once when `Content-Length` says so, else as soon as the streamed
+bytes pass the limit, so at most the limit is ever read.
+
+Concurrent turns: every route is a sync function, so it runs in AnyIO's worker-thread pool
+(40 threads). An agent turn holds its thread for as long as the model takes, up to the turn
+deadline, so a few dozen slow chats used to stall every endpoint, `/health` included.
+`TurnSlots` caps the turns in flight well below the pool size; a turn over the cap is
+refused at once with 503 and `Retry-After`, and the other routes always find a free thread.
 """
 
 import inspect
+import json
 import threading
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
-from starlette.types import Receive, Scope, Send
+from starlette.datastructures import Headers
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 # How long a client should wait before retrying a turn refused for capacity.
 RETRY_AFTER_SECONDS = 5
@@ -79,3 +87,82 @@ class SlotStreamingResponse(StreamingResponse):
             if state != inspect.GEN_RUNNING:
                 # A generator still running in a worker thread releases in its `finally`.
                 self._slot.release()
+
+
+class _BodyTooLarge(Exception):
+    """Raised from `receive` once a streamed body passes its limit."""
+
+
+class BodySizeLimit:
+    """ASGI middleware: 413 for a request body over its route's limit.
+
+    `limits` maps a path to `(bytes, detail)`; other paths get `default`. A declared
+    `Content-Length` over the limit is refused without reading the body. Otherwise the bytes
+    are counted as they arrive and the request is cut off just past the limit; whatever the
+    route then answers (a parse error) is replaced by the 413.
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        default: tuple[int, str],
+        limits: Mapping[str, tuple[int, str]] | None = None,
+    ) -> None:
+        self.app = app
+        self.default = default
+        self.limits = dict(limits or {})
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        limit, detail = self.limits.get(scope["path"], self.default)
+        declared = Headers(scope=scope).get("content-length")
+        if declared is not None and declared.isdigit() and int(declared) > limit:
+            await _too_large(send, detail)
+            return
+        received = 0
+        exceeded = False
+        started = False
+
+        async def limited() -> Message:
+            nonlocal received, exceeded
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > limit:
+                    exceeded = True
+                    raise _BodyTooLarge
+            return message
+
+        async def guarded(message: Message) -> None:
+            nonlocal started
+            if exceeded and not started:
+                return  # the route's answer to a cut-off body; the 413 replaces it
+            started = started or message["type"] == "http.response.start"
+            await send(message)
+
+        try:
+            await self.app(scope, limited, guarded)
+        except Exception:
+            if not exceeded:
+                raise
+        if exceeded and not started:
+            await _too_large(send, detail)
+
+
+async def _too_large(send: Send, detail: str) -> None:
+    body = json.dumps({"detail": detail}).encode()
+    await send(
+        {
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode()),
+                (b"connection", b"close"),
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})

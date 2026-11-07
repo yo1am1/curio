@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # 503 with Retry-After. Keep it well below AnyIO's 40 worker threads, which every route
     # shares, so search and /health stay responsive while turns wait on a slow model.
     max_concurrent_turns: int = Field(default=8, ge=1, le=32)
+    # Largest request body, in bytes, for every route but the image upload (which allows
+    # 10 MB): 413 beyond it. The largest valid chat request (50 history turns of 4,000
+    # characters) fits in 1 MiB.
+    max_body_bytes: int = Field(default=1024 * 1024, ge=64 * 1024, le=64 * 1024 * 1024)
 
     # --- Web app ----------------------------------------------------------
     # The built React app (`npm run build` in web/). The API serves it beside its own routes

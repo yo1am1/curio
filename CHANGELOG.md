@@ -18,6 +18,14 @@ All notable changes to Curio are recorded here. The format follows
   `/chat` and `/chat/stream` answer **503 with `Retry-After: 5`** at once (a new status for
   these routes, documented in the OpenAPI schema) instead of queueing on the worker-thread
   pool, which 45 slow chats used to exhaust until `/health` and search stopped answering.
+- Request bodies are limited: **413** for a body over `MAX_BODY_BYTES` (default 1 MiB) on
+  every route (`{"detail": "Request body is too large: ..."}`), and over 10 MB on
+  `POST /search/image`. The limit is enforced while the body streams in, so an oversized
+  upload is cut off at the limit instead of being spooled to disk first (it used to be read
+  in full before the existing 413), and a 200 MB JSON body is no longer parsed.
+- Uploaded images are decoded only as PNG or JPEG (what the UI offers): other formats get
+  the existing 400 "Upload a valid PNG or JPEG image." without reaching Pillow's other
+  parsers.
 
 ### Removed
 

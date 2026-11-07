@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from curio.app.config import Settings, get_settings
 from curio.app.demo import DemoCustomer
-from curio.app.hardening import SlotStreamingResponse, TurnSlots
+from curio.app.hardening import BodySizeLimit, SlotStreamingResponse, TurnSlots
 from curio.app.schemas import AssistantReply, ChatRequest, Domain, TurnContext
 from curio.app.services import (
     BOOKS,
@@ -77,6 +77,12 @@ logger = logging.getLogger(__name__)
 
 MAX_TOP_K = 50
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+# The multipart envelope around the image: boundaries, part headers, the file name.
+MULTIPART_OVERHEAD_BYTES = 64 * 1024
+UPLOAD_TOO_LARGE = "Image must be at most 10 MB."
+# Formats Pillow may decode from an upload (the UI offers PNG and JPEG); others never reach
+# a decoder, which keeps TIFF, PSD and the rest of Pillow's parsers out of reach.
+UPLOAD_FORMATS = ("PNG", "JPEG")
 # Bounds decode memory: a small compressed file can still expand to gigabytes of pixels.
 MAX_IMAGE_PIXELS = 25_000_000
 CHAT_DISABLED = "Chat is disabled: set LLM_MODEL (and LLM_API_KEY / LLM_BASE_URL) in .env."
@@ -354,9 +360,9 @@ def _to_hits(fashion: FashionServices, scored: Sequence[ScoredProduct]) -> list[
 
 def _read_image(upload: UploadFile) -> Image.Image:
     if upload.size is None or upload.size > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Image must be at most 10 MB.")
+        raise HTTPException(status_code=413, detail=UPLOAD_TOO_LARGE)
     try:
-        image = Image.open(io.BytesIO(upload.file.read()))
+        image = Image.open(io.BytesIO(upload.file.read()), formats=UPLOAD_FORMATS)
         if image.width * image.height > MAX_IMAGE_PIXELS:
             raise HTTPException(status_code=413, detail="Image resolution is too large.")
         image.load()  # Image.open is lazy; decode now so corrupt files fail here.
@@ -403,6 +409,15 @@ def create_app(
         title="Curio Recommendation API",
         version=version("curio-recommendations"),
         lifespan=lifespan,
+    )
+
+    app.add_middleware(
+        BodySizeLimit,
+        default=(
+            settings.max_body_bytes,
+            f"Request body is too large: the limit is {settings.max_body_bytes:,} bytes.",
+        ),
+        limits={"/search/image": (MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES, UPLOAD_TOO_LARGE)},
     )
 
     @app.exception_handler(IndexNotBuiltError)
