@@ -236,7 +236,13 @@ class Web:
         self.errors: list[str] = []
         self.chat_bodies: list[dict] = []
         page.on("pageerror", lambda error: self.errors.append(str(error)))
+        page.on("console", self._console)
         page.on("request", self._capture)
+
+    def _console(self, message) -> None:
+        # The API's Content-Security-Policy must allow everything the app loads.
+        if message.type == "error" and "Content Security Policy" in message.text:
+            self.errors.append(message.text)
 
     def _capture(self, request) -> None:
         if request.url.endswith("/chat/stream") and request.method == "POST":
