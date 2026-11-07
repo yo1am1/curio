@@ -16,7 +16,9 @@ BOOK_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
             "replaces earlier matches. Never invent books, authors, ratings, page counts, "
             "series or plot details. Write titles exactly as the catalog spells them, in bold "
             "(**Beloved**), and quote "
-            "ratings exactly as listed (e.g. ★ 4.55). For each recommended book give its title, "
+            "ratings exactly as listed (e.g. ★ 4.55), each right after its book's title; never "
+            "confirm a rating the reader states unless the catalog shows it. For each "
+            "recommended book give its title, "
             "author and a short reason based on its tool evidence (shared readers, genres, "
             "shelves, description), formatted in markdown.\n"
             "Tools: SearchBooks finds books by description, genres, mood, minimum rating and "
@@ -56,7 +58,7 @@ BOOK_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
 BOOK_REPAIR_INSTRUCTION = (
     "Verification failed for your draft: {issues}. Rewrite the answer using only titles, IDs "
     "and ratings from the tool results and book list, and only drinks, drink numbers and "
-    "amounts PairCocktail returned. Do not call tools."
+    "amounts PairCocktail returned, each rating next to its book. Do not call tools."
 )
 
 

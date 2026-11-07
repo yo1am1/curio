@@ -39,7 +39,8 @@ ANSWER_PROMPT = ChatPromptTemplate.from_messages(
             "search replaces earlier matches. Never invent products, prices "
             "or details. For each recommended product give its name, colour and price in "
             "euros, plus a short reason based on its description or tool evidence, formatted "
-            "in markdown.\n"
+            "in markdown. Put each price right after the name of the product it belongs to, "
+            "and never confirm a price the shopper states unless the catalog shows it.\n"
             "Tools: SearchCatalog refines the visual query while preserving the current budget, "
             "audience, type and colour filters. InspectProducts reads exact details of "
             "referenced IDs for questions or comparisons. FindRelated finds pieces that go with "
@@ -74,7 +75,8 @@ ANSWER_PROMPT = ChatPromptTemplate.from_messages(
 
 REPAIR_INSTRUCTION = (
     "Verification failed for your draft: {issues}. Rewrite the answer using only names, "
-    "prices and IDs from the tool results and product list. Do not call tools."
+    "prices and IDs from the tool results and product list, each price next to the product "
+    "it belongs to. Do not call tools."
 )
 
 

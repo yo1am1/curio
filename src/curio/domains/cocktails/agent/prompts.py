@@ -16,7 +16,7 @@ COCKTAIL_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
             "steps, and quote ingredient amounts exactly as the recipe lists them. For each "
             "recommended drink give its name, its alcohol status (contains alcohol, alcohol-free "
             "or alcohol optional) and a short reason based on its recipe or tool evidence, "
-            "formatted in markdown.\n"
+            "formatted in markdown. Give each amount next to the drink it belongs to.\n"
             "Tools: SearchCocktails finds drinks by description, required ingredients, alcohol "
             "and category. InspectCocktails reads full recipes with amounts and method for "
             "referenced IDs. SimilarCocktails finds drinks sharing ingredients with one drink. "
@@ -47,7 +47,8 @@ COCKTAIL_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
 
 COCKTAIL_REPAIR_INSTRUCTION = (
     "Verification failed for your draft: {issues}. Rewrite the answer using only drink names, "
-    "IDs and ingredient amounts from the tool results and drink list. Do not call tools."
+    "IDs, alcohol labels and ingredient amounts from the tool results and drink list, each "
+    "amount next to its drink. Do not call tools."
 )
 
 

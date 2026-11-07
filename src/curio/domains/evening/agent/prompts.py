@@ -45,8 +45,8 @@ EVENING_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
 
 EVENING_REPAIR_INSTRUCTION = (
     "Verification failed for your draft: {issues}. Rewrite the answer using only the pieces, "
-    "prices, totals, books, ratings and drinks in the evening plan the tools returned. Do not "
-    "call tools."
+    "prices, totals, books, ratings and drinks in the evening plan the tools returned, each "
+    "price, rating and amount next to the piece, book or drink it belongs to. Do not call tools."
 )
 
 
