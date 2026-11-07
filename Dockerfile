@@ -1,7 +1,7 @@
 # One image, one port: the API serves the React app (web/dist) beside its own routes.
 
 # --- The React app ----------------------------------------------------------------------------
-FROM node:22.23.4-bookworm-slim AS web
+FROM node:26.12.1-bookworm-slim AS web
 WORKDIR /web
 # Dependencies first, so a code change reuses the npm layer.
 COPY web/package.json web/package-lock.json ./
