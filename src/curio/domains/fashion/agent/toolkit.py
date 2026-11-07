@@ -44,6 +44,7 @@ from curio.domains.fashion.agent.tools import (
     SwapOutfitItem,
 )
 from curio.domains.fashion.catalog import ProductCatalog
+from curio.domains.fashion.currency import budget_in_text, foreign_note
 from curio.domains.fashion.models import Product
 from curio.domains.fashion.navigator import CatalogNavigator, NoPersonalHistoryError
 from curio.domains.fashion.outfits import (
@@ -73,9 +74,11 @@ INVALID_ACTION = (
     "to five distinct slots), SwapOutfitItem with a slot of the current outfit, or AskShopper "
     "with a question and two to four options."
 )
-# Turn.extras keys: the outfit this turn built or changed, and the one the client sent.
+# Turn.extras keys: the outfit this turn built or changed, the one the client sent, and the
+# note about a budget given in dollars or pounds.
 OUTFIT = "outfit"
 CURRENT_OUTFIT = "current_outfit"
+CURRENCY_NOTE = "currency_note"
 
 
 class FashionToolkit(BaseToolkit[Product]):
@@ -140,6 +143,7 @@ class FashionToolkit(BaseToolkit[Product]):
 
     def plan(self, turn: Turn[Product], history: Sequence[BaseMessage]) -> Iterator[AgentStep]:
         intent = self._intent_extractor.extract(turn.message, history)
+        intent = _with_written_budget(intent, turn.message)
         intent, remembered = _with_preferences(intent, turn.context.preferences)
         turn.intent = intent
         yield AgentStep(
@@ -148,6 +152,11 @@ class FashionToolkit(BaseToolkit[Product]):
             summary=_describe(intent, remembered),
             detail=intent.model_dump(exclude_defaults=True) | {"from_memory": remembered},
         )
+        # Dollars or pounds: prices are euros and nothing is converted, which the trace, the
+        # session prompt and every tool result say, so the answer can too.
+        if note := foreign_note(turn.message, intent.max_price):
+            turn.extras[CURRENCY_NOTE] = note
+            yield AgentStep(kind="plan", name="Currency", summary=note)
         if intent.wants_products:
             turn.show(self._find_products(intent))
             yield _search_step(intent, turn.items)
@@ -202,7 +211,7 @@ class FashionToolkit(BaseToolkit[Product]):
             return self._swap(turn, action)
         else:  # pragma: no cover - POLICIES and TOOLS are defined together
             raise ToolError(INVALID_ACTION)
-        return render_products(turn.items, turn.reasons), step
+        return _with_note(render_products(turn.items, turn.reasons), turn), step
 
     def _build_outfit(
         self, turn: Turn[Product], action: BuildOutfit
@@ -244,7 +253,8 @@ class FashionToolkit(BaseToolkit[Product]):
             status="ok" if outfit.status == "complete" else "skipped",
             detail={"occasion": outfit.occasion, "total": outfit.total, "status": outfit.status},
         )
-        return render_outfit(outfit), step
+        note = foreign_note(turn.message, action.budget) if CURRENCY_NOTE in turn.extras else None
+        return render_outfit(outfit) + (f"\nNote: {note}" if note else ""), step
 
     def _swap(self, turn: Turn[Product], action: SwapOutfitItem) -> tuple[str, AgentStep]:
         current: Outfit | None = turn.extras.get(OUTFIT) or turn.extras.get(CURRENT_OUTFIT)
@@ -270,7 +280,8 @@ class FashionToolkit(BaseToolkit[Product]):
             step = AgentStep(
                 kind="tool", name="SwapOutfitItem", summary=summary, status="skipped", detail=detail
             )
-            return f"{summary} The outfit is unchanged.\n{render_outfit(swap.outfit)}", step
+            unchanged = f"{summary} The outfit is unchanged.\n{render_outfit(swap.outfit)}"
+            return _with_note(unchanged, turn), step
         summary = (
             f"Swapped {label}: {swap.old.display_name} → {swap.new.display_name} · "
             f"{_euro(swap.new.price)}; total {_euro(swap.outfit.total)}."
@@ -285,7 +296,7 @@ class FashionToolkit(BaseToolkit[Product]):
             f"Replaced the {swap.old.display_name} [id {swap.old.product_id}] "
             f"({_euro(swap.old.price)}) with the {swap.new.display_name}.\n"
         )
-        return replaced + render_outfit(swap.outfit), step
+        return _with_note(replaced + render_outfit(swap.outfit), turn), step
 
     def _show_outfit(self, turn: Turn[Product], outfit: Outfit) -> None:
         turn.extras[OUTFIT] = outfit
@@ -477,6 +488,8 @@ class FashionToolkit(BaseToolkit[Product]):
             )
         else:
             parts.append("the shortlist is empty")
+        if note := turn.extras.get(CURRENCY_NOTE):
+            parts.append(f"currency note: {note.rstrip('.')}")
         return ". ".join(parts) + "."
 
     def _allowed_amounts(self, turn: Turn[Product]) -> list[float]:
@@ -521,6 +534,23 @@ def related_sections(product: Product, audience: Audience | None = None) -> tupl
     which the catalog does not split by gender) leaves the results unrestricted."""
     audience = audience or SECTION_AUDIENCE.get(product.section)
     return AUDIENCE_SECTIONS[audience] if audience else ()
+
+
+def _with_written_budget(intent: SearchIntent, message: str) -> SearchIntent:
+    """A budget the shopper wrote in dollars or pounds ("under $30") is a euro budget of the
+    same number, never converted: it becomes the price limit when the intent has none."""
+    written = budget_in_text(message)
+    if written is None or not written.foreign or not intent.wants_products:
+        return intent
+    if intent.max_price is not None or intent.min_price is not None:
+        return intent
+    return intent.model_copy(update={"max_price": written.amount})
+
+
+def _with_note(result: str, turn: Turn[Product]) -> str:
+    """A tool result with the turn's currency note, if any."""
+    note = turn.extras.get(CURRENCY_NOTE)
+    return f"{result}\nNote: {note}" if note else result
 
 
 def _with_preferences(

@@ -63,7 +63,11 @@ class BuildOutfit(BaseModel):
         "'summer wedding' or 'office, smart'.",
     )
     budget: float | None = Field(
-        default=None, gt=0, le=10_000, description="Total budget in euros for the whole outfit."
+        default=None,
+        gt=0,
+        le=10_000,
+        description="Total budget in euros for the whole outfit; a budget in dollars or "
+        "pounds as the same number (prices are euros, nothing is converted).",
     )
     audience: Audience | None = Field(
         default=None, description="Who it is for; leave empty if the shopper did not say."

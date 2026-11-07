@@ -61,6 +61,7 @@ from curio.domains.evening.themes import (
     guard_in,
     mentions,
 )
+from curio.domains.fashion.currency import budget_in_text, currency_note, foreign_note
 from curio.domains.fashion.models import Product
 from curio.domains.fashion.outfits import (
     SLOT_LABELS,
@@ -107,16 +108,6 @@ BROWSE_CANDIDATES = 40
 # that any candidate reaches applies, so a theme with only niche books still gets one.
 POPULARITY_FLOORS = (100_000, 25_000, 0)
 SEASONS = ("summer", "winter", "autumn", "spring")
-# "under €100", "budget of €99.50", "up to 80 euros", "max €1,500": an amount after a limit
-# word, with the euro sign before it or a euro word after it.
-_AMOUNT = r"(\d[\d,. ]*\d|\d)"
-_BUDGET = re.compile(
-    r"(?:under|below|less than|up to|within|max(?:imum)?|budget(?: of| is)?)\s*"
-    rf"(?:€\s?{_AMOUNT}|{_AMOUNT}\s?(?:€|eur\b|euros?\b))",
-    re.IGNORECASE,
-)
-_THOUSANDS = re.compile(r"\d{1,3}(?:[, ]\d{3})+(?:\.\d+)?")
-_DECIMAL_COMMA = re.compile(r"\d+,\d{1,2}")
 BUDGET_NOTE = (
     "Planned without a budget: €{amount} is not one Curio can plan with (an outfit budget is "
     "over €0 and at most €{limit:,})."
@@ -140,23 +131,17 @@ def budget_in(text: str) -> float | None:
 
 
 def budget_note(text: str) -> tuple[float | None, str | None]:
-    """The budget written in `text`, or None with a note when the amount is out of range
-    ("under €0", "under €6,000"): such an amount is no budget, never an error."""
-    match = _BUDGET.search(text)
-    if match is None:
+    """The budget written in `text` ("under €100", "budget $150", "a £80 budget"), with a
+    note when the plan should say something about it. An amount out of range ("under €0",
+    "under €6,000") is no budget, never an error. An amount in dollars or pounds is used as
+    a euro budget, never converted, and the note says so (`currency.currency_note`)."""
+    money = budget_in_text(text)
+    if money is None:
         return None, None
-    raw = (match.group(1) or match.group(2)).strip()
-    if _THOUSANDS.fullmatch(raw):
-        raw = raw.replace(",", "").replace(" ", "")
-    elif _DECIMAL_COMMA.fullmatch(raw):
-        raw = raw.replace(",", ".")
-    try:
-        amount = float(raw.replace(" ", ""))
-    except ValueError:
-        return None, None
+    amount = money.amount
     if not 0 < amount <= MAX_BUDGET:
         return None, BUDGET_NOTE.format(amount=f"{amount:,g}", limit=MAX_BUDGET)
-    return round(amount, 2), None
+    return round(amount, 2), currency_note(money) if money.foreign else None
 
 
 def alcohol_free_in(text: str) -> tuple[str, str] | None:
@@ -232,9 +217,11 @@ class EveningPlanner:
 
     def plan(self, request: EveningRequest) -> EveningPlan:
         match = detect_theme(request.occasion, request.mood)
-        budget, budget_issue = (
-            (request.budget, None) if request.budget is not None else budget_note(request.occasion)
-        )
+        budget, budget_issue = budget_note(request.occasion)
+        if request.budget is not None:
+            budget, budget_issue = request.budget, None  # a given budget wins
+        # Dollars or pounds in the occasion: the plan says prices are euros, never converted.
+        budget_issue = budget_issue or foreign_note(request.occasion, budget)
         audience = request.audience or audience_of(request.occasion)
         alcohol_free, alcohol_note = resolve_alcohol_free(
             f"{request.occasion} {request.mood or ''}", request.alcohol_free

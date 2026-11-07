@@ -41,6 +41,7 @@ from curio.domains.evening.agent.tools import (
 from curio.domains.evening.models import EveningAudience, EveningPlan, EveningRequest, EveningTastes
 from curio.domains.evening.planner import EveningError, EveningPlanner
 from curio.domains.fashion.catalog import ProductCatalog
+from curio.domains.fashion.currency import foreign_note
 from curio.domains.fashion.models import Product
 from curio.domains.fashion.outfits import SECTION_AUDIENCE, SLOT_LABELS
 from curio.engine.grounding import amounts_in
@@ -184,6 +185,11 @@ class EveningToolkit(BaseToolkit[EveningItem]):
             plan = self._planner.plan(request)
         except ValidationError as error:
             raise ToolError(_invalid(error)) from error
+        # A budget in dollars or pounds is used as euros, never converted: the plan says so,
+        # in the tool result and on the card, so the answer can too.
+        note = foreign_note(turn.message, plan.state.budget)
+        if note and note not in plan.notes:
+            plan = plan.model_copy(update={"notes": [note, *plan.notes]})
         yield AgentStep(
             kind="plan",
             name="Evening theme",
