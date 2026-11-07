@@ -186,3 +186,16 @@
   font: 600 1.35rem/1.2 var(--font-serif);
   font-variant-numeric: tabular-nums;
 }
+
+.embedded {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.listActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

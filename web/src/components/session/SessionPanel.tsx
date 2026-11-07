@@ -1,4 +1,4 @@
-import { MessageCircle, X } from "lucide-react";
+import { Columns3, MessageCircle, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useId, type ReactNode } from "react";
 
@@ -219,16 +219,36 @@ function ShopperLink() {
 export function SessionPanel({
   domain,
   onAsk,
+  embedded = false,
+  onLeave,
 }: {
   domain: Domain;
   onAsk: (message: string) => void;
+  /** Inside another surface (the session sheet): no card chrome or title of its own. */
+  embedded?: boolean;
+  /** Called before the panel opens a dialog or hands off to chat (the sheet closes). */
+  onLeave?: () => void;
 }) {
   const shortlist = useSession((s) => s.shortlist);
   const drinks = useSession((s) => s.cocktailShortlist);
   const books = useSession((s) => s.readingList);
   const actions = useSessionActions();
-  const details = useDetails();
+  const shown = useDetails();
+  const details = {
+    open: (target: Parameters<typeof shown.open>[0]) => {
+      onLeave?.();
+      shown.open(target);
+    },
+  };
   const copy = DOMAINS[domain].copy;
+  const saved =
+    domain === "fashion"
+      ? shortlist
+      : domain === "cocktails"
+        ? drinks
+        : domain === "books"
+          ? books
+          : [];
 
   const productRows: Row[] = shortlist.map((p) => ({
     id: p.product_id,
@@ -275,8 +295,12 @@ export function SessionPanel({
   }));
 
   return (
-    <aside className={styles.panel} aria-label="Your session" data-testid="session-panel">
-      <h2 className={styles.title}>Your session</h2>
+    <aside
+      className={`${styles.panel} ${embedded ? styles.embedded : ""}`}
+      aria-label="Your session"
+      data-testid="session-panel"
+    >
+      {embedded ? null : <h2 className={styles.title}>Your session</h2>}
       {domain === "fashion" ? <ShopperLink /> : null}
       <Approvals domain={domain} />
       <Memory domain={domain} />
@@ -314,17 +338,31 @@ export function SessionPanel({
           <p className={styles.hint}>{copy.shortlistHint}</p>
         </Section>
       ) : null}
-      {domain !== "evening" &&
-      (domain === "fashion" ? shortlist : domain === "cocktails" ? drinks : books).length >= 2 ? (
-        <Button
-          icon={<MessageCircle />}
-          size="sm"
-          onClick={() => {
-            onAsk(copy.comparePrompt);
-          }}
-        >
-          {domain === "books" ? "Ask Curio which to read first" : "Ask Curio to compare"}
-        </Button>
+      {saved.length >= 2 ? (
+        <div className={styles.listActions}>
+          {domain === "fashion" || domain === "cocktails" ? (
+            <Button
+              icon={<Columns3 />}
+              size="sm"
+              onClick={() => {
+                details.open({ kind: "compare", domain });
+              }}
+            >
+              Compare
+            </Button>
+          ) : null}
+          <Button
+            icon={<MessageCircle />}
+            size="sm"
+            variant={domain === "books" ? "secondary" : "ghost"}
+            onClick={() => {
+              onLeave?.();
+              onAsk(copy.comparePrompt);
+            }}
+          >
+            {domain === "books" ? "Ask Curio which to read first" : "Ask Curio"}
+          </Button>
+        </div>
       ) : null}
     </aside>
   );

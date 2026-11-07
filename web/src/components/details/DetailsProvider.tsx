@@ -3,12 +3,18 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 
 import { Button } from "../../ui/Button";
 import { Dialog } from "../../ui/Dialog";
+import { CompareView } from "../compare/CompareView";
 import { BookDetails } from "./BookDetails";
 import { CocktailDetails } from "./CocktailDetails";
 import { DetailsContext, type DetailTarget } from "./DetailsContext";
 import { ProductDetails } from "./ProductDetails";
 
-const TITLES = { product: "Product details", cocktail: "Recipe", book: "Book" } as const;
+const TITLES = {
+  product: "Product details",
+  cocktail: "Recipe",
+  book: "Book",
+  compare: "Compare",
+} as const;
 
 /** One dialog for every item: products, recipes and books. Related items opened from inside
  * stack, so "Back" returns to the item before. */
@@ -28,7 +34,9 @@ export function DetailsProvider({ children }: { children: ReactNode }) {
   }, []);
   const api = useMemo(() => ({ open, close }), [open, close]);
   const target = stack[stack.length - 1];
-  const key = target ? `${target.kind}-${target.id}-${stack.length}` : "none";
+  const key = target
+    ? `${target.kind}-${target.kind === "compare" ? target.domain : target.id}-${stack.length}`
+    : "none";
 
   return (
     <DetailsContext.Provider value={api}>
@@ -50,6 +58,9 @@ export function DetailsProvider({ children }: { children: ReactNode }) {
         ) : null}
         {target?.kind === "cocktail" ? (
           <CocktailDetails key={key} id={target.id} onTitle={setTitle} />
+        ) : null}
+        {target?.kind === "compare" ? (
+          <CompareView key={key} domain={target.domain} onTitle={setTitle} />
         ) : null}
         {target?.kind === "book" ? (
           <BookDetails key={key} id={target.id} pair={target.pair} onTitle={setTitle} />
