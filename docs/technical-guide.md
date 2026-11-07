@@ -448,7 +448,7 @@ src/curio/
 │   ├── tools.py          # Policy (READ / ASK / APPROVE) and the shared AskShopper tool
 │   ├── schemas.py        # AgentStep, Intent, PendingAction, AppliedEffect, AssistantReply…
 │   ├── signing.py        # ActionSigner (HMAC proposals), narrow_args
-│   ├── grounding.py      # Price and ID checks, name matching, GroundingReport merging
+│   ├── grounding.py      # Facts bound to items, names, labels, GroundingReport counts
 │   ├── llm.py            # Chat model factory for any LangChain provider
 │   └── data.py           # DataFileMissingError, shared by every catalog loader
 ├── domains/              # Each imports the engine and itself only (pairings: + books,

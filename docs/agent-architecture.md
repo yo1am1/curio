@@ -38,7 +38,7 @@ engine, without the app.
 |---|---|---|---|---|
 | Toolkit | `domains/fashion/agent/` | `domains/cocktails/agent/` | `domains/books/agent/`; PairCocktail from `domains/pairings/agent/` | `domains/evening/agent/` |
 | Planning | Structured `SearchIntent` from the LLM, then an initial catalog search | The message is the query; no extra model call before the tool loop | As cocktails | As cocktails; the plan step lists the remembered tastes of every domain |
-| Grounding | Euro amounts (including outfit totals) and product IDs | Drink IDs, catalog drink names and recipe amounts | Book IDs, catalog titles and Goodreads ratings; paired drinks' numbers, names and amounts | All of these, against the plan's parts |
+| Grounding | Prices bound to their product, totals and budgets, product IDs and names, other currencies, percentages, stock and delivery claims | Drink IDs and names, recipe amounts bound to their drink, alcohol labels, allergen and health claims | Book IDs and titles, authors, ratings, page counts and years bound to their book; paired drinks as in cocktails | All of these, against the plan's parts |
 | Reply items | `products` | `cocktails` | `books`; a pairing's drinks in `cocktails` and `pairing` | The plan in `evening`; its pieces, book and drink in `products`, `books`, `cocktails` |
 
 The engine owns everything shared: the tool-call and time budgets, policy enforcement,
@@ -87,7 +87,10 @@ flowchart TD
     S --> L{Tool loop<br/>max 5 calls, 90 s}
     L -- READ --> R[Domain READ tools<br/>fashion: SearchCatalog · InspectProducts · FindRelated · PersonalPicks · BuildOutfit · SwapOutfitItem<br/>cocktails: SearchCocktails · InspectCocktails · SimilarCocktails · WhatCanIMake<br/>books: SearchBooks · InspectBooks · ReadersAlsoLiked · BooksByAuthor · PairCocktail<br/>evening: PlanEvening · SwapEveningPart]
     R --> L
-    L -- ASK --> Q[AskShopper: question + quick replies]
+    L -- ASK --> G{Question grounded?}
+    G -- yes --> Q[AskShopper: question + quick replies]
+    G -- "no (once)" --> L
+    G -- "no (twice)" --> Q2[A general question, no quick replies] --> W
     L -- APPROVE --> A{Auto-approve<br/>allowed?}
     A -- no --> H[Signed proposal: approve, narrow or decline]
     A -- yes --> X[Apply effect] --> L
@@ -307,98 +310,139 @@ one worker.
 
 ## Grounding guardrail
 
-### Fashion
+Grounding checks the facts an answer states against what this turn's tools returned. It is
+a deterministic check, not a model: regular expressions find the facts, and each fact is
+tied to the item it is about before it is compared. The engine's part (`curio.engine.grounding`)
+knows no domain: items, references, binding, number framing, names, labels and the report.
+Each domain supplies its vocabulary: how answers cite its items, which numbers its items
+carry, which labels matter and which claims no data can support.
 
-After drafting, every euro amount and product ID in the answer is checked against
-products returned by tools this turn, products referenced in history and the shortlist.
-Allowed amounts are evidence prices, differences between two evidence prices, numbers
-the shopper typed and active budget filters. For an outfit built or swapped this turn, and
-for the outfit the client sent, they also include its total, its budget, what is left, the
-cheapest complete outfit, the shortfall and the cheapest price of a slot that did not fit;
-a piece swapped out stays evidence. A wrong total ("€73.50" for a €75.96 outfit) is an
-unverified claim like a wrong price, so it is rewritten or replaced. A whole-euro mention within €1 of a real
-price ("about €35" for €34.99) is accepted. Negative amounts are always rejected.
+### What is checked
 
-An unverified draft gets one rewrite request listing the issues. If the rewrite still
-fails, or tries to call tools, the reply falls back to a deterministic list of verified
-catalog facts. The UI shows a verified, self-corrected or fallback badge.
+**Facts are bound to items.** An item is referenced by its citation (`[id 3]`, `product #12`,
+`book #31`, `drink #107`) or its name (a product's display or raw name, a book's title or
+series, a drink's name). A word of four or more letters that occurs in only one item's
+name also counts ("the jeans" for Slim Jeans) when its sentence names no item in full. A
+fact binds to the nearest reference before it in its sentence or bullet, else the nearest
+after it, else the last item named in an earlier sentence of the same line, else the last
+item named anywhere before, else the only item the answer names (or the only item in the
+evidence). The fact must then match *that* item:
 
-The check covers prices and IDs only. It does not verify colours, materials or other
-descriptive claims.
+| Fact | Domains | Rule |
+|---|---|---|
+| Price | fashion, evening | That product's price, to the cent; a whole euro may round it ("about €35" for €34.99). "Under €30", "over €20" and "about €25" compare instead of matching. |
+| Rating | books, evening | That book's Goodreads average at the precision written (4.6 may round 4.55). "★ 4.55", "rated", "scores", "a Goodreads average of", "4.5/5", "on Goodreads", and in book answers any bare 1.0–5.99 decimal. |
+| Page count, year | books, evening | That book's pages (within 5%, "a 300-page novel") and publication year ("published in", "from", "(1985)"). |
+| Recipe amount | cocktails, pairings, evening | An amount in that drink's recipe ("1 1/2 oz"). |
+| Percentage | fashion, evening | Must appear in that product's description ("100% cotton"). |
+| Author | books, evening | "<title> by <name>" must name one of that book's authors. |
+| Alcohol label | cocktails, pairings, evening | "Alcohol-free", "non-alcoholic", "mocktail" only for a drink marked non-alcoholic; "contains alcohol" for one with alcohol or alcohol optional; "alcohol optional" only for an optional one. Negated labels flip ("not alcohol-free"). A plural label with no drink in its sentence ("All of these are alcohol-free:") covers the list after it. |
 
-### Cocktails
+A number bound to no item is allowed only if it equals a value the tools stated without an
+item: an outfit's or evening's total, its budget, what is left, the cheapest option of a
+gap, a price filter or a remembered limit. Otherwise it is reported as *unattributed*. An
+unbound "under €30" must hold for every item the answer names. Differences between two
+prices are no longer allowed: no tool states one, and "€5 off" was the audit's example of
+an invented discount that the old whitelist passed.
 
-`CocktailGroundingCheck` checks three things against drinks returned by tools this turn,
-drinks in history and the cocktail shortlist:
+**What the shopper typed is not evidence.** A number the shopper typed may appear only as
+their own figure: in a budget or limit ("under €30", "your €100 budget"), attributed to them
+("the €4.99 your friend saw"), or contradicted ("€8.99, not €4.99", "isn't rated 4.5").
+"Yes, it's €4.99" for an €8.99 dress binds €4.99 to the dress and is reported. A question
+or quick reply may suggest a budget ("Something under €20?"). Names the shopper typed may
+be repeated ("*The Seven Moons of Maali Almeida* isn't in the catalog").
 
-- Drink IDs must have been returned.
-- Catalog drink names, matched case-sensitively in catalog spelling, must have been
-  returned or typed by the shopper. A name inside a longer glass or ingredient name
-  ("Martini" in "Martini Glass") does not count, and names that are also ingredient names
-  ("Limeade") are ignored.
-- Ingredient amounts ("1 1/2 oz") must match an amount in an evidence recipe or one the
-  shopper typed. Malformed measures with a zero denominator are skipped.
+**Names.** Each check keeps its closed-vocabulary pass (catalog titles and drink names that
+this turn did not return are reported). Besides that, every bold, italic or quoted span that
+reads as a name, and every unmarked "<Title> by <Author>", must name an item this turn's
+tools returned, a person of one, a name the tools wrote, or something the shopper typed. A
+span reads as a name when it starts with a capital, has at most ten words and no amounts,
+and most of its words, leaving out heading words ("Why it works", "Top pick", "Women's")
+and the domain's vocabulary (genres, moods, ingredients, glasses, colours, product types,
+occasions), are capitalised. A label prefix ("**Dress: River Wrap Dress**") is dropped, and
+spans that are labels themselves ("**Ingredients:**") or category headings ("**Picture
+books**") are skipped. In fashion, a sentence-case span counts when it is a catalog product
+name. So a book, drink or brand outside the catalog ("**Paper Plane**", "**Nike Air Max
+90**") is caught.
 
-The same self-correction and fallback apply. Descriptive claims (taste, strength) are not
-verified.
+**Claims no data supports.** Allergen, dietary, health and age-safety promises ("nut-free",
+"gluten-free", "safe for kids", "safe during pregnancy", "vegan", "caffeine-free",
+"healthy") in cocktail, book (paired drinks) and evening answers, and stock, size,
+delivery and discount promises ("in stock", "ships tomorrow", "20% off") in fashion and
+evening answers, are always reported, unless the clause negates or hedges them ("I can't
+guarantee it's nut-free", "check whether it's gluten-free"). Amounts in dollars, pounds or
+yen are reported in fashion and evening answers, except the shopper's own figure as a budget.
+A sentence that repeats tool text word for word (an evening swap's "An alcohol-free drink:
+Figgy Thyme → Masala Chai") is the tool's own.
 
-### Books
+### Questions, repair and fallback
 
-`BookGroundingCheck` checks, against books returned by tools this turn, books in history
-and the reading list:
+The final answer, every `AskShopper` question and its quick replies are checked the same
+way (each quick reply reads as a question of its own). An unverified answer gets one
+rewrite request listing the issues; if the rewrite still fails, or tries to call tools, the
+reply falls back to a deterministic list of catalog facts. An unverified question goes back
+to the model as a tool error (it may ask again or answer); a second unverified question is
+replaced by "Could you tell me a little more about what you're looking for?" without quick
+replies. The catalog-facts fallback after a tool or time budget, or an empty answer (traced
+as "Empty answer"), is checked too, so its report says what it states.
 
-- Book IDs ("[id 192]", "book #192") must have been returned.
-- Catalog titles, matched case-sensitively, must have been returned (or be the series of a
-  returned book) or typed by the reader. Only titles unlikely to be ordinary words are
-  checked: several words, or one word of at least six letters ("Twilight", not "It" or
-  "Room"). A one-word title is checked only where the answer marks it as a title (bold,
-  italic or quoted, next to its "[id N]", or followed by "by <author>"), so "Beloved by
-  fans" or "Remember that" are ordinary words; the prompt asks for bold titles. A title that
-  is also an author, genre or mood name ("Mystery") is ignored, and so is a title inside
-  one ("George" in "George Orwell").
-- Ratings ("★ 4.55", "rated 4.6", "4.5/5", "4.3 stars") must match an evidence book's
-  Goodreads average at the precision written (4.6 may round 4.55; 4.55 must be exact) or
-  a number the reader typed.
+### The report and the badge
 
-The fallback lists "Title by Author · ★ rating" for the shown books, then the drinks a
-pairing returned (`Toolkit.fallback` receives the turn's extras). Plot, page counts and
-years in prose are not verified.
+`GroundingReport.status` is `verified` only when at least one fact was checked and all
+matched; `not_applicable` when the answer stated nothing checkable; `repaired` when the
+rewrite passed; `fallback` when catalog facts replaced the answer. `checked` counts the
+facts of the first check and `counts` splits them by kind (`price`, `id`, `rating`, `title`,
+`name`, `author`, `amount`, `alcohol`, `pages`, `year`, `percent`, `claim`; `fact` for
+toolkits that do not split them). The trace's "Grounding check" step and the UI badge say
+what was checked: "Checked 3 prices and 2 names against the catalog" (three kinds at most,
+then "N other facts"). Nothing is shown for `not_applicable`. "Self-corrected to match the
+catalog" and "Unverified answer replaced with catalog facts" keep their labels; their
+tooltip says how many claims did not match.
 
-Drinks in a book answer are checked by `PairedDrinkCheck` against the drinks PairCocktail
-returned in the same turn only: earlier answers' drinks are context, never evidence, so the
-model calls the tool again to talk about them.
+### Measured
 
-- Drink numbers ("drink #12"; "[id 12]" means a book) must have been returned.
-- Catalog drink names count only where the answer marks them as names (bold, italic, quoted
-  or next to their "drink #N"), because in a book answer "Manhattan", "Brooklyn" or "San
-  Francisco" are usually places. A drink name inside a longer evidence book title or author
-  ("Casino" in "Casino Royale") is the book.
-- Ingredient amounts must match a paired recipe, checked only in turns that paired drinks.
-- Book titles accept the paired drinks' names ("Death in the Afternoon" is both) and titles
-  the pairer's reasons cite (a lore line names The Long Goodbye).
+`tests/agents/grounding_corpus/corpus.json` is a labelled corpus; `test_grounding_corpus.py`
+gates it (recall at least 0.95 on false answers, false alarms at most 0.05 on correct ones)
+and `python -m tests.agents.test_grounding_corpus` prints every miss and false alarm. Each
+case carries the evidence the engine had: for run texts it is rebuilt from the requests the
+model saw (the item IDs of the tool results, session and history cards, loaded from the
+prepared catalogs, and the euro figures the tools stated without an item), by
+`tests/agents/grounding_corpus/build.py`.
 
-An invented drink ("**Negroni** (drink #257)" when the pairing returned an Old Fashioned)
-is an unverified claim like an invented rating: one rewrite, then the fallback.
+| Source | False answers | Caught | Correct answers | Flagged |
+|---|---|---|---|---|
+| The audit's 13 probes (F1), on the test fixtures | 13 | 13 | | |
+| Real-model texts of the first evaluation run (39 answers, 4 questions) | | | 43 | 0 |
+| Scripted end-to-end model, eval dry run plus its e2e scenarios | 4 (its deliberate inventions) | 4 | 68 | 0 |
+| Written for this corpus, on the evidence of real turns | 49 | 46 | 35 | 0 |
+| **Total** | **66** | **63 (recall 0.955)** | **146** | **0 (false-alarm rate 0.000)** |
 
-### Evening
+The three misses are kept on purpose and are misses by design: a wrong colour, a wrong
+glass and a wrong genre ("Gone Girl is a gentle cosy mystery"). Colours, glasses, genres,
+descriptions, plot and shelves are not checked. On the same corpus the previous check
+(v1) caught 17 of the 66 false answers (0.258), none of the 13 probes, and flagged 3 of the
+146 correct texts (two of them questions, which v1 did not check in production).
 
-`EveningGroundingCheck` merges the three domains' checks against this turn's plans, the plan
-the client holds (re-read and re-paired) and the parts a swap replaced:
+Read these numbers with their limits. The written cases were written by the same person who
+wrote the check, after it existed, and the heading and binding rules were calibrated on the
+relay and stub texts, so the corpus is not a held-out test: it shows the check catches the
+listed failure classes and does not flag these 146 texts, not how it does on a new model's
+answers. The real-model sample is one run of 39 answers.
 
-- Euro amounts and product IDs as fashion checks them; besides piece prices it allows the
-  outfit's total, budget, what is left, the cheapest option of a gap and a remembered limit.
-  Answers cite pieces as "product #N".
-- Titles, book IDs ("[id N]", "book #N") and Goodreads ratings as books check them; the
-  pairer's reasons count as tool text, so a lore line's title may be repeated.
-- Drink names (where marked), drink numbers ("drink #N") and recipe amounts as
-  `PairedDrinkCheck` checks them, against the plans' drinks only: drinks of earlier answers
-  are context, never evidence.
-- Each check accepts the other parts' names: an H&M piece called "Paloma" is not the Paloma
-  cocktail, and a drink named like a book is the drink.
+### Limits
 
-The fallback restates the plan from the catalogs: each piece with its price, the outfit
-total, the book with its rating, the drink with its alcohol status, what is missing, the
-"why it works" line and the pairer's note.
+- Binding is positional. A price in a sentence that names one product but describes
+  another ("the dress (€29.99) and the **Paloma** (€12.99)", where "the dress" is no
+  reference) binds to the nearest name and may be reported; a pronoun after two products
+  binds to the last one named.
+- A fact that equals a total, budget or remainder the tools stated passes wherever it
+  stands, even bound to the wrong item.
+- Colours, materials (other than percentages), sizes, glasses, genres, shelves, series
+  positions, descriptions, plot and ratings counts are not checked; nor is whether a
+  recommendation fits the request.
+- A drink called alcohol-free in a sentence that names no drink, without a list after it,
+  is not checked.
+- The checks read English phrasing; another language passes unchecked.
 
 ## Budgets and failure handling
 
@@ -464,9 +508,12 @@ actions. Gaps addressed here:
   with no theme word becomes a cosy evening. The outfit, book and drink are chosen one after
   the other (the drink from the book), not jointly, and nothing checks that the outfit's
   colours suit the book or drink.
-- The grounding check verifies prices, IDs, drink names, amounts, book titles and ratings,
-  not descriptive claims.
-- Book titles that are a single short word ("It", "Dune") are not checked, so the agent
+- The grounding check verifies prices, IDs, names, titles, authors, ratings, page counts,
+  years, recipe amounts and alcohol labels, each bound to its item, and reports safety, stock
+  and foreign-currency claims; it does not verify descriptive claims (see "Grounding
+  guardrail").
+- A book title that is a single short word ("Dune") is checked only when the answer marks
+  it (bold, italic or quoted); one that is also a common word ("It") never is, so the agent
   could name such a book without evidence.
 - A drink name the answer does not mark as a name (no bold, quotes or "drink #N") is read as
   prose and not checked. Pairing themes are hand-written rules over crowd shelves, not a
@@ -475,7 +522,7 @@ actions. Gaps addressed here:
 - Pantry words are mapped to catalog spelling only when the match is unique; "whiskey,
   lemon, sugar" does not yet find Whiskey Sour, whose recipe lists "Blended whiskey" and
   "Powdered sugar".
-- Feedback stays in memory and resets when the API restarts.
+- Feedback is not stored: the API logs the rating and the tool names, nothing else.
 - Unit and browser tests use scripted models. The [agent evaluation](agent-eval.md) measures a
   real model on 45 tasks, a small set that shows failure modes rather than precise rates.
 - Outfit coherence is a CLIP query per slot plus co-purchase and photo similarity; there is

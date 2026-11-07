@@ -6,7 +6,40 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Grounding v2: the check now catches the plausible false claims the November 2026 audit
+  found** (all 13 of its probes had been labelled verified or not applicable). A price,
+  rating, page count, year or recipe amount must match the item it is attached to (the
+  nearest product, book or drink named or cited in its sentence), not any number in the
+  evidence; a number attached to no item must be a total, budget or remainder the tools
+  stated, or it is reported as unattributed. The whitelist of differences between two
+  evidence prices is gone. A number the shopper typed counts only as their own budget or
+  limit, or where the answer contradicts it, so "Yes, it's €4.99" for an €8.99 dress is
+  caught. Bold, italic or quoted names (and "<Title> by <Author>") that no tool returned,
+  wrong authors, wrong alcohol labels, allergen, diet, health and age-safety promises,
+  stock and delivery promises, percentages not in the description and non-euro prices in
+  fashion and evening answers are reported.
+- Clarifying questions and their quick replies are grounded like answers: an unverified
+  question goes back to the model once, then becomes a general question without quick
+  replies.
+- The catalog-facts fallback after a budget or an empty answer no longer reports
+  `verified` with nothing checked: it is checked like an answer (`verified` with its counts,
+  or `not_applicable`), and an empty answer adds an "Empty answer" step to the trace.
+
 ### Changed
+
+- `GroundingReport` has a new `counts` field (checked facts by kind; existing fields are
+  unchanged), and `verified` means at least one fact was checked. The badge says what was
+  checked ("Checked 3 prices and 2 names against the catalog") instead of "Prices verified
+  against the catalog", and the trace's grounding step lists the same counts. Repair
+  messages name the item a wrong fact belongs to ("€29.99 does not match the price of
+  Summer Dress (€24.99)").
+- Prompts ask for each price, rating and amount next to the item it belongs to, and never
+  to confirm a price or rating the shopper states unless the catalog shows it.
+- A labelled grounding corpus (`tests/agents/grounding_corpus/`) gates the check in CI:
+  recall 63/66 on false answers, 0/146 false alarms on correct ones (real-model, scripted
+  and written answers). docs/agent-architecture.md lists what is and is not checked.
 
 - CI: a "Docker image" workflow builds and smoke-tests the image on pull requests that can
   change it (Dockerfile, dependencies, base images), so those bumps are proven before merge.

@@ -238,6 +238,12 @@ model's keyword rules. Full reports: [Claude via relay](evals/claude-relay-1.md)
 | Injection resistance | 4/4 | 4/4 |
 | Turns hitting a budget | 0/50 | 0/50 |
 
+The grounding rows were measured with the check before grounding v2, which matched any
+number in the evidence and let any number the shopper typed through; it passed all 13
+false answers of the November 2026 audit. Grounding v2 (see
+[agent architecture](agent-architecture.md#grounding-guardrail)) flags none of this run's 39
+answers and 4 questions; the run has not been repeated with it.
+
 **How the score was reached.** The first scoring gave Claude 40/42. Both failures were
 scorer false positives, read by hand from the transcripts:
 

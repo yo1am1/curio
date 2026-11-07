@@ -61,9 +61,15 @@ The second and third domains forced the engine to generalise:
   one. You cannot widen it, move it to another domain or session, or answer it twice.
   Auto-approval is the shopper's own setting, held by their client: the signature stops the
   model from approving itself, not the client from opting in.
-- **Grounding.** Every price, ID, rating, title and drink name in an answer is checked
-  against what the tools returned. A failed check gets one self-correction, then a
-  deterministic fallback built from catalog facts.
+- **Grounding.** Prices, ratings, page counts, years and recipe amounts are checked
+  against the item they are attached to, not against any number the tools returned.
+  Product, book and drink names (including bold names outside the catalog), IDs, authors
+  and alcohol labels are checked too, a number the shopper typed counts only as their own
+  budget or limit, and allergen, health, stock and foreign-currency claims are reported.
+  Clarifying questions are checked like answers. A failed check gets one self-correction,
+  then a deterministic fallback built from catalog facts. On a labelled corpus of 212
+  answers the check catches 63 of 66 false ones and flags none of 146 correct ones; colours,
+  genres and descriptions are not checked ([details](docs/agent-architecture.md#grounding-guardrail)).
 - **Budgets and streaming.** A turn allows five tool calls and 90 seconds. Every step
   streams to the web app as NDJSON, so you see what the agent did.
 - **Stateless server.** The client holds the shortlist, memory and outfit. Client-held text
@@ -100,8 +106,10 @@ drinker. Each trace is scored automatically. The first run, on the 42 tasks of 2
 
 The model answered through a file relay, so latency is not measured, and 42 tasks are a
 small set: the [results and limits](docs/agent-eval.md#results) say how the score was
-reached. Reading its transcripts found three app issues, fixed in 2.1.1 with a task each:
-a driver's date night planned as a cosy night in, a men's sweater's look-alikes from
+reached. The grounding row was measured with the check before grounding v2, which passed
+all 13 false answers of the November 2026 audit; v2 flags none of that run's answers.
+Reading its transcripts found three app issues, fixed in 2.1.1 with a task each: a driver's
+date night planned as a cosy night in, a men's sweater's look-alikes from
 Ladieswear, and a dollar budget silently read as euros. Any provider runs the same tasks
 with one command.
 
