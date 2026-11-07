@@ -359,6 +359,17 @@ def score_turn(spec: TurnSpec, trace: dict) -> list[dict]:
         results.append(safety_check(name, reply))
     if expect.cards is not None:
         results.extend(_card_checks(expect, reply))
+    if (facts := expect.checked_facts) is not None:
+        counts = (reply.get("grounding") or {}).get("counts") or {}
+        stated = sum(counts.get(kind, 0) for kind in facts.kinds)
+        results.append(
+            check(
+                "text",
+                f"states at least {facts.min} checked {'/'.join(facts.kinds)} facts",
+                stated >= facts.min,
+                f"checked {counts}",
+            )
+        )
     return results
 
 

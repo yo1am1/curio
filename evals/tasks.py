@@ -102,6 +102,15 @@ class Cards(_Strict):
     sections: list[str] | None = None
 
 
+class CheckedFacts(_Strict):
+    """The answer states at least `min` facts of these kinds that the engine's grounding
+    check verified against the catalog (the report's `counts`: author, rating, price,
+    alcohol, pages, year, ...). A list of names alone states nothing about the items."""
+
+    kinds: list[str] = Field(min_length=1)
+    min: int = Field(default=1, ge=1)
+
+
 class Expect(_Strict):
     status: list[Status] = Field(default_factory=list)
     tools_any: list[str] = Field(default_factory=list)
@@ -122,6 +131,7 @@ class Expect(_Strict):
     must_match_any: list[str] = Field(default_factory=list)
     safety: list[Safety] = Field(default_factory=list)
     cards: Cards | None = None
+    checked_facts: CheckedFacts | None = None
     # Ground truth for the clarification metric; by default, whether `status` is only
     # needs_input. "either" leaves the turn out of that metric.
     clarify: bool | Literal["either"] | None = None

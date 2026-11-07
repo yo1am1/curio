@@ -466,3 +466,18 @@ def test_a_card_floor_fails_a_reply_without_cards():
     assert not by_kind(refusal, "cards")[0]["passed"]
     shown = reply("Two picks.", books=[{"book_id": 1}, {"book_id": 2}])
     assert by_kind(score_turn(spec, trace(shown, [])), "cards")[0]["passed"]
+
+
+def test_checked_facts_count_what_the_engine_verified():
+    spec = turn(checked_facts={"kinds": ["author", "rating"], "min": 1})
+    names_only = reply(
+        "**Dune**, **Emma**.", grounding={"status": "verified", "counts": {"title": 2}}
+    )
+    (result,) = by_kind(score_turn(spec, trace(names_only, [])), "text")
+    assert not result["passed"]
+    counts = {"title": 1, "author": 1}
+    with_author = reply(
+        "**Dune** by Frank Herbert.", grounding={"status": "verified", "counts": counts}
+    )
+    (result,) = by_kind(score_turn(spec, trace(with_author, [])), "text")
+    assert result["passed"]
