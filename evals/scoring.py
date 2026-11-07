@@ -347,6 +347,12 @@ def _card_checks(expect: Expect, reply: dict) -> list[dict]:
             if b.get("pages") is None or b["pages"] > limits.max_pages
         ]
         results.append(check("cards", f"books ≤ {limits.max_pages} pages", not bad, str(bad)))
+    if limits.sections is not None:
+        wanted = set(limits.sections)
+        bad = [f"{p['name']} ({p.get('section')})" for p in products]
+        bad = [b for b, p in zip(bad, products, strict=True) if p.get("section") not in wanted]
+        label = f"products from {', '.join(limits.sections)}"
+        results.append(check("cards", label, not bad, f"{len(products)} products; others: {bad}"))
     if limits.max_outfit_total is not None:
         totals = _outfit_totals(reply)
         bad = [t for t in totals if t > limits.max_outfit_total + 0.005]
