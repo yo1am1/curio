@@ -58,7 +58,7 @@ from curio.domains.fashion.recommenders.repeat import RepeatPurchaseRecommender
 from curio.domains.fashion.search import ProductSearch
 from curio.domains.fashion.vector_store import ProductVectorStore
 from curio.domains.pairings.pairer import BookCocktailPairer
-from curio.engine import ActionSigner, AgentEngine
+from curio.engine import TURN_DEADLINE_SECONDS, ActionSigner, AgentEngine
 from curio.engine.llm import build_chat_model
 
 logger = logging.getLogger(__name__)
@@ -88,6 +88,8 @@ class AgentKit:
 
     chat_model: BaseChatModel
     signer: ActionSigner
+    # The wall-clock budget of one agent turn (AGENT_TURN_DEADLINE_SECONDS).
+    turn_deadline_seconds: float = TURN_DEADLINE_SECONDS
 
 
 @dataclass(frozen=True)
@@ -303,6 +305,7 @@ def load_fashion(settings: Settings, kit: AgentKit | None) -> FashionServices | 
                 navigator=RecommenderNavigator(graph, search, learned or collaborative),
                 outfits=OutfitPlanner(search, catalog, vectors=store, links=graph),
                 signer=kit.signer,
+                turn_deadline_seconds=kit.turn_deadline_seconds,
             )
         return FashionServices(
             catalog=catalog,
@@ -342,7 +345,13 @@ def load_cocktails(settings: Settings, kit: AgentKit | None) -> CocktailServices
         return None
     assistant = None
     if kit is not None:
-        assistant = CocktailAssistant(kit.chat_model, catalog, recommender, signer=kit.signer)
+        assistant = CocktailAssistant(
+            kit.chat_model,
+            catalog,
+            recommender,
+            signer=kit.signer,
+            turn_deadline_seconds=kit.turn_deadline_seconds,
+        )
     return CocktailServices(catalog=catalog, recommender=recommender, assistant=assistant)
 
 
@@ -364,7 +373,13 @@ def load_books(settings: Settings, kit: AgentKit | None) -> BookServices | None:
         return None
     assistant = None
     if kit is not None:
-        assistant = BookAssistant(kit.chat_model, catalog, recommender, signer=kit.signer)
+        assistant = BookAssistant(
+            kit.chat_model,
+            catalog,
+            recommender,
+            signer=kit.signer,
+            turn_deadline_seconds=kit.turn_deadline_seconds,
+        )
     return BookServices(catalog=catalog, recommender=recommender, assistant=assistant)
 
 
@@ -419,6 +434,7 @@ def compose_evening(
             cocktails=cocktails.catalog,
             products=fashion.catalog if fashion is not None else None,
             signer=kit.signer,
+            turn_deadline_seconds=kit.turn_deadline_seconds,
         )
     return EveningServices(planner=planner, assistant=assistant)
 
@@ -461,6 +477,7 @@ def build_services(settings: Settings) -> Services:
         kit = AgentKit(
             chat_model=build_chat_model(settings),
             signer=ActionSigner(key.get_secret_value().encode() if key else None),
+            turn_deadline_seconds=settings.agent_turn_deadline_seconds,
         )
     else:
         logger.warning("LLM_MODEL is not set: the assistants are disabled.")

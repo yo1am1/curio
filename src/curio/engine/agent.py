@@ -53,7 +53,8 @@ logger = logging.getLogger(__name__)
 # Each ChatTurn is one message; older turns rarely matter and only cost tokens.
 MAX_HISTORY_TURNS = 10
 MAX_TOOL_CALLS = 5
-# Wall-clock budget for one turn; checked before every model call.
+# Default wall-clock budget for one turn; checked before every model call. An app may set
+# another per engine (`turn_deadline_seconds`), e.g. for a slow model behind a relay.
 TURN_DEADLINE_SECONDS = 90.0
 
 
@@ -66,9 +67,14 @@ class AgentEngine[T]:
         signer: ActionSigner | None = None,
         clock: Callable[[], float] = time.monotonic,
         schemas: Schemas | None = None,
+        turn_deadline_seconds: float = TURN_DEADLINE_SECONDS,
     ) -> None:
         """`schemas` are the models a turn builds: the engine's own by default, or an app's
-        subclasses that carry its domains' payloads (`curio.app.schemas.WIRE`)."""
+        subclasses that carry its domains' payloads (`curio.app.schemas.WIRE`).
+        `turn_deadline_seconds` is the wall-clock budget of one turn."""
+        if turn_deadline_seconds <= 0:
+            raise ValueError("turn_deadline_seconds must be positive")
+        self.turn_deadline_seconds = float(turn_deadline_seconds)
         self._toolkit = toolkit
         self._signer = signer or ActionSigner()
         self._clock = clock
@@ -448,7 +454,7 @@ class AgentEngine[T]:
     # --- Helpers --------------------------------------------------------------------------
 
     def _out_of_time(self, turn: Turn[T]) -> bool:
-        return self._clock() - turn.started > TURN_DEADLINE_SECONDS
+        return self._clock() - turn.started > self.turn_deadline_seconds
 
     def _applied(self, turn: Turn[T], effect: AppliedEffect) -> None:
         """Record an applied effect and let later tool calls in this turn use it."""

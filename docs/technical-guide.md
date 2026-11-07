@@ -701,6 +701,10 @@ for both intent extraction and catalog-grounded replies. Without `LLM_MODEL`
 every feature except chat still works. One configuration serves the fashion, cocktail and
 book assistants. Set `AGENT_SIGNING_KEY` to a long random
 string when running several API workers, so approval proposals verify on any worker.
+`AGENT_TURN_DEADLINE_SECONDS` (default 90) is the wall-clock budget of one agent turn and
+`LLM_TIMEOUT_SECONDS` (default 60) the timeout of one model call. Keep the defaults in
+production; the [agent evaluation](agent-eval.md) raises both for a relayed model that can
+take minutes per request.
 
 ## API
 

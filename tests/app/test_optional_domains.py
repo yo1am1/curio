@@ -279,3 +279,34 @@ def test_api_starts_with_no_domain_at_all(tmp_path, no_fashion_models, monkeypat
         assert [d["enabled"] for d in health["domains"]] == [False, False, False, False]
         assert health["domains"][1]["hint"] == COCKTAILS_MISSING
         assert client.get("/cocktails/categories").status_code == 503
+
+
+def test_turn_deadline_defaults_to_90_seconds_and_reads_the_environment(monkeypatch):
+    monkeypatch.delenv("AGENT_TURN_DEADLINE_SECONDS", raising=False)
+    assert Settings(_env_file=None).agent_turn_deadline_seconds == 90.0
+    monkeypatch.setenv("AGENT_TURN_DEADLINE_SECONDS", "1800")
+    assert Settings(_env_file=None).agent_turn_deadline_seconds == 1800.0
+    monkeypatch.setenv("AGENT_TURN_DEADLINE_SECONDS", "0")
+    with pytest.raises(ValueError, match="greater than 0"):
+        Settings(_env_file=None)
+
+
+@pytest.mark.parametrize("deadline", [None, 1800.0])
+def test_every_assistant_gets_the_configured_turn_deadline(tmp_path, monkeypatch, deadline):
+    from tests.agents.conftest import FakeToolCallingChatModel
+    from tests.conftest import book_frame, book_neighbours_frame
+
+    cocktail_frame().to_parquet(tmp_path / "cocktails.parquet")
+    book_frame().to_parquet(tmp_path / "books.parquet")
+    book_neighbours_frame().to_parquet(tmp_path / "book_neighbours.parquet")
+    model = FakeToolCallingChatModel(messages=iter([]))
+    monkeypatch.setattr(service_module, "build_chat_model", Mock(return_value=model))
+    overrides = {"llm_model": "stub"}
+    if deadline is not None:
+        overrides["agent_turn_deadline_seconds"] = deadline
+
+    services = build_services(settings_for(tmp_path, **overrides))
+
+    assert set(services.domains) == {"cocktails", "books", "evening"}
+    expected = deadline or 90.0
+    assert {d.assistant.turn_deadline_seconds for d in services.domains.values()} == {expected}

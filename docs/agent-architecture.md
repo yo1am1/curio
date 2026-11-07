@@ -364,8 +364,8 @@ total, the book with its rating, the drink with its alcohol status, what is miss
 ## Budgets and failure handling
 
 - At most five tool calls per turn, then a grounded fallback.
-- A 90-second wall-clock budget, checked before every model call, including the
-  self-correction call. When it is spent the trace shows a "Time budget" step and the
+- A 90-second wall-clock budget (`AGENT_TURN_DEADLINE_SECONDS`), checked before every model
+  call, including the self-correction call. When it is spent the trace shows a "Time budget" step and the
   answer falls back to catalog facts.
 - Provider failures map to safe HTTP errors (429 retry, 502 otherwise). On the
   streaming endpoint they arrive as an `error` event; provider details stay in server logs.

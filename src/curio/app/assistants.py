@@ -29,7 +29,7 @@ from curio.domains.fashion.outfits import OutfitPlanner
 from curio.domains.fashion.search import ProductSearch
 from curio.domains.pairings.agent.toolkit import CocktailPairing
 from curio.domains.pairings.pairer import BookCocktailPairer
-from curio.engine import ActionSigner, AgentEngine
+from curio.engine import TURN_DEADLINE_SECONDS, ActionSigner, AgentEngine
 
 __all__ = ["BookAssistant", "CocktailAssistant", "EveningAssistant", "ShoppingAssistant"]
 
@@ -47,6 +47,7 @@ class ShoppingAssistant(AgentEngine[Product]):
         outfits: OutfitPlanner | None = None,
         signer: ActionSigner | None = None,
         clock: Callable[[], float] = time.monotonic,
+        turn_deadline_seconds: float = TURN_DEADLINE_SECONDS,
     ) -> None:
         extractor = intent_extractor or IntentExtractor(
             chat_model,
@@ -55,7 +56,14 @@ class ShoppingAssistant(AgentEngine[Product]):
             colours=catalog.distinct("colour"),
         )
         toolkit = FashionToolkit(search, catalog, top_k, extractor, navigator, outfits)
-        super().__init__(chat_model, toolkit, signer=signer, clock=clock, schemas=WIRE)
+        super().__init__(
+            chat_model,
+            toolkit,
+            signer=signer,
+            clock=clock,
+            schemas=WIRE,
+            turn_deadline_seconds=turn_deadline_seconds,
+        )
         self._navigator = navigator
 
 
@@ -69,9 +77,17 @@ class CocktailAssistant(AgentEngine[Cocktail]):
         *,
         signer: ActionSigner | None = None,
         clock: Callable[[], float] = time.monotonic,
+        turn_deadline_seconds: float = TURN_DEADLINE_SECONDS,
     ) -> None:
         toolkit = CocktailToolkit(catalog, recommender, top_k)
-        super().__init__(chat_model, toolkit, signer=signer, clock=clock, schemas=WIRE)
+        super().__init__(
+            chat_model,
+            toolkit,
+            signer=signer,
+            clock=clock,
+            schemas=WIRE,
+            turn_deadline_seconds=turn_deadline_seconds,
+        )
 
 
 class BookAssistant(AgentEngine[Book]):
@@ -84,6 +100,7 @@ class BookAssistant(AgentEngine[Book]):
         *,
         signer: ActionSigner | None = None,
         clock: Callable[[], float] = time.monotonic,
+        turn_deadline_seconds: float = TURN_DEADLINE_SECONDS,
         pairer: BookCocktailPairer | None = None,
         cocktails: CocktailCatalog | None = None,
     ) -> None:
@@ -91,7 +108,14 @@ class BookAssistant(AgentEngine[Book]):
         self.toolkit = BookToolkit(catalog, recommender, top_k)
         if pairer is not None and cocktails is not None:
             self.attach_pairing(pairer, cocktails)
-        super().__init__(chat_model, self.toolkit, signer=signer, clock=clock, schemas=WIRE)
+        super().__init__(
+            chat_model,
+            self.toolkit,
+            signer=signer,
+            clock=clock,
+            schemas=WIRE,
+            turn_deadline_seconds=turn_deadline_seconds,
+        )
 
     def attach_pairing(self, pairer: BookCocktailPairer, cocktails: CocktailCatalog) -> None:
         """Enable PairCocktail (the server loaded cocktails beside the books)."""
@@ -111,6 +135,14 @@ class EveningAssistant(AgentEngine[EveningItem]):
         products: ProductCatalog | None = None,
         signer: ActionSigner | None = None,
         clock: Callable[[], float] = time.monotonic,
+        turn_deadline_seconds: float = TURN_DEADLINE_SECONDS,
     ) -> None:
         self.toolkit = EveningToolkit(planner, books=books, cocktails=cocktails, products=products)
-        super().__init__(chat_model, self.toolkit, signer=signer, clock=clock, schemas=WIRE)
+        super().__init__(
+            chat_model,
+            self.toolkit,
+            signer=signer,
+            clock=clock,
+            schemas=WIRE,
+            turn_deadline_seconds=turn_deadline_seconds,
+        )
