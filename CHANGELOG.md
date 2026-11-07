@@ -19,6 +19,13 @@ All notable changes to Curio are recorded here. The format follows
   these routes, documented in the OpenAPI schema) instead of queueing on the worker-thread
   pool, which 45 slow chats used to exhaust until `/health` and search stopped answering.
 
+### Removed
+
+- `GET /chat/feedback` (now 405). It returned other users' messages, answers and comments
+  to anyone. Nothing in the repository read it: the web app only posts ratings.
+  `POST /chat/feedback` is unchanged on the wire (204) but no longer keeps the texts in
+  memory; it logs the rating and tool names only.
+
 ### Changed
 
 - CI: a "Docker image" workflow builds and smoke-tests the image on pull requests that can

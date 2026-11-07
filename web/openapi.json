@@ -1468,24 +1468,9 @@
       }
     },
     "/chat/feedback": {
-      "get": {
-        "summary": "Chat Feedback Summary",
-        "operationId": "chat_feedback_summary_chat_feedback_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FeedbackSummary"
-                }
-              }
-            }
-          }
-        }
-      },
       "post": {
         "summary": "Chat Feedback",
+        "description": "Record a rating in the server log: the rating and tool names only. The message,\nanswer and comment are not kept, and nothing serves feedback back over HTTP.",
         "operationId": "chat_feedback_chat_feedback_post",
         "requestBody": {
           "content": {
@@ -3532,32 +3517,6 @@
         ],
         "title": "FashionEffect",
         "description": "An approved shortlist addition or remembered shopping preferences."
-      },
-      "FeedbackSummary": {
-        "properties": {
-          "up": {
-            "type": "integer",
-            "title": "Up"
-          },
-          "down": {
-            "type": "integer",
-            "title": "Down"
-          },
-          "recent_down": {
-            "items": {
-              "$ref": "#/components/schemas/ChatFeedback"
-            },
-            "type": "array",
-            "title": "Recent Down"
-          }
-        },
-        "type": "object",
-        "required": [
-          "up",
-          "down",
-          "recent_down"
-        ],
-        "title": "FeedbackSummary"
       },
       "FlavourProfile": {
         "properties": {

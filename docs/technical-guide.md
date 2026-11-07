@@ -832,7 +832,7 @@ take minutes per request.
 | POST | `/evening/swap` | `{"evening": <state>, "part": "outfit\|book\|drink", "slot": "shoes", "mode": "other\|cheaper\|alcohol_free", "refine": "", "tastes": {...}}`: the plan with that part changed and `change` saying what changed; 422 for a swap the plan cannot make (a cheaper book, an alcohol-free outfit, a slot the outfit lacks) or an out-of-bounds state |
 | POST | `/chat` | One agent turn: `{"domain": "fashion\|cocktails\|books\|evening", "message", "history", "preferences", "shopper_id", "shortlist", "outfit", "cocktail_preferences", "cocktail_shortlist", "book_preferences", "book_shortlist", "evening", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal. `domain` defaults to `fashion`; a fashion reply carries `outfit` when the turn built or changed one, an evening reply `evening` (the plan) |
 | POST | `/chat/stream` | The same turn as NDJSON: `step` events, then `reply` (or `error`) |
-| POST, GET | `/chat/feedback` | Rate an answer; summary of ratings and recent negative feedback |
+| POST | `/chat/feedback` | Rate an answer (204); the rating and tool names go to the server log, the texts are not kept |
 | GET | `/evaluation` | Offline evaluation results saved by `scripts.evaluate --output` |
 
 Every `/cocktails` endpoint returns 503 until `scripts.prepare_cocktails` has been run,

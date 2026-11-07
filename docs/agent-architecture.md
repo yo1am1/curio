@@ -396,10 +396,11 @@ total, the book with its rating, the drink with its alcohol status, what is miss
 
 ## Feedback
 
-Each completed answer has thumbs up/down. `POST /chat/feedback` stores the rating with
-the question, answer, product IDs and tools used in a bounded in-memory buffer.
-`GET /chat/feedback` summarises counts and the ten most recent negative ratings for review.
-The buffer is not persisted.
+Each completed answer has thumbs up/down. `POST /chat/feedback` writes the rating and the
+names of the tools used to the server log at INFO. The question, answer and comment the
+client sends are validated and then dropped: they are not stored, and no route serves
+feedback back. (Until 3.0.0, `GET /chat/feedback` returned the ten most recent negative
+ratings, with their text, to anyone.)
 
 ## Review findings (November 2026)
 

@@ -544,13 +544,22 @@ def test_chat_accepts_the_client_held_outfit(services) -> None:
             assert swap.status_code == 422
 
 
-def test_chat_feedback_is_recorded_and_summarized(client):
-    rating = {"rating": "down", "message": "jeans", "answer": "Try these.", "tools": ["Search"]}
-    assert client.post("/chat/feedback", json=rating).status_code == 204
-    assert client.post("/chat/feedback", json={**rating, "rating": "up"}).status_code == 204
-    summary = client.get("/chat/feedback").json()
-    assert (summary["up"], summary["down"]) == (1, 1)
-    assert summary["recent_down"][0]["message"] == "jeans"
+def test_chat_feedback_is_logged_without_text_and_never_served_back(client, caplog):
+    rating = {
+        "rating": "down",
+        "message": "I am pregnant and my address is 1 Main St",
+        "answer": "Try these.",
+        "tools": ["Search"],
+        "comment": "private note",
+    }
+    with caplog.at_level("DEBUG", logger="curio.app.api"):
+        assert client.post("/chat/feedback", json=rating).status_code == 204
+        assert client.post("/chat/feedback", json={**rating, "rating": "up"}).status_code == 204
+    assert "chat feedback down tools=Search" in caplog.text
+    for private in ("pregnant", "Main St", "Try these", "private note"):
+        assert private not in caplog.text
+    # The world-readable summary of other users' messages is gone.
+    assert client.get("/chat/feedback").status_code == 405
 
 
 # --- Cocktail domain ---------------------------------------------------------------------

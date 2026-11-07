@@ -702,10 +702,13 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Chat Feedback Summary */
-    get: operations["chat_feedback_summary_chat_feedback_get"];
+    get?: never;
     put?: never;
-    /** Chat Feedback */
+    /**
+     * Chat Feedback
+     * @description Record a rating in the server log: the rating and tool names only. The message,
+     *     answer and comment are not kept, and nothing serves feedback back over HTTP.
+     */
     post: operations["chat_feedback_chat_feedback_post"];
     delete?: never;
     options?: never;
@@ -1404,15 +1407,6 @@ export interface components {
       /** Product Ids */
       product_ids?: number[];
       preferences?: components["schemas"]["ShopperPreferences"] | null;
-    };
-    /** FeedbackSummary */
-    FeedbackSummary: {
-      /** Up */
-      up: number;
-      /** Down */
-      down: number;
-      /** Recent Down */
-      recent_down: components["schemas"]["ChatFeedback"][];
     };
     /** FlavourProfile */
     FlavourProfile: {
@@ -3262,26 +3256,6 @@ export interface operations {
           [name: string]: unknown;
         };
         content?: never;
-      };
-    };
-  };
-  chat_feedback_summary_chat_feedback_get: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "application/json": components["schemas"]["FeedbackSummary"];
-        };
       };
     };
   };

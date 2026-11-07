@@ -6,7 +6,6 @@ Run with: uv run uvicorn curio.app.api:create_app --factory
 import io
 import json
 import logging
-from collections import Counter, deque
 from collections.abc import AsyncIterator, Iterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import date
@@ -80,7 +79,6 @@ MAX_TOP_K = 50
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 # Bounds decode memory: a small compressed file can still expand to gigabytes of pixels.
 MAX_IMAGE_PIXELS = 25_000_000
-MAX_FEEDBACK_RECORDS = 500
 CHAT_DISABLED = "Chat is disabled: set LLM_MODEL (and LLM_API_KEY / LLM_BASE_URL) in .env."
 
 TopK = Annotated[int, Query(ge=1, le=MAX_TOP_K)]
@@ -213,12 +211,6 @@ class ChatFeedback(BaseModel):
     product_ids: list[int] = Field(default_factory=list, max_length=5)
     tools: list[str] = Field(default_factory=list, max_length=12)
     comment: str = Field(default="", max_length=500)
-
-
-class FeedbackSummary(BaseModel):
-    up: int
-    down: int
-    recent_down: list[ChatFeedback]
 
 
 class OutfitQuery(BaseModel):
@@ -796,21 +788,11 @@ def create_app(
 
         return SlotStreamingResponse(lines(), slot, media_type="application/x-ndjson")
 
-    feedback: deque[ChatFeedback] = deque(maxlen=MAX_FEEDBACK_RECORDS)
-
     @app.post("/chat/feedback", status_code=204)
     def chat_feedback(rating: ChatFeedback) -> None:
-        feedback.append(rating)
+        """Record a rating in the server log: the rating and tool names only. The message,
+        answer and comment are not kept, and nothing serves feedback back over HTTP."""
         logger.info("chat feedback %s tools=%s", rating.rating, ",".join(rating.tools))
-
-    @app.get("/chat/feedback")
-    def chat_feedback_summary() -> FeedbackSummary:
-        counts = Counter(item.rating for item in feedback)
-        return FeedbackSummary(
-            up=counts["up"],
-            down=counts["down"],
-            recent_down=[item for item in feedback if item.rating == "down"][-10:],
-        )
 
     if web_dist is None and services is None:
         settings = get_settings()
