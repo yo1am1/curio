@@ -4,7 +4,8 @@ correct ones (`tests/agents/grounding_corpus`, built by its `build.py`).
 The checks run exactly as the toolkits compose them, on the evidence each answer had. The
 gate: at least 95% of the false answers are caught (every audit probe among them) and at
 most 5% of the correct answers are flagged. `python -m tests.agents.test_grounding_corpus`
-prints the numbers and every miss and false alarm.
+prints the numbers and every miss and false alarm; given a path, it measures another
+labelled set in the same layout (`grounding_heldout/v1.json`).
 """
 
 import json
@@ -31,13 +32,18 @@ MAX_FALSE_ALARMS = 0.05
 
 
 @cache
+def load(path: Path) -> dict[str, Any]:
+    """A labelled set: its cases, the catalog rows they cite and the catalog vocabulary."""
+    return json.loads(path.read_text())
+
+
 def corpus() -> dict[str, Any]:
-    return json.loads(CORPUS.read_text())
+    return load(CORPUS)
 
 
 @cache
-def checks() -> dict[str, Any]:
-    vocabulary = corpus()["vocabulary"]
+def checks(path: Path = CORPUS) -> dict[str, Any]:
+    vocabulary = load(path)["vocabulary"]
     titles, others = vocabulary["book_titles"], vocabulary["book_other_names"]
     drinks, ingredients = vocabulary["drink_names"], vocabulary["ingredients"]
     glasses = vocabulary["glasses"]
@@ -63,20 +69,21 @@ def checks() -> dict[str, Any]:
     }
 
 
-def _rows(case: dict[str, Any], kind: str, field: str) -> list[dict[str, Any]]:
-    items = corpus()["items"]["probe"] if case["source"] == "probe" else corpus()["items"]
-    table = items[kind]
+def _rows(case: dict[str, Any], kind: str, field: str, path: Path) -> list[dict[str, Any]]:
+    items = load(path)["items"]
+    table = (items["probe"] if case["source"] == "probe" else items)[kind]
     return [table[str(i)] for i in case["evidence"][field] if str(i) in table]
 
 
-def check_case(case: dict[str, Any]) -> GroundingReport:
-    """The report the domain's toolkit would give `case`'s answer on its evidence."""
-    every = checks()
+def check_case(case: dict[str, Any], path: Path = CORPUS) -> GroundingReport:
+    """The report the domain's toolkit would give `case`'s answer on its evidence (`path`
+    is the labelled set the case comes from)."""
+    every = checks(path)
     evidence, text, typed = case["evidence"], case["answer"], case["typed"]
-    products = [Product.model_validate(r) for r in _rows(case, "products", "products")]
-    books = [Book.model_validate(r) for r in _rows(case, "books", "books")]
-    drinks = [Cocktail.model_validate(r) for r in _rows(case, "drinks", "drinks")]
-    paired = [Cocktail.model_validate(r) for r in _rows(case, "drinks", "paired")]
+    products = [Product.model_validate(r) for r in _rows(case, "products", "products", path)]
+    books = [Book.model_validate(r) for r in _rows(case, "books", "books", path)]
+    drinks = [Cocktail.model_validate(r) for r in _rows(case, "drinks", "drinks", path)]
+    paired = [Cocktail.model_validate(r) for r in _rows(case, "drinks", "paired", path)]
     amounts, cited = evidence["amounts"], evidence["cited"]
     domain = case["domain"]
     if domain == "fashion":
@@ -107,16 +114,16 @@ def check_case(case: dict[str, Any]) -> GroundingReport:
     )
 
 
-def flagged(case: dict[str, Any]) -> bool:
-    return check_case(case).status == "fallback"
+def flagged(case: dict[str, Any], path: Path = CORPUS) -> bool:
+    return check_case(case, path).status == "fallback"
 
 
-def measure() -> dict[str, Any]:
-    cases = corpus()["cases"]
+def measure(path: Path = CORPUS) -> dict[str, Any]:
+    cases = load(path)["cases"]
     false = [c for c in cases if c["label"] == "false"]
     correct = [c for c in cases if c["label"] == "correct"]
-    caught = [c for c in false if flagged(c)]
-    alarms = [c for c in correct if flagged(c)]
+    caught = [c for c in false if flagged(c, path)]
+    alarms = [c for c in correct if flagged(c, path)]
     return {
         "false": false,
         "correct": correct,
@@ -156,8 +163,8 @@ def test_recall_and_false_alarms_meet_the_gate():
     assert result["false_alarm_rate"] <= MAX_FALSE_ALARMS, alarms
 
 
-def main() -> None:
-    result = measure()
+def main(path: Path = CORPUS) -> None:
+    result = measure(path)
     print(
         f"false answers: {len(result['false'])}, caught "
         f"{len(result['false']) - len(result['missed'])} (recall {result['recall']:.3f})"
@@ -169,8 +176,10 @@ def main() -> None:
     for case in result["missed"]:
         print(f"MISSED {case['id']}: {case['answer'][:160]!r} ({case.get('note', '')})")
     for case in result["alarms"]:
-        print(f"ALARM {case['id']}: {check_case(case).issues}")
+        print(f"ALARM {case['id']}: {check_case(case, path).issues}")
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    main(Path(sys.argv[1]) if len(sys.argv) > 1 else CORPUS)

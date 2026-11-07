@@ -1,0 +1,5126 @@
+{
+ "cases": [
+  {
+   "id": "heldout-v1/1",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "I need a black blazer, ideally under €50.",
+   "answer": "Here's what I found:\n\n- **Basquiat blazer** (Black) – **€39.99**. This one fits your budget and is the only black option here.\n- **Nick super skinny blazer** (Dark Blue) – €59.99\n- **Jess blazer(1)** (Off White) – €69.99\n\nThe last two are over €50, so the **Basquiat blazer** is your best match.",
+   "evidence": {
+    "products": [
+     906741002,
+     713991002,
+     807831005
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/2",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "How much is the Paris Trench? My friend said it was €49.99.",
+   "answer": "The **Paris Trench** (beige) is actually **€69.99**, not €49.99.\n\nIf you'd like something closer to that price, the **Cactus Coat** in light beige comes in at **€39.99**.",
+   "evidence": {
+    "products": [
+     771368001,
+     708845002
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/3",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "What would the sneakers, the bumbag and the sunglasses cost together?",
+   "answer": "Here's the breakdown:\n\n| Item | Price |\n|---|---|\n| **Tua sneaker** (White) | €9.99 |\n| **CYNTHIA BUMBAG** (Black) | €7.99 |\n| **Hilma sunglasses** (Black) | €5.99 |\n| **Total** | **€23.97** |",
+   "evidence": {
+    "products": [
+     853504001,
+     844992001,
+     882993001
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/4",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Show me some dresses for summer.",
+   "answer": "A few dresses you might like:\n\n1. **Eleonor button dress** [id 880839003] – light orange, €17.99\n2. **Jenna knitted midi speed dress** [id 862990001] – light beige, €24.99\n3. **MC Malena dress** [id 839824002] – dark blue, €13.11\n\nThe **MC Malena dress** is the most affordable of the three.",
+   "evidence": {
+    "products": [
+     880839003,
+     862990001,
+     839824002
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/5",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Which grey sweater is cheapest?",
+   "answer": "You have a tie for cheapest: the **Tambov** sweater (grey) and the **Floyd Sweater** (dark grey) are both €12.99. If you want something a bit more premium, the **Baretta Sweater (Bari)** in dark grey is €29.99.",
+   "evidence": {
+    "products": [
+     886367002,
+     794793001,
+     820431001
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/6",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Any black or dark trousers around €20–30?",
+   "answer": "Sure, all three of these are in that range:\n\n- **Blake Slim Trs** – dark blue, €19.99\n- **Hendrix slacks** – black, €29.99\n- **Curvy Jegging HW.** – black, €19.99",
+   "evidence": {
+    "products": [
+     761501007,
+     887904002,
+     914441002
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/7",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Compare these two hoodies for me.",
+   "answer": "**Norway hood jacket** is black and costs €29.99, while the **Waverly hoodie** is grey at €24.99, so the Waverly is €5.00 cheaper. If you prefer a darker colour, go for the Norway.",
+   "evidence": {
+    "products": [
+     805000001,
+     866387010
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/8",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "I want both boots. What's the total?",
+   "answer": "- **Patsy high chelsea** (black): €34.99\n- **Kafka boot** (black): €39.99\n\nTogether that's **€74.98**.",
+   "evidence": {
+    "products": [
+     927172004,
+     898885002
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/9",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Swimsuits please, nothing over €20.",
+   "answer": "Both of these are under €20:\n\n- **Wallaby Way Swimsuit** – light turquoise, **€14.99**\n- **Hamilton Swimsuit** – red, **€17.99**\n\nBoth are fully lined.",
+   "evidence": {
+    "products": [
+     850889001,
+     832309005
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/10",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Is the Vivi beanie the same price in every colour?",
+   "answer": "Not quite. The **Vivi basic beanie** in black is €3.99, and the beige one is €5.99.",
+   "evidence": {
+    "products": [
+     776850001,
+     776850023
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/11",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "I need a shirt for the office.",
+   "answer": "Two options:\n\n**Arthur slim fit shirt** (id 501722004) – white, €24.99. A classic choice for the office.\n\n**Lorena flannel shirt** (id 868874004) – light pink, €19.99. More casual, but €5 less.",
+   "evidence": {
+    "products": [
+     501722004,
+     868874004
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/12",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "What are your most expensive coats?",
+   "answer": "The two priciest options are the **Italian Carpet coat** in greenish khaki and the **PQ JENNIFER WOOL/CASH SHACKET** in light grey, both at **€149.00**.",
+   "evidence": {
+    "products": [
+     910642001,
+     839494001
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/13",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "I have €40 for a skirt.",
+   "answer": "Both skirts fit within €40:\n\n- **Skirt Midi Straight N.W** – blue, €34.99\n- **Skirt Mini** – black, €11.99\n\nBuying both would be €46.98, which is over your budget, so pick one.",
+   "evidence": {
+    "products": [
+     906657001,
+     658298001
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/14",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Show me small bags.",
+   "answer": "- **Hello cross** – green, €17.99\n- **CYNTHIA BUMBAG** – black, €7.99\n- **Willow slingbag** – off white, €8.99\n\nThe **CYNTHIA BUMBAG** is the cheapest at €7.99.",
+   "evidence": {
+    "products": [
+     911061003,
+     844992001,
+     865956001
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/15",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Dresses for a party?",
+   "answer": "Two great picks:\n\n- **Pudong dress** – black, €29.99, sleek and easy to dress up.\n- **Eleonor button dress** – light orange, €17.99, for something more playful.",
+   "evidence": {
+    "products": [
+     904712002,
+     880839003
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Pudong dress price is €39.99, not €29.99."
+  },
+  {
+   "id": "heldout-v1/16",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Black trousers, which is cheaper?",
+   "answer": "The **Hendrix slacks** are the cheaper option at **€19.99**, while the **Curvy Jegging HW.** costs **€29.99**. Both are black.",
+   "evidence": {
+    "products": [
+     887904002,
+     914441002
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Prices swapped: Hendrix slacks are €29.99 and Curvy Jegging HW. is €19.99; the jegging is the cheaper one."
+  },
+  {
+   "id": "heldout-v1/17",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "false",
+   "typed": "The Waverly hoodie is €19.99, right?",
+   "answer": "Yes, the **Waverly hoodie** in grey is €19.99. If you'd like black, the **Norway hood jacket** is €29.99.",
+   "evidence": {
+    "products": [
+     866387010,
+     805000001
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Confirms user's wrong price: Waverly hoodie is €24.99, not €19.99."
+  },
+  {
+   "id": "heldout-v1/18",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "false",
+   "typed": "How much for both jackets?",
+   "answer": "- **MC Shihtzu Coat (Ester)** – black, €59.99\n- **Alaskan** – beige, €29.87\n\nThat comes to **€87.86** in total.",
+   "evidence": {
+    "products": [
+     832995001,
+     853327001
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Wrong total: €59.99 + €29.87 = €89.86, not €87.86."
+  },
+  {
+   "id": "heldout-v1/19",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Price of the trench coat?",
+   "answer": "The **Paris Trench** in beige is **$69.99**, and the **Cactus Coat** (light beige) is a cheaper alternative at **$39.99**.",
+   "evidence": {
+    "products": [
+     771368001,
+     708845002
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Prices are in euros in the catalog; the answer states them in US dollars."
+  },
+  {
+   "id": "heldout-v1/20",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Is the Basquiat blazer a good buy?",
+   "answer": "Definitely! The **Basquiat blazer** is black and €39.99, which is great value compared with the **Nick super skinny blazer** at €59.99. I'd move fast though – there are only a few left in stock.",
+   "evidence": {
+    "products": [
+     906741002,
+     713991002
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Stock claim ('only a few left in stock') is not supported by the catalog."
+  },
+  {
+   "id": "heldout-v1/21",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Tell me about the Jess blazer.",
+   "answer": "The **Jess blazer(1)** comes in off white and is listed at €69.99, but it's currently 30% off, bringing it down to about **€48.99**. The **Basquiat blazer** (black, €39.99) is another option.",
+   "evidence": {
+    "products": [
+     807831005,
+     906741002
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Discount claim (30% off, €48.99) is invented; the catalog price is €69.99 with no discount info."
+  },
+  {
+   "id": "heldout-v1/22",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "false",
+   "typed": "I'll take the scarf and the cardigan. Any shipping cost?",
+   "answer": "Nice choices! The **Lina Linen scarf** (dark beige) is €19.99 and the **Robert Button Cardigan** (light pink) is €19.99, so your total is **€39.98**. Orders over €30 ship free, so no shipping cost for you.",
+   "evidence": {
+    "products": [
+     836605009,
+     897146001
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Free-shipping claim (orders over €30 ship free) is not supported by the catalog."
+  },
+  {
+   "id": "heldout-v1/23",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Cheap sweaters?",
+   "answer": "- **Tambov** – navy, €12.99\n- **Floyd Sweater** – dark grey, €12.99\n\nBoth are the same price, so it just comes down to colour.",
+   "evidence": {
+    "products": [
+     794793001,
+     820431001
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Tambov is grey, not navy."
+  },
+  {
+   "id": "heldout-v1/24",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Basic tops for men?",
+   "answer": "Here are some basics:\n\n1. **GREY Scale Tee** – greenish khaki, €12.99\n2. **R-NECK SS BASIC 3 PK** – dark blue, €17.99 (a 3-pack, so great value)\n3. **Norway hood jacket** – black, €29.99 if you want a layer on top",
+   "evidence": {
+    "products": [
+     793704004,
+     513699036,
+     805000001
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "R-NECK SS BASIC 3 PK is €19.99, not €17.99 (other facts correct)."
+  },
+  {
+   "id": "heldout-v1/25",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Any dresses under €20?",
+   "answer": "Yes, a few:\n\n- **Eleonor button dress** – light orange, €17.99\n- **MC Malena dress** – dark blue, €13.11\n- **Divided Ribbed Knit Dress** – black, €14.99, a comfy everyday option",
+   "evidence": {
+    "products": [
+     880839003,
+     839824002
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "'Divided Ribbed Knit Dress' at €14.99 is not among the returned items (invented)."
+  },
+  {
+   "id": "heldout-v1/26",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "false",
+   "typed": "My daughter has sensitive skin, which swimsuit?",
+   "answer": "I'd go with the **Wallaby Way Swimsuit** (light turquoise, €14.99). It's made from a hypoallergenic, chlorine-resistant fabric that's gentle on sensitive skin. The **Hamilton Swimsuit** (red, €17.99) is another option.",
+   "evidence": {
+    "products": [
+     850889001,
+     832309005
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Hypoallergenic / chlorine-resistant / safe for sensitive skin claim is not in the catalog."
+  },
+  {
+   "id": "heldout-v1/27",
+   "source": "heldout",
+   "domain": "fashion",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Which black boots are cheapest?",
+   "answer": "They're the same price: the **Patsy high chelsea** and the **Kafka boot** are both €34.99, so pick whichever style you prefer.",
+   "evidence": {
+    "products": [
+     927172004,
+     898885002
+    ],
+    "books": [],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Kafka boot is €39.99, not €34.99; they are not the same price."
+  },
+  {
+   "id": "heldout-v1/28",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "How do I make a margarita?",
+   "answer": "**Margarita** (drink #239), served in a cocktail glass:\n\n- 1 1/2 oz tequila\n- 1/2 oz triple sec\n- 1 oz lime juice\n- Salt for the rim\n\nIf you want something simpler, the **Daiquiri** (#78) only needs light rum, lime and powdered sugar.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     239,
+     78
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/29",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Something bitter and stirred?",
+   "answer": "The **Negroni** is perfect: equal parts **1 oz gin, 1 oz Campari and 1 oz sweet vermouth**, served in an old-fashioned glass. For something smoother, try the **Manhattan**: 2 1/2 oz blended bourbon with 3/4 oz sweet vermouth and a dash of Angostura bitters.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     257,
+     238
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/30",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "I'm driving tonight, any alcohol-free drinks?",
+   "answer": "Here are two alcohol-free options:\n\n1. **Afterglow** (drink #20) – non-alcoholic: 1 part grenadine, 4 parts orange juice, 4 parts pineapple juice.\n2. **Bora Bora** (drink #36) – non-alcoholic: 10 cl pineapple juice, 6 cl passion fruit juice, 1 cl lemon juice and 1 cl grenadine.\n\nI'd skip the Margarita tonight since it contains tequila.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     20,
+     36,
+     239
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/31",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Moscow Mule recipe?",
+   "answer": "**Moscow Mule** (#246) – served in a copper mug:\n- 2 oz vodka\n- 2 oz lime juice\n- 8 oz ginger ale\n\nNote that this recipe uses ginger ale. If you want ginger beer, the **Dark and Stormy** (#87) uses 10 cl ginger beer with 5 cl dark rum.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     246,
+     87
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/32",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Classic whiskey cocktail?",
+   "answer": "Try an **Old Fashioned**: 4.5 cL bourbon, 2 dashes Angostura bitters, 1 sugar cube and a dash of water, in an old-fashioned glass.\n\nOr the **Whiskey Sour**: 2 oz blended whiskey, juice of 1/2 lemon, 1/2 tsp powdered sugar, garnished with a cherry and half a lemon slice.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     269,
+     405
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/33",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Winter party drinks where alcohol can be optional?",
+   "answer": "Both of these are listed as **optional alcohol**:\n\n- **Gluehwein** (#136): 1 L red wine, 125 ml water, 60 gr sugar, a cinnamon stick, 3 cloves and 1 tblsp lemon peel.\n- **Egg Nog #4** (#95): the recipe includes 1/2 cup light rum and 1/2 cup bourbon, alongside 6 egg yolks, 2 cups milk and 1 cup whipping cream.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     136,
+     95
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/34",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Something with ginger beer and rum?",
+   "answer": "The **Dark and Stormy** is exactly that: **5 cl dark rum** and **10 cl ginger beer**, served in a highball glass.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     87,
+     233
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/35",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Espresso martini ingredients?",
+   "answer": "**Espresso Martini** (drink #97): 5 cl vodka, 1 cl Kahlua and a dash of sugar syrup, served in a cocktail glass.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     97,
+     236
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/36",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "A daiquiri is 2 oz of rum, isn't it?",
+   "answer": "In this recipe the **Daiquiri** uses **1 1/2 oz light rum**, not 2 oz, plus the juice of 1/2 lime and 1 tsp powdered sugar.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     78,
+     239
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/37",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Warm non-alcoholic drinks for a cold evening?",
+   "answer": "- **Nuked Hot Chocolate** (#262) – non-alcoholic: 2 tsp cocoa powder, 1 tsp sugar, 1/2 tsp vanilla extract and 12 oz milk.\n- **Masala Chai** (#248) – non-alcoholic: 2 cups water, 3-4 tsp tea, ginger, crushed cardamom, 3 cloves, cinnamon and black pepper, with sugar and milk to taste.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     262,
+     248
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/38",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Citrusy brandy or vodka cocktail?",
+   "answer": "**Sidecar**: 2 oz cognac, 1/2 oz Cointreau, 1 oz lemon juice.\n\n**Cosmopolitan**: 1 1/4 oz vodka, 1/4 oz lime juice, 1/4 oz Cointreau and 1/4 cup cranberry juice.\n\nBoth are served in a cocktail glass.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     340,
+     66
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/39",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Brazilian or Cuban classics?",
+   "answer": "1. **Caipirinha** (#53) – 2 1/2 oz cachaca, 1 lime and 2 tsp sugar, in an old-fashioned glass.\n2. **Mojito** (#233) – 2-3 oz light rum, juice of 1 lime, 2 tsp sugar, 2-4 mint leaves, topped with soda water.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     53,
+     233
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/40",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Mango lassi recipe?",
+   "answer": "**Lassi - Mango** (non-alcoholic):\n- 2 mangoes\n- 2 cups yoghurt\n- 1/2 cup sugar\n- 1 cup iced water\n\nFor a simpler version, **Lassi - Sweet** uses 1 cup yoghurt, 2 cups cold water, 4 tblsp sugar, a pinch of salt and 2 tblsp lemon juice.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     220,
+     221
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/41",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Margarita amounts?",
+   "answer": "For a **Margarita**: 2 oz tequila, 1/2 oz triple sec and 1 oz lime juice, with a salted rim.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     239,
+     78
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Margarita uses 1 1/2 oz tequila, not 2 oz."
+  },
+  {
+   "id": "heldout-v1/42",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Alcohol-free drinks for a baby shower?",
+   "answer": "Two lovely alcohol-free choices:\n\n- **Afterglow** – grenadine, orange juice and pineapple juice.\n- **Bellini** – a bubbly, peachy drink that's also alcohol-free, served in a champagne flute.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     20,
+     31
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Bellini is alcoholic (6 oz champagne, 1 oz peach schnapps), not alcohol-free."
+  },
+  {
+   "id": "heldout-v1/43",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Fruity mocktails for kids?",
+   "answer": "Kids usually love these:\n\n1. **Afterglow** (#20) – grenadine, orange juice and pineapple juice.\n2. **Apello** (#9) – orange, grapefruit and apple juice with a maraschino cherry.\n3. **Shirley Temple** – ginger ale with a splash of grenadine and a cherry on top.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     20,
+     9
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Shirley Temple is not among the returned drinks (invented)."
+  },
+  {
+   "id": "heldout-v1/44",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Italian aperitivo ideas?",
+   "answer": "- **Aperol Spritz** – 9 cl prosecco, 6 cl Aperol and a splash of soda.\n- **Negroni** – 1 oz each of gin, Campari and sweet vermouth.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     335,
+     257
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "'Aperol Spritz' with Aperol is not in the evidence; the returned Spritz (#335) is 6 cl prosecco, 4 cl Campari and a splash of soda."
+  },
+  {
+   "id": "heldout-v1/45",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Negroni proportions?",
+   "answer": "The **Negroni** (#257): 1 1/2 oz gin, 1 oz Campari and 1 oz sweet vermouth, served in an old-fashioned glass.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     257,
+     238
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Negroni uses 1 oz gin, not 1 1/2 oz."
+  },
+  {
+   "id": "heldout-v1/46",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Moscow Mule uses ginger beer, right?",
+   "answer": "Yes! The **Moscow Mule** is 2 oz vodka, 2 oz lime juice and 8 oz ginger beer, served in a copper mug.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     246,
+     87
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "The catalog Moscow Mule uses ginger ale, not ginger beer; the answer confirms the user's wrong assumption."
+  },
+  {
+   "id": "heldout-v1/47",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Party punch for a school event with kids, one has a nut allergy.",
+   "answer": "The **Cranberry Punch** is a great pick: 4 cups cranberry juice, 4 cups pineapple juice, 1 1/2 cups sugar and 2 qt ginger ale. It's non-alcoholic and nut-free, so it's safe for kids with allergies.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     75,
+     20
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Cranberry Punch contains 1 tblsp almond flavoring, so it is not nut-free / safe for nut allergies."
+  },
+  {
+   "id": "heldout-v1/48",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Can kids have eggnog at the family Christmas party?",
+   "answer": "Sure! **Egg Nog #4** is alcohol-free, so it's perfectly fine for kids: egg yolks, sugar, milk, vanilla, whipping cream and nutmeg. **Egg-Nog - Classic Cooked** is another family option.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     95,
+     102
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Egg Nog #4 is 'Optional alcohol' and its recipe contains 1/2 cup light rum and 1/2 cup bourbon; it is not alcohol-free / kid-safe as written."
+  },
+  {
+   "id": "heldout-v1/49",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Something light for someone who doesn't drink?",
+   "answer": "The **Wine Cooler** (#403) is non-alcoholic, just lemon-lime soda over ice. The **Orangeade** (#265) is also non-alcoholic: 5 cl lemon juice, 15 cl orange juice, 2-3 cl sugar syrup and soda water.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     403,
+     265
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Wine Cooler is 'Optional alcohol' and contains red/white wine, not non-alcoholic."
+  },
+  {
+   "id": "heldout-v1/50",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Old Fashioned measurements?",
+   "answer": "**Old Fashioned**:\n- 6 cL bourbon\n- 2 dashes Angostura bitters\n- 1 sugar cube\n- A dash of water",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     269,
+     405
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Old Fashioned uses 4.5 cL bourbon, not 6 cL (other amounts correct)."
+  },
+  {
+   "id": "heldout-v1/51",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Rum cocktails?",
+   "answer": "- **Daiquiri** (drink #87) – 1 1/2 oz light rum, juice of 1/2 lime, 1 tsp powdered sugar.\n- **Dark and Stormy** – 5 cl dark rum, 10 cl ginger beer.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     78,
+     87
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Daiquiri is drink #78; #87 is Dark and Stormy."
+  },
+  {
+   "id": "heldout-v1/52",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Iced drink I can give my kids before bed?",
+   "answer": "**Thai Iced Tea** (#372) is non-alcoholic and caffeine-free, so it's a nice bedtime treat: 1/4 cup Thai tea, 1/2 cup boiling water, 2 tsp sweetened condensed milk, ice and a mint garnish.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     372,
+     381
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Thai Iced Tea is made with tea and is not caffeine-free; 'good for kids before bed' is unsupported."
+  },
+  {
+   "id": "heldout-v1/53",
+   "source": "heldout",
+   "domain": "cocktails",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Dark and Stormy ratio?",
+   "answer": "The **Dark and Stormy** is 5 cl dark rum topped with 15 cl ginger beer, served in a highball glass.",
+   "evidence": {
+    "products": [],
+    "books": [],
+    "drinks": [
+     87,
+     246
+    ],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Dark and Stormy uses 10 cl ginger beer, not 15 cl."
+  },
+  {
+   "id": "heldout-v1/54",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Recommend some dystopian classics.",
+   "answer": "1. **The Hunger Games** by Suzanne Collins (2008) – 374 pages, rated 4.34.\n2. **1984** by George Orwell (1949) – rated 4.14.\n3. **Brave New World** by Aldous Huxley (1932) – rated 3.97.\n\nThe Hunger Games has the highest average rating of the three.",
+   "evidence": {
+    "products": [],
+    "books": [
+     1,
+     13,
+     55
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/55",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "The Great Gatsby is around 300 pages, isn't it?",
+   "answer": "It's actually much shorter: **The Great Gatsby** by F. Scott Fitzgerald is **180 pages**, not 300. If you want something even quicker, **Of Mice and Men** by John Steinbeck is 112 pages.",
+   "evidence": {
+    "products": [],
+    "books": [
+     5,
+     32
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/56",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Tolkien books?",
+   "answer": "- **The Hobbit** (book 7) – J.R.R. Tolkien, 1937, 366 pages, ★ 4.25\n- **The Fellowship of the Ring** (book 19) – J.R.R. Tolkien, 1954, 398 pages, ★ 4.34",
+   "evidence": {
+    "products": [],
+    "books": [
+     7,
+     19
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/57",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Which Harry Potter book is rated highest?",
+   "answer": "Of these, **Harry Potter and the Deathly Hallows** has the highest average rating at **4.61**, followed by **Harry Potter and the Half-Blood Prince** (4.54) and **Harry Potter and the Prisoner of Azkaban** (4.53). All are by J.K. Rowling.",
+   "evidence": {
+    "products": [],
+    "books": [
+     25,
+     27,
+     18
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/58",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Good science fiction?",
+   "answer": "**Dune** by Frank Herbert (1965) is the big one at 604 pages, rated 4.19. **The Martian** by Andy Weir (2012, 369 pages) has the highest rating here at 4.39, and **Ender's Game** by Orson Scott Card (1985) sits at 4.30.",
+   "evidence": {
+    "products": [],
+    "books": [
+     126,
+     141,
+     70
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/59",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Short books under 200 pages?",
+   "answer": "- **Animal Farm** by George Orwell – 122 pages\n- **Siddhartha** by Hermann Hesse – 152 pages\n- **Fahrenheit 451** by Ray Bradbury – 174 pages\n\nAll three are under 200 pages.",
+   "evidence": {
+    "products": [],
+    "books": [
+     14,
+     180,
+     48
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/60",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Mysteries with a twist?",
+   "answer": "- **And Then There Were None** by Agatha Christie (1939) – 264 pages, rated 4.23\n- **Gone Girl** by Gillian Flynn (2012) – 399 pages, rated 4.03\n- **Rebecca** by Daphne du Maurier (1938) – 441 pages, rated 4.20",
+   "evidence": {
+    "products": [],
+    "books": [
+     200,
+     30,
+     270
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/61",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "How many pages are the first three Game of Thrones books together?",
+   "answer": "- **A Game of Thrones** – 848 pages (rated 4.45)\n- **A Clash of Kings** – 761 pages (rated 4.40)\n- **A Storm of Swords** – 1177 pages (rated 4.54)\n\nThat's **2,786 pages** in total, all by George R.R. Martin.",
+   "evidence": {
+    "products": [],
+    "books": [
+     39,
+     110,
+     135
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/62",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Twilight is rated like 4.5, right?",
+   "answer": "Not quite. **Twilight** by Stephenie Meyer has an average rating of **3.57**, not 4.5. Its sequel **New Moon** is a bit lower at 3.52.",
+   "evidence": {
+    "products": [],
+    "books": [
+     3,
+     49
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/63",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Post-apocalyptic novels?",
+   "answer": "**The Road** by Cormac McCarthy (2006) is short and intense at 241 pages, with a 3.95 average. **Station Eleven** by Emily St. John Mandel (2014, 336 pages) is rated 4.02.",
+   "evidence": {
+    "products": [],
+    "books": [
+     104,
+     458
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/64",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Thoughtful sci-fi that isn't too long?",
+   "answer": "1. **Never Let Me Go** – Kazuo Ishiguro, 2005, 288 pages, 3.80\n2. **Neuromancer** – William Gibson, 1984, 271 pages, 3.88",
+   "evidence": {
+    "products": [],
+    "books": [
+     268,
+     400
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/65",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Epic fantasy series starters?",
+   "answer": "**The Name of the Wind** by Patrick Rothfuss (2007) is rated an impressive 4.55 and runs 662 pages. **The Eye of the World** by Robert Jordan (1990) is longer at 814 pages, rated 4.18.",
+   "evidence": {
+    "products": [],
+    "books": [
+     192,
+     330
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/66",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Nonfiction suggestions?",
+   "answer": "- **Sapiens: A Brief History of Humankind** by Yuval Noah Harari (2011) – 443 pages, rated 4.41.\n- **Yes Please** by Amy Poehler (2014) – rated 3.81, a lighter memoir.",
+   "evidence": {
+    "products": [],
+    "books": [
+     2205,
+     352
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/67",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "correct",
+   "typed": "Books for a 10-year-old reader that are well rated?",
+   "answer": "Here are the ratings for these three:\n\n- **Wonder** by R.J. Palacio (2012, 316 pages) – 4.43\n- **Charlotte's Web** by E.B. White (1952) – 4.15\n- **The Boy in the Striped Pajamas** by John Boyne (2006, 224 pages) – 4.10",
+   "evidence": {
+    "products": [],
+    "books": [
+     250,
+     300,
+     59
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "correct"
+  },
+  {
+   "id": "heldout-v1/68",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Is the Hunger Games trilogy consistently good?",
+   "answer": "Pretty much! **The Hunger Games** is rated 4.34, **Catching Fire** also 4.34, and **Mockingjay** dips a little to 4.03. All three are by Suzanne Collins.",
+   "evidence": {
+    "products": [],
+    "books": [
+     1,
+     17,
+     20
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Catching Fire is rated 4.30; 4.34 is The Hunger Games' rating."
+  },
+  {
+   "id": "heldout-v1/69",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Cyberpunk classics?",
+   "answer": "**Neuromancer** by Philip K. Dick (1984) is the defining cyberpunk novel, 271 pages and rated 3.88.",
+   "evidence": {
+    "products": [],
+    "books": [
+     400,
+     268
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Neuromancer is by William Gibson, not Philip K. Dick."
+  },
+  {
+   "id": "heldout-v1/70",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "false",
+   "typed": "How long is Dune?",
+   "answer": "**Dune** by Frank Herbert is 412 pages, first published in 1965. Its sequel **Dune Messiah** is shorter at 331 pages.",
+   "evidence": {
+    "products": [],
+    "books": [
+     126,
+     1105
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Dune is 604 pages, not 412."
+  },
+  {
+   "id": "heldout-v1/71",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "false",
+   "typed": "When did The Hobbit come out compared to Lord of the Rings?",
+   "answer": "**The Hobbit** was published in 1954, the same year as **The Fellowship of the Ring** (1954). Both are by J.R.R. Tolkien.",
+   "evidence": {
+    "products": [],
+    "books": [
+     7,
+     19
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "The Hobbit is from 1937, not 1954."
+  },
+  {
+   "id": "heldout-v1/72",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "false",
+   "typed": "I loved The Martian, anything similar?",
+   "answer": "If you loved **The Martian** (Andy Weir, 4.39), try **Project Hail Mary** by Andy Weir (2021), another science-heavy survival story. **Dune** by Frank Herbert (4.19) is a different flavour but a classic.",
+   "evidence": {
+    "products": [],
+    "books": [
+     141,
+     126
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Project Hail Mary is not among the returned books (invented, not in the catalog)."
+  },
+  {
+   "id": "heldout-v1/73",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Psychological thrillers?",
+   "answer": "- **Gone Girl** by Gillian Flynn (2012) – rated 4.03\n- **The Silent Patient** by Alex Michaelides (2019) – rated 4.08\n- **And Then There Were None** by Agatha Christie (1939) – rated 4.23",
+   "evidence": {
+    "products": [],
+    "books": [
+     30,
+     200
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "The Silent Patient is not among the returned books (invented)."
+  },
+  {
+   "id": "heldout-v1/74",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "false",
+   "typed": "The Alchemist has a rating around 4.5, right?",
+   "answer": "Yes, **The Alchemist** by Paulo Coelho is rated about 4.5. It's short too, at 197 pages.",
+   "evidence": {
+    "products": [],
+    "books": [
+     35,
+     180
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Confirms user's wrong rating: The Alchemist is rated 3.82, not ~4.5."
+  },
+  {
+   "id": "heldout-v1/75",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Ratings for the middle Harry Potter books?",
+   "answer": "- **Harry Potter and the Chamber of Secrets** – 4.37\n- **Harry Potter and the Goblet of Fire** – 4.46\n- **Harry Potter and the Order of the Phoenix** – 4.46",
+   "evidence": {
+    "products": [],
+    "books": [
+     23,
+     24,
+     21
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Goblet of Fire is rated 4.53, not 4.46 (4.46 is Order of the Phoenix)."
+  },
+  {
+   "id": "heldout-v1/76",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Classic novels about kids?",
+   "answer": "**Lord of the Flies** by William Goldman (1954) is a dark classic about stranded schoolboys, and **The Outsiders** by S.E. Hinton (1967) follows teenage gangs.",
+   "evidence": {
+    "products": [],
+    "books": [
+     28,
+     90
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Lord of the Flies is by William Golding, not William Goldman."
+  },
+  {
+   "id": "heldout-v1/77",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "false",
+   "typed": "How many pages is the whole Hunger Games trilogy?",
+   "answer": "- **The Hunger Games** – 374 pages\n- **Catching Fire** – 391 pages\n- **Mockingjay** – 392 pages\n\nThat's about **1,203 pages** altogether.",
+   "evidence": {
+    "products": [],
+    "books": [
+     1,
+     17,
+     20
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Wrong total: 374 + 391 + 392 = 1,157 pages, not 1,203."
+  },
+  {
+   "id": "heldout-v1/78",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Is And Then There Were None OK for my 8-year-old?",
+   "answer": "Yes, **And Then There Were None** by Agatha Christie (rated 4.23) is suitable for kids aged 8 and up. **Charlotte's Web** by E.B. White is another great option.",
+   "evidence": {
+    "products": [],
+    "books": [
+     200,
+     59
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Age-suitability claim (fine for 8-year-olds) is not supported by the catalog."
+  },
+  {
+   "id": "heldout-v1/79",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Where can I get The Name of the Wind?",
+   "answer": "**The Name of the Wind** by Patrick Rothfuss (rated 4.55) is available in paperback for €9.99 and ships within 24 hours.",
+   "evidence": {
+    "products": [],
+    "books": [
+     192,
+     330
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Price (€9.99) and shipping claims are invented; the book catalog has no prices or stock data."
+  },
+  {
+   "id": "heldout-v1/80",
+   "source": "heldout",
+   "domain": "books",
+   "kind": "answer",
+   "label": "false",
+   "typed": "Classic romance novels from the 1800s?",
+   "answer": "1. **Pride and Prejudice** by Jane Austen (1813) – rated 4.24\n2. **Jane Eyre** by Charlotte Brontë (1857) – rated 4.10\n3. **Little Women** by Louisa May Alcott (1868) – rated 4.04",
+   "evidence": {
+    "products": [],
+    "books": [
+     10,
+     43,
+     42
+    ],
+    "drinks": [],
+    "paired": [],
+    "amounts": [],
+    "cited": []
+   },
+   "note": "Jane Eyre is from 1847, not 1857."
+  }
+ ],
+ "items": {
+  "products": {
+   "853504001": {
+    "product_id": 853504001,
+    "name": "Tua sneaker",
+    "product_type": "Sneakers",
+    "product_group": "Shoes",
+    "section": "Ladieswear",
+    "colour": "White",
+    "description": "Low platform trainers in cotton canvas with lacing at the top and a wide loop at the back. Cotton linings and insoles. Platform front approx. 2.5 cm. Platform back 5 cm.",
+    "price": 9.99,
+    "shopify_category": "Apparel & Accessories > Shoes > Sneakers",
+    "shopify_attributes": {
+     "color": "White",
+     "pattern": "Solid",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "844992001": {
+    "product_id": 844992001,
+    "name": "CYNTHIA BUMBAG",
+    "product_type": "Bag",
+    "product_group": "Accessories",
+    "section": "Divided",
+    "colour": "Black",
+    "description": "Waist bag in woven fabric with a slight sheen. Zip at the top, a zipped outer compartment and an adjustable strap with a plastic fastener at the waist. Lined. Depth 9.5 cm. Height 14.5 cm. Width 28 cm.",
+    "price": 7.99,
+    "shopify_category": "Apparel & Accessories > Handbags, Wallets & Cases",
+    "shopify_attributes": {
+     "color": "Black",
+     "pattern": "Solid"
+    }
+   },
+   "839824002": {
+    "product_id": 839824002,
+    "name": "MC Malena dress",
+    "product_type": "Dress",
+    "product_group": "Garment Full body",
+    "section": "Ladieswear",
+    "colour": "Dark Blue",
+    "description": "Short V-neck dress in a crêpe weave with double-layered flutter sleeves that fall in soft pleats over the shoulders. Elasticated seam at the waist with narrow ties at the sides. Lined.",
+    "price": 13.11,
+    "shopify_category": "Apparel & Accessories > Clothing > Dresses",
+    "shopify_attributes": {
+     "color": "Blue",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "887904002": {
+    "product_id": 887904002,
+    "name": "Hendrix slacks",
+    "product_type": "Trousers",
+    "product_group": "Garment Lower body",
+    "section": "Ladieswear",
+    "colour": "Black",
+    "description": "Ankle-length cigarette trousers in a slightly stretchy weave with a high waist, zip fly with a hook-and-eye fastener, pockets in the side seams, fake back pockets and slim legs with creases.",
+    "price": 29.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Pants",
+    "shopify_attributes": {
+     "color": "Black",
+     "pattern": "Solid",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "906741002": {
+    "product_id": 906741002,
+    "name": "Basquiat blazer",
+    "product_type": "Blazer",
+    "product_group": "Garment Upper body",
+    "section": "Divided",
+    "colour": "Black",
+    "description": "Oversized jacket in woven fabric with notch lapels, buttons at the front, a chest pocket and flap front pockets. Lined.",
+    "price": 39.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Outerwear > Coats & Jackets > Blazers",
+    "shopify_attributes": {
+     "color": "Black",
+     "pattern": "Solid"
+    }
+   },
+   "898885002": {
+    "product_id": 898885002,
+    "name": "Kafka boot",
+    "product_type": "Boots",
+    "product_group": "Shoes",
+    "section": "Ladieswear",
+    "colour": "Black",
+    "description": "Ankle boots in grained imitation leather with rounded toes, a zip on the inside, block heels and a small platform. Linings in satin made from recycled polyester and insoles in imitation leather. Heel 6.5 cm.",
+    "price": 39.99,
+    "shopify_category": "Apparel & Accessories > Shoes > Boots",
+    "shopify_attributes": {
+     "color": "Black",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "911061003": {
+    "product_id": 911061003,
+    "name": "Hello cross",
+    "product_type": "Bag",
+    "product_group": "Accessories",
+    "section": "Ladieswear",
+    "colour": "Green",
+    "description": "Shoulder bag with a flap and decorative metal buckle and a shoulder strap with metal chains at the ends. Lined.",
+    "price": 17.99,
+    "shopify_category": "Apparel & Accessories > Handbags, Wallets & Cases",
+    "shopify_attributes": {
+     "color": "Green",
+     "pattern": "Solid",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "832309005": {
+    "product_id": 832309005,
+    "name": "Hamilton Swimsuit",
+    "product_type": "Swimsuit",
+    "product_group": "Swimwear",
+    "section": "Ladieswear",
+    "colour": "Red",
+    "description": "Fully lined swimsuit with a deep, flounce-trimmed, elasticated V-neck front and back. Cups with removable inserts that shape the bust and provide good support and decorative crossover lacing at the front.",
+    "price": 17.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Swimwear > One-Piece Swimsuits",
+    "shopify_attributes": {
+     "color": "Red",
+     "pattern": "Solid",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "658298001": {
+    "product_id": 658298001,
+    "name": "Skirt Mini",
+    "product_type": "Skirt",
+    "product_group": "Garment Lower body",
+    "section": "Ladieswear",
+    "colour": "Black",
+    "description": "5-pocket skirt in washed denim with a high waist, button fly and frayed, raw-edge hem.",
+    "price": 11.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Skirts",
+    "shopify_attributes": {
+     "color": "Black",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "897146001": {
+    "product_id": 897146001,
+    "name": "Robert Button Cardigan",
+    "product_type": "Cardigan",
+    "product_group": "Garment Upper body",
+    "section": "Divided",
+    "colour": "Light Pink",
+    "description": "Cardigan in a soft textured knit with a V-neck, loop fasteners with pearly plastic beads down the front and overlocked edges at the cuffs and hem.",
+    "price": 19.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Clothing Tops > Cardigans",
+    "shopify_attributes": {
+     "color": "Pink",
+     "pattern": "Solid"
+    }
+   },
+   "501722004": {
+    "product_id": 501722004,
+    "name": "Arthur slim fit shirt",
+    "product_type": "Shirt",
+    "product_group": "Garment Upper body",
+    "section": "Menswear",
+    "colour": "White",
+    "description": "Shirt woven in a stretch cotton blend with a narrow turn-down collar, long sleeves with adjustable buttoning at the cuffs, darts at the back, and a rounded hem. Slim fit with narrow shoulders and a tapered waist to create a fitted silhouette.",
+    "price": 24.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Clothing Tops > Shirts",
+    "shopify_attributes": {
+     "color": "White",
+     "pattern": "Solid",
+     "target-gender": "Male",
+     "age-group": "Adults"
+    }
+   },
+   "868874004": {
+    "product_id": 868874004,
+    "name": "Lorena flannel shirt",
+    "product_type": "Shirt",
+    "product_group": "Garment Upper body",
+    "section": "Ladieswear",
+    "colour": "Light Pink",
+    "description": "Shirt in soft, lightweight cotton flannel with a collar, buttons down the front and a yoke with a pleat at the back. Open chest pockets, dropped shoulders, long sleeves with buttoned cuffs, and a rounded hem. Slightly longer at the back.",
+    "price": 19.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Clothing Tops > Shirts",
+    "shopify_attributes": {
+     "color": "Pink",
+     "pattern": "Checkered",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "820431001": {
+    "product_id": 820431001,
+    "name": "Floyd Sweater",
+    "product_type": "Sweater",
+    "product_group": "Garment Upper body",
+    "section": "Divided",
+    "colour": "Dark Grey",
+    "description": "Wide jumper in a fine knit with a lightly brushed finish. Stand-up collar, low dropped shoulders, long sleeves and ribbing around the neckline, cuffs and hem.",
+    "price": 12.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Clothing Tops > Sweaters",
+    "shopify_attributes": {
+     "color": "Gray"
+    }
+   },
+   "886367002": {
+    "product_id": 886367002,
+    "name": "Baretta Sweater (Bari)",
+    "product_type": "Sweater",
+    "product_group": "Garment Upper body",
+    "section": "Ladieswear",
+    "colour": "Dark Grey",
+    "description": "Relaxed-fit jumper in a soft, fine knit containing some wool with dropped shoulders, long sleeves and ribbing around the neckline, cuffs and hem. The polyester content of the jumper is recycled.",
+    "price": 29.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Clothing Tops > Sweaters",
+    "shopify_attributes": {
+     "color": "Gray",
+     "pattern": "Solid",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "853327001": {
+    "product_id": 853327001,
+    "name": "Alaskan",
+    "product_type": "Jacket",
+    "product_group": "Garment Upper body",
+    "section": "Ladieswear",
+    "colour": "Beige",
+    "description": "Short trenchcoat in a cotton and Tencel™ lyocell blend with a collar, tab with a button at the top and shoulder tabs with a button. Off-centre buttons at the front and a loose yoke at one side. Wide raglan sleeves with an adjustable tab and plastic buckle at the cuffs. Front pockets with a decorative flap, a detachable belt with a plastic buckle at the waist, and a gently rounded hem. Lined.",
+    "price": 29.87,
+    "shopify_category": "Apparel & Accessories > Clothing > Outerwear",
+    "shopify_attributes": {
+     "color": "Beige",
+     "pattern": "Solid",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "865956001": {
+    "product_id": 865956001,
+    "name": "Willow slingbag",
+    "product_type": "Bag",
+    "product_group": "Accessories",
+    "section": "Sport",
+    "colour": "Off White",
+    "description": "Waist bag in nylon with a zip at the front and an adjustable waist strap with a plastic fastener. Lined. Depth 7 cm. Height 10.5 cm. Width 20 cm.",
+    "price": 8.99,
+    "shopify_category": "Apparel & Accessories > Handbags, Wallets & Cases",
+    "shopify_attributes": {
+     "color": "White",
+     "pattern": "Solid"
+    }
+   },
+   "927172004": {
+    "product_id": 927172004,
+    "name": "Patsy high chelsea",
+    "product_type": "Boots",
+    "product_group": "Shoes",
+    "section": "Ladieswear",
+    "colour": "Black",
+    "description": "Chelsea boots in imitation leather with platform soles, elastic gores in the sides and a loop front and back. Linings and insoles in jersey made from recycled polyester, and chunky soles. Platform front 4.5 cm. Heel 5 cm.",
+    "price": 34.99,
+    "shopify_category": "Apparel & Accessories > Shoes > Boots",
+    "shopify_attributes": {
+     "color": "Black",
+     "pattern": "Solid",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "794793001": {
+    "product_id": 794793001,
+    "name": "Tambov",
+    "product_type": "Sweater",
+    "product_group": "Garment Upper body",
+    "section": "Ladieswear",
+    "colour": "Grey",
+    "description": "Boxy jumper in a soft knit containing some wool with a turtle neck, long raglan sleeves and ribbing at the cuffs and hem. Slightly longer at the back. The polyester content of the jumper is recycled.",
+    "price": 12.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Clothing Tops > Sweaters",
+    "shopify_attributes": {
+     "color": "Gray",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "914441002": {
+    "product_id": 914441002,
+    "name": "Curvy Jegging HW.",
+    "product_type": "Trousers",
+    "product_group": "Garment Lower body",
+    "section": "Divided",
+    "colour": "Black",
+    "description": "Ankle-length jeggings in soft, stretch denim with worn details. Extra-high waist, zip fly and button, fake front pockets, real back pockets and skinny legs.",
+    "price": 19.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Pants",
+    "shopify_attributes": {
+     "color": "Black"
+    }
+   },
+   "850889001": {
+    "product_id": 850889001,
+    "name": "Wallaby Way Swimsuit",
+    "product_type": "Swimsuit",
+    "product_group": "Swimwear",
+    "section": "Ladieswear",
+    "colour": "Light Turquoise",
+    "description": "Fully lined, batik-patterned swimsuit with narrow, flounce-trimmed shoulder straps and cups with removable inserts that shape the bust and provide good support. Concealed elastication under the bust and a deep V-neck and long ties at the back. High-cut legs with flounced trims at the sides, and medium coverage at the back. The polyester content of the swimsuit is recycled.",
+    "price": 14.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Swimwear > One-Piece Swimsuits",
+    "shopify_attributes": {
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "862990001": {
+    "product_id": 862990001,
+    "name": "Jenna knitted midi speed dress",
+    "product_type": "Dress",
+    "product_group": "Garment Full body",
+    "section": "Divided",
+    "colour": "Light Beige",
+    "description": "Ribbed, calf-length dress in a soft, fine knit with a V-neck, decorative buttons down the front, long sleeves and slits in the sides.",
+    "price": 24.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Dresses",
+    "shopify_attributes": {
+     "color": "Beige",
+     "pattern": "Solid"
+    }
+   },
+   "832995001": {
+    "product_id": 832995001,
+    "name": "MC Shihtzu Coat (Ester)",
+    "product_type": "Jacket",
+    "product_group": "Garment Upper body",
+    "section": "Ladieswear",
+    "colour": "Black",
+    "description": "Knee-length coat in woven fabric with notch lapels, a detachable belt with a round metal buckle at the waist and no fasteners. Adjustable tab and press-studs at the cuffs and discreet pockets in the side seams. Lined.",
+    "price": 59.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Outerwear",
+    "shopify_attributes": {
+     "color": "Black",
+     "pattern": "Solid",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "771368001": {
+    "product_id": 771368001,
+    "name": "Paris Trench",
+    "product_type": "Coat",
+    "product_group": "Garment Upper body",
+    "section": "Ladieswear",
+    "colour": "Beige",
+    "description": "Trenchcoat in a crêpe weave with wide notch lapels with a hook-and-eye fastener at the top, loose yoke with a pleat at the back, and a single back vent. Detachable tie belt at the waist, a decorative tab at the cuffs and diagonal welt pockets. Lined.",
+    "price": 69.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Outerwear > Coats & Jackets",
+    "shopify_attributes": {
+     "pattern": "Solid",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "805000001": {
+    "product_id": 805000001,
+    "name": "Norway hood jacket",
+    "product_type": "Hoodie",
+    "product_group": "Garment Upper body",
+    "section": "Sport",
+    "colour": "Black",
+    "description": "Fitted jacket in fast-drying functional fabric designed to help keep you dry and cool while exercising. Hood, zip down the front with a chin guard and zipped front pockets for safe storage of valuables. Extra-long sleeves with thumbholes to help keep you warm while exercising outside. The sleeves are in a raglan cut to minimise the risk of friction from the seams.",
+    "price": 29.99,
+    "shopify_category": "Apparel & Accessories > Clothing",
+    "shopify_attributes": {
+     "color": "Black"
+    }
+   },
+   "866387010": {
+    "product_id": 866387010,
+    "name": "Waverly hoodie",
+    "product_type": "Hoodie",
+    "product_group": "Garment Upper body",
+    "section": "Ladieswear",
+    "colour": "Grey",
+    "description": "Oversized hoodie in soft sweatshirt fabric with a double-layered, wrapover, drawstring hood and kangaroo pocket. Dropped shoulders, long sleeves, ribbing at the cuffs and hem, and slits in the sides. Soft brushed inside.",
+    "price": 24.99,
+    "shopify_category": "Apparel & Accessories > Clothing",
+    "shopify_attributes": {
+     "color": "Gray",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "904712002": {
+    "product_id": 904712002,
+    "name": "Pudong dress",
+    "product_type": "Dress",
+    "product_group": "Garment Full body",
+    "section": "Ladieswear",
+    "colour": "Black",
+    "description": "Short dress in a crinkled weave made from a Tencel™ lyocell blend with a V-neck and wrapover front with ties at one side. Wide, 3/4-length sleeves and narrow cuffs with a covered button. Gathered seam with a small frill trim at the waist and on the skirt. Jersey lining.",
+    "price": 39.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Dresses",
+    "shopify_attributes": {
+     "color": "Black",
+     "pattern": "Solid",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "793704004": {
+    "product_id": 793704004,
+    "name": "GREY Scale Tee",
+    "product_type": "T-shirt",
+    "product_group": "Garment Upper body",
+    "section": "Menswear",
+    "colour": "Greenish Khaki",
+    "description": "Long, round-necked T-shirt in slub cotton jersey in a relaxed fit with a wider neckline with raw roll edges. Open chest pocket, sleeves with sewn-in turn-ups, and a rounded hem at the front. Longer at the back.",
+    "price": 12.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Clothing Tops > T-Shirts",
+    "shopify_attributes": {
+     "color": "Green",
+     "pattern": "Solid",
+     "target-gender": "Male",
+     "age-group": "Adults"
+    }
+   },
+   "708845002": {
+    "product_id": 708845002,
+    "name": "Cactus Coat",
+    "product_type": "Coat",
+    "product_group": "Garment Upper body",
+    "section": "Ladieswear",
+    "colour": "Light Beige",
+    "description": "Double-breasted coat in woven fabric with a brushed finish. Notch lapels, welt side pockets and a single back vent. Unlined.",
+    "price": 39.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Outerwear > Coats & Jackets",
+    "shopify_attributes": {
+     "color": "Beige",
+     "pattern": "Checkered",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "761501007": {
+    "product_id": 761501007,
+    "name": "Blake Slim Trs",
+    "product_type": "Trousers",
+    "product_group": "Garment Lower body",
+    "section": "Menswear",
+    "colour": "Dark Blue",
+    "description": "Ankle-length suit trousers in airy linen with a hook-and-eye fastening and zip fly. Side pockets, welt back pockets and tapered legs with creases. Slim Fit – a fit that is close-fitting at the thighs, knees and ankles to create a fitted silhouette.",
+    "price": 19.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Pants",
+    "shopify_attributes": {
+     "color": "Blue",
+     "target-gender": "Male",
+     "age-group": "Adults"
+    }
+   },
+   "776850001": {
+    "product_id": 776850001,
+    "name": "Vivi basic beanie",
+    "product_type": "Hat/beanie",
+    "product_group": "Accessories",
+    "section": "Divided",
+    "colour": "Black",
+    "description": "Double-layered hat in a soft, fine knit with a sewn-in turn-up and a silicone appliqué at the front.",
+    "price": 3.99,
+    "shopify_category": "Apparel & Accessories > Clothing Accessories > Hats",
+    "shopify_attributes": {
+     "color": "Black",
+     "pattern": "Solid"
+    }
+   },
+   "910642001": {
+    "product_id": 910642001,
+    "name": "Italian Carpet coat",
+    "product_type": "Jacket",
+    "product_group": "Garment Upper body",
+    "section": "Ladieswear",
+    "colour": "Greenish Khaki",
+    "description": "Coat in a soft, felted wool blend with a collar and concealed buttons down the front. Diagonal welt side pockets and long raglan sleeves with a tab and adjustable buttoning at the cuffs. Recycled polyester lining. The wool content of the coat is recycled.",
+    "price": 149.0,
+    "shopify_category": "Apparel & Accessories > Clothing > Outerwear",
+    "shopify_attributes": {
+     "color": "Green",
+     "pattern": "Solid",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "836605009": {
+    "product_id": 836605009,
+    "name": "Lina Linen scarf",
+    "product_type": "Scarf",
+    "product_group": "Accessories",
+    "section": "Ladieswear",
+    "colour": "Dark Beige",
+    "description": "Linen scarf with raw edges and short fringe trims on the short sides.",
+    "price": 19.99,
+    "shopify_category": "Apparel & Accessories > Clothing Accessories > Scarves & Shawls",
+    "shopify_attributes": {
+     "pattern": "Solid",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "713991002": {
+    "product_id": 713991002,
+    "name": "Nick super skinny blazer",
+    "product_type": "Blazer",
+    "product_group": "Garment Upper body",
+    "section": "Menswear",
+    "colour": "Dark Blue",
+    "description": "Single-breasted jacket in a stretch weave with narrow notch lapels, a chest pocket, welt front pockets and one inner pocket. One button at the front, decorative buttons at the cuffs and a single back vent. Lined. Super skinny fit – a shorter style that shapes in at the chest and tapers sharply at the waist. This combined with narrow shoulders and sleeves creates a completely fitted silhouette.",
+    "price": 59.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Outerwear > Coats & Jackets > Blazers",
+    "shopify_attributes": {
+     "color": "Blue",
+     "target-gender": "Male",
+     "age-group": "Adults"
+    }
+   },
+   "880839003": {
+    "product_id": 880839003,
+    "name": "Eleonor button dress",
+    "product_type": "Dress",
+    "product_group": "Garment Full body",
+    "section": "Divided",
+    "colour": "Light Orange",
+    "description": "Calf-length dress in ribbed jersey with a V-neck, narrow shoulder straps and buttons down the front. Unlined.",
+    "price": 17.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Dresses",
+    "shopify_attributes": {
+     "color": "Orange",
+     "pattern": "Solid"
+    }
+   },
+   "513699036": {
+    "product_id": 513699036,
+    "name": "R-NECK SS BASIC 3 PK",
+    "product_type": "T-shirt",
+    "product_group": "Garment Upper body",
+    "section": "Menswear",
+    "colour": "Dark Blue",
+    "description": "Round-necked T-shirts in organic cotton jersey.",
+    "price": 19.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Clothing Tops > T-Shirts",
+    "shopify_attributes": {
+     "color": "Blue",
+     "pattern": "Striped",
+     "target-gender": "Male",
+     "age-group": "Adults"
+    }
+   },
+   "807831005": {
+    "product_id": 807831005,
+    "name": "Jess blazer(1)",
+    "product_type": "Blazer",
+    "product_group": "Garment Upper body",
+    "section": "Ladieswear",
+    "colour": "Off White",
+    "description": "Straight-cut jacket in a textured weave with frayed edges. Notch lapels, a button at the front, flap front pockets and a single back vent. Lined.",
+    "price": 69.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Outerwear > Coats & Jackets > Blazers",
+    "shopify_attributes": {
+     "color": "White",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "776850023": {
+    "product_id": 776850023,
+    "name": "Vivi basic beanie",
+    "product_type": "Hat/beanie",
+    "product_group": "Accessories",
+    "section": "Divided",
+    "colour": "Beige",
+    "description": "Double-layered hat in a soft, fine knit with a sewn-in turn-up and a silicone appliqué at the front.",
+    "price": 5.99,
+    "shopify_category": "Apparel & Accessories > Clothing Accessories > Hats",
+    "shopify_attributes": {
+     "color": "Beige",
+     "pattern": "Solid"
+    }
+   },
+   "882993001": {
+    "product_id": 882993001,
+    "name": "Hilma sunglasses",
+    "product_type": "Sunglasses",
+    "product_group": "Accessories",
+    "section": "Ladieswear",
+    "colour": "Black",
+    "description": "Sunglasses with plastic frames and tinted, UV-protective lenses. Plastic sidepieces with a stylish inset section in gold-coloured metal.",
+    "price": 5.99,
+    "shopify_category": "Apparel & Accessories > Clothing Accessories > Sunglasses",
+    "shopify_attributes": {
+     "color": "Black",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   },
+   "906657001": {
+    "product_id": 906657001,
+    "name": "Skirt Midi Straight N.W",
+    "product_type": "Skirt",
+    "product_group": "Garment Lower body",
+    "section": "Divided",
+    "colour": "Blue",
+    "description": "5-pocket skirt in washed, stretch denim with a regular waist, zip fly and button and slit at the front. The cotton content of the skirt is partly recycled.",
+    "price": 34.99,
+    "shopify_category": "Apparel & Accessories > Clothing > Skirts",
+    "shopify_attributes": {
+     "color": "Blue"
+    }
+   },
+   "839494001": {
+    "product_id": 839494001,
+    "name": "PQ JENNIFER WOOL/CASH SHACKET",
+    "product_type": "Coat",
+    "product_group": "Garment Upper body",
+    "section": "Ladieswear",
+    "colour": "Light Grey",
+    "description": "Boxy, oversized jacket in a soft wool blend with a brushed finish. Collar, buttons down the front and a yoke with a pleat and hanger loop at the back. Concealed chest pockets with a flap and open patch pockets with a decorative flap at the front. Dropped shoulders and long sleeves with buttoned cuffs. Unlined.",
+    "price": 149.0,
+    "shopify_category": "Apparel & Accessories > Clothing > Outerwear > Coats & Jackets",
+    "shopify_attributes": {
+     "color": "Gray",
+     "pattern": "Solid",
+     "target-gender": "Female",
+     "age-group": "Adults"
+    }
+   }
+  },
+  "books": {
+   "1": {
+    "book_id": 1,
+    "title": "The Hunger Games",
+    "authors": [
+     "Suzanne Collins"
+    ],
+    "series": "The Hunger Games",
+    "series_position": "1",
+    "year": 2008,
+    "language": "eng",
+    "average_rating": 4.34,
+    "ratings_count": 4780653,
+    "pages": 374,
+    "description": "",
+    "genres": [
+     "Young adult",
+     "Dystopian",
+     "Science fiction",
+     "Fantasy"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1447303603m/2767052.jpg",
+    "isbn": "9780439023481",
+    "source_url": "https://www.goodreads.com/book/show/2767052",
+    "readers": 22806
+   },
+   "3": {
+    "book_id": 3,
+    "title": "Twilight",
+    "authors": [
+     "Stephenie Meyer"
+    ],
+    "series": "Twilight",
+    "series_position": "1",
+    "year": 2005,
+    "language": "en-US",
+    "average_rating": 3.57,
+    "ratings_count": 3866839,
+    "pages": 498,
+    "description": "",
+    "genres": [
+     "Young adult",
+     "Fantasy",
+     "Paranormal",
+     "Romance"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1361039443m/41865.jpg",
+    "isbn": "9780316015844",
+    "source_url": "https://www.goodreads.com/book/show/41865",
+    "readers": 16931
+   },
+   "5": {
+    "book_id": 5,
+    "title": "The Great Gatsby",
+    "authors": [
+     "F. Scott Fitzgerald"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1925,
+    "language": "eng",
+    "average_rating": 3.89,
+    "ratings_count": 2683664,
+    "pages": 180,
+    "description": "",
+    "genres": [
+     "Classics"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1490528560m/4671.jpg",
+    "isbn": "9780743273565",
+    "source_url": "https://www.goodreads.com/book/show/4671",
+    "readers": 16604
+   },
+   "7": {
+    "book_id": 7,
+    "title": "The Hobbit",
+    "authors": [
+     "J.R.R. Tolkien"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1937,
+    "language": "en-US",
+    "average_rating": 4.25,
+    "ratings_count": 2071616,
+    "pages": 366,
+    "description": "",
+    "genres": [
+     "Fantasy",
+     "Classics"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1372847500m/5907.jpg",
+    "isbn": "9780618260300",
+    "source_url": "https://www.goodreads.com/book/show/5907",
+    "readers": 15558
+   },
+   "135": {
+    "book_id": 135,
+    "title": "A Storm of Swords",
+    "authors": [
+     "George R.R. Martin"
+    ],
+    "series": "A Song of Ice and Fire",
+    "series_position": "3",
+    "year": 2000,
+    "language": "eng",
+    "average_rating": 4.54,
+    "ratings_count": 469022,
+    "pages": 1177,
+    "description": "",
+    "genres": [
+     "Fantasy"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1497931121m/62291.jpg",
+    "isbn": "9780553573428",
+    "source_url": "https://www.goodreads.com/book/show/62291",
+    "readers": 6237
+   },
+   "10": {
+    "book_id": 10,
+    "title": "Pride and Prejudice",
+    "authors": [
+     "Jane Austen"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1813,
+    "language": "eng",
+    "average_rating": 4.24,
+    "ratings_count": 2035490,
+    "pages": 279,
+    "description": "",
+    "genres": [
+     "Classics",
+     "Romance",
+     "Historical fiction"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1320399351m/1885.jpg",
+    "isbn": "9780679783268",
+    "source_url": "https://www.goodreads.com/book/show/1885",
+    "readers": 13445
+   },
+   "268": {
+    "book_id": 268,
+    "title": "Never Let Me Go",
+    "authors": [
+     "Kazuo Ishiguro"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 2005,
+    "language": "eng",
+    "average_rating": 3.8,
+    "ratings_count": 294123,
+    "pages": 288,
+    "description": "",
+    "genres": [
+     "Science fiction",
+     "Dystopian",
+     "Contemporary",
+     "Literary fiction"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1353048590m/6334.jpg",
+    "isbn": "9781400078776",
+    "source_url": "https://www.goodreads.com/book/show/6334",
+    "readers": 3837
+   },
+   "13": {
+    "book_id": 13,
+    "title": "1984",
+    "authors": [
+     "George Orwell",
+     "Erich Fromm",
+     "Celâl Üster"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1949,
+    "language": "eng",
+    "average_rating": 4.14,
+    "ratings_count": 1956832,
+    "pages": 328,
+    "description": "",
+    "genres": [
+     "Science fiction",
+     "Dystopian",
+     "Classics",
+     "Literary fiction"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1348990566m/5470.jpg",
+    "isbn": "9780451524935",
+    "source_url": "https://www.goodreads.com/book/show/5470",
+    "readers": 14693
+   },
+   "141": {
+    "book_id": 141,
+    "title": "The Martian",
+    "authors": [
+     "Andy Weir"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 2012,
+    "language": "eng",
+    "average_rating": 4.39,
+    "ratings_count": 423344,
+    "pages": 369,
+    "description": "",
+    "genres": [
+     "Science fiction",
+     "Adventure"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1413706054m/18007564.jpg",
+    "isbn": "9780804139021",
+    "source_url": "https://www.goodreads.com/book/show/18007564",
+    "readers": 5408
+   },
+   "14": {
+    "book_id": 14,
+    "title": "Animal Farm",
+    "authors": [
+     "George Orwell"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1945,
+    "language": "eng",
+    "average_rating": 3.87,
+    "ratings_count": 1881700,
+    "pages": 122,
+    "description": "",
+    "genres": [
+     "Classics",
+     "Dystopian",
+     "Literary fiction"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1424037542m/7613.jpg",
+    "isbn": "9780452284241",
+    "source_url": "https://www.goodreads.com/book/show/7613",
+    "readers": 14328
+   },
+   "270": {
+    "book_id": 270,
+    "title": "Rebecca",
+    "authors": [
+     "Daphne du Maurier",
+     "Sally Beauman"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1938,
+    "language": "en-US",
+    "average_rating": 4.2,
+    "ratings_count": 177384,
+    "pages": 441,
+    "description": "",
+    "genres": [
+     "Classics",
+     "Mystery",
+     "Romance",
+     "Historical fiction"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1327871977m/12873.jpg",
+    "isbn": "9781844080380",
+    "source_url": "https://www.goodreads.com/book/show/12873",
+    "readers": 4220
+   },
+   "400": {
+    "book_id": 400,
+    "title": "Neuromancer",
+    "authors": [
+     "William Gibson"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1984,
+    "language": "eng",
+    "average_rating": 3.88,
+    "ratings_count": 183878,
+    "pages": 271,
+    "description": "",
+    "genres": [
+     "Science fiction",
+     "Dystopian",
+     "Classics"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1167348726m/22328.jpg",
+    "isbn": "9780441569595",
+    "source_url": "https://www.goodreads.com/book/show/22328",
+    "readers": 2243
+   },
+   "18": {
+    "book_id": 18,
+    "title": "Harry Potter and the Prisoner of Azkaban",
+    "authors": [
+     "J.K. Rowling",
+     "Mary GrandPré",
+     "Rufus Beck"
+    ],
+    "series": "Harry Potter",
+    "series_position": "3",
+    "year": 1999,
+    "language": "eng",
+    "average_rating": 4.53,
+    "ratings_count": 1832823,
+    "pages": 435,
+    "description": "",
+    "genres": [
+     "Fantasy",
+     "Young adult",
+     "Children's"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1499277281m/5.jpg",
+    "isbn": "9780439655484",
+    "source_url": "https://www.goodreads.com/book/show/5",
+    "readers": 15855
+   },
+   "19": {
+    "book_id": 19,
+    "title": "The Fellowship of the Ring",
+    "authors": [
+     "J.R.R. Tolkien"
+    ],
+    "series": "The Lord of the Rings",
+    "series_position": "1",
+    "year": 1954,
+    "language": "eng",
+    "average_rating": 4.34,
+    "ratings_count": 1766803,
+    "pages": 398,
+    "description": "",
+    "genres": [
+     "Fantasy",
+     "Classics"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1298411339m/34.jpg",
+    "isbn": "9780618346257",
+    "source_url": "https://www.goodreads.com/book/show/34",
+    "readers": 12530
+   },
+   "20": {
+    "book_id": 20,
+    "title": "Mockingjay",
+    "authors": [
+     "Suzanne Collins"
+    ],
+    "series": "The Hunger Games",
+    "series_position": "3",
+    "year": 2010,
+    "language": "eng",
+    "average_rating": 4.03,
+    "ratings_count": 1719760,
+    "pages": 392,
+    "description": "",
+    "genres": [
+     "Young adult",
+     "Dystopian",
+     "Science fiction",
+     "Fantasy"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1358275419m/7260188.jpg",
+    "isbn": "9780439023511",
+    "source_url": "https://www.goodreads.com/book/show/7260188",
+    "readers": 15953
+   },
+   "17": {
+    "book_id": 17,
+    "title": "Catching Fire",
+    "authors": [
+     "Suzanne Collins"
+    ],
+    "series": "The Hunger Games",
+    "series_position": "2",
+    "year": 2009,
+    "language": "eng",
+    "average_rating": 4.3,
+    "ratings_count": 1831039,
+    "pages": 391,
+    "description": "",
+    "genres": [
+     "Young adult",
+     "Dystopian",
+     "Fantasy",
+     "Science fiction"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1358273780m/6148028.jpg",
+    "isbn": "9780439023498",
+    "source_url": "https://www.goodreads.com/book/show/6148028",
+    "readers": 16549
+   },
+   "21": {
+    "book_id": 21,
+    "title": "Harry Potter and the Order of the Phoenix",
+    "authors": [
+     "J.K. Rowling",
+     "Mary GrandPré"
+    ],
+    "series": "Harry Potter",
+    "series_position": "5",
+    "year": 2003,
+    "language": "eng",
+    "average_rating": 4.46,
+    "ratings_count": 1735368,
+    "pages": 870,
+    "description": "",
+    "genres": [
+     "Fantasy",
+     "Children's",
+     "Young adult",
+     "Paranormal"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1387141547m/2.jpg",
+    "isbn": "9780439358071",
+    "source_url": "https://www.goodreads.com/book/show/2",
+    "readers": 15258
+   },
+   "23": {
+    "book_id": 23,
+    "title": "Harry Potter and the Chamber of Secrets",
+    "authors": [
+     "J.K. Rowling",
+     "Mary GrandPré"
+    ],
+    "series": "Harry Potter",
+    "series_position": "2",
+    "year": 1998,
+    "language": "eng",
+    "average_rating": 4.37,
+    "ratings_count": 1779331,
+    "pages": 341,
+    "description": "",
+    "genres": [
+     "Fantasy",
+     "Young adult",
+     "Children's"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1474169725m/15881.jpg",
+    "isbn": "9780439064866",
+    "source_url": "https://www.goodreads.com/book/show/15881",
+    "readers": 15657
+   },
+   "24": {
+    "book_id": 24,
+    "title": "Harry Potter and the Goblet of Fire",
+    "authors": [
+     "J.K. Rowling",
+     "Mary GrandPré"
+    ],
+    "series": "Harry Potter",
+    "series_position": "4",
+    "year": 2000,
+    "language": "eng",
+    "average_rating": 4.53,
+    "ratings_count": 1753043,
+    "pages": 752,
+    "description": "",
+    "genres": [
+     "Fantasy",
+     "Young adult",
+     "Children's"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1361482611m/6.jpg",
+    "isbn": "9780439139601",
+    "source_url": "https://www.goodreads.com/book/show/6",
+    "readers": 15523
+   },
+   "25": {
+    "book_id": 25,
+    "title": "Harry Potter and the Deathly Hallows",
+    "authors": [
+     "J.K. Rowling",
+     "Mary GrandPré"
+    ],
+    "series": "Harry Potter",
+    "series_position": "7",
+    "year": 2007,
+    "language": "eng",
+    "average_rating": 4.61,
+    "ratings_count": 1746574,
+    "pages": 759,
+    "description": "",
+    "genres": [
+     "Fantasy",
+     "Young adult",
+     "Children's"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1474171184m/136251.jpg",
+    "isbn": "9780545010221",
+    "source_url": "https://www.goodreads.com/book/show/136251",
+    "readers": 15304
+   },
+   "27": {
+    "book_id": 27,
+    "title": "Harry Potter and the Half-Blood Prince",
+    "authors": [
+     "J.K. Rowling",
+     "Mary GrandPré"
+    ],
+    "series": "Harry Potter",
+    "series_position": "6",
+    "year": 2005,
+    "language": "eng",
+    "average_rating": 4.54,
+    "ratings_count": 1678823,
+    "pages": 652,
+    "description": "",
+    "genres": [
+     "Fantasy",
+     "Young adult",
+     "Children's"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1361039191m/1.jpg",
+    "isbn": "9780439785969",
+    "source_url": "https://www.goodreads.com/book/show/1",
+    "readers": 15081
+   },
+   "28": {
+    "book_id": 28,
+    "title": "Lord of the Flies",
+    "authors": [
+     "William Golding"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1954,
+    "language": "eng",
+    "average_rating": 3.64,
+    "ratings_count": 1605019,
+    "pages": 182,
+    "description": "",
+    "genres": [
+     "Classics",
+     "Young adult",
+     "Dystopian"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1327869409m/7624.jpg",
+    "isbn": "9780140283334",
+    "source_url": "https://www.goodreads.com/book/show/7624",
+    "readers": 13556
+   },
+   "2205": {
+    "book_id": 2205,
+    "title": "Sapiens: A Brief History of Humankind",
+    "authors": [
+     "Yuval Noah Harari"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 2011,
+    "language": "eng",
+    "average_rating": 4.41,
+    "ratings_count": 52846,
+    "pages": 443,
+    "description": "",
+    "genres": [
+     "Non-fiction"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1420585954m/23692271.jpg",
+    "isbn": null,
+    "source_url": "https://www.goodreads.com/book/show/23692271",
+    "readers": 326
+   },
+   "30": {
+    "book_id": 30,
+    "title": "Gone Girl",
+    "authors": [
+     "Gillian Flynn"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 2012,
+    "language": "eng",
+    "average_rating": 4.03,
+    "ratings_count": 512475,
+    "pages": 399,
+    "description": "",
+    "genres": [
+     "Mystery",
+     "Thriller",
+     "Crime",
+     "Contemporary"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1339602131m/8442457.jpg",
+    "isbn": "9780297859383",
+    "source_url": "https://www.goodreads.com/book/show/8442457",
+    "readers": 12105
+   },
+   "32": {
+    "book_id": 32,
+    "title": "Of Mice and Men",
+    "authors": [
+     "John Steinbeck"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1937,
+    "language": "eng",
+    "average_rating": 3.84,
+    "ratings_count": 1467496,
+    "pages": 112,
+    "description": "",
+    "genres": [
+     "Classics"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1437235233m/890.jpg",
+    "isbn": "9780142000670",
+    "source_url": "https://www.goodreads.com/book/show/890",
+    "readers": 11921
+   },
+   "35": {
+    "book_id": 35,
+    "title": "The Alchemist",
+    "authors": [
+     "Paulo Coelho",
+     "Alan R. Clarke"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1988,
+    "language": "eng",
+    "average_rating": 3.82,
+    "ratings_count": 1299566,
+    "pages": 197,
+    "description": "",
+    "genres": [
+     "Classics",
+     "Fantasy",
+     "Philosophy",
+     "Religion"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1483412266m/865.jpg",
+    "isbn": "9780061122415",
+    "source_url": "https://www.goodreads.com/book/show/865",
+    "readers": 8916
+   },
+   "39": {
+    "book_id": 39,
+    "title": "A Game of Thrones",
+    "authors": [
+     "George R.R. Martin"
+    ],
+    "series": "A Song of Ice and Fire",
+    "series_position": "1",
+    "year": 1996,
+    "language": "eng",
+    "average_rating": 4.45,
+    "ratings_count": 1319204,
+    "pages": 848,
+    "description": "",
+    "genres": [
+     "Fantasy",
+     "Adventure",
+     "Science fiction",
+     "Historical fiction"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1436732693m/13496.jpg",
+    "isbn": "9780553588484",
+    "source_url": "https://www.goodreads.com/book/show/13496",
+    "readers": 10692
+   },
+   "42": {
+    "book_id": 42,
+    "title": "Little Women",
+    "authors": [
+     "Louisa May Alcott"
+    ],
+    "series": "Little Women",
+    "series_position": "1",
+    "year": 1868,
+    "language": "en-US",
+    "average_rating": 4.04,
+    "ratings_count": 1257121,
+    "pages": 449,
+    "description": "",
+    "genres": [
+     "Classics",
+     "Historical fiction",
+     "Young adult",
+     "Children's"
+    ],
+    "tags": [],
+    "image_url": null,
+    "isbn": "9780451529305",
+    "source_url": "https://www.goodreads.com/book/show/1934",
+    "readers": 10649
+   },
+   "43": {
+    "book_id": 43,
+    "title": "Jane Eyre",
+    "authors": [
+     "Charlotte Brontë",
+     "Michael Mason"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1847,
+    "language": "eng",
+    "average_rating": 4.1,
+    "ratings_count": 1198557,
+    "pages": 507,
+    "description": "",
+    "genres": [
+     "Literary fiction",
+     "Historical fiction",
+     "Classics",
+     "Romance"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1327867269m/10210.jpg",
+    "isbn": "9780142437209",
+    "source_url": "https://www.goodreads.com/book/show/10210",
+    "readers": 10308
+   },
+   "300": {
+    "book_id": 300,
+    "title": "The Boy in the Striped Pajamas",
+    "authors": [
+     "John Boyne"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 2006,
+    "language": "eng",
+    "average_rating": 4.1,
+    "ratings_count": 285692,
+    "pages": 224,
+    "description": "",
+    "genres": [
+     "Historical fiction",
+     "Young adult",
+     "Children's",
+     "Classics"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1366228171m/39999.jpg",
+    "isbn": "9780385751063",
+    "source_url": "https://www.goodreads.com/book/show/39999",
+    "readers": 2694
+   },
+   "48": {
+    "book_id": 48,
+    "title": "Fahrenheit 451",
+    "authors": [
+     "Ray Bradbury"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1953,
+    "language": "spa",
+    "average_rating": 3.97,
+    "ratings_count": 570498,
+    "pages": 174,
+    "description": "",
+    "genres": [
+     "Classics",
+     "Science fiction",
+     "Dystopian"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1351643740m/4381.jpg",
+    "isbn": "9780307347978",
+    "source_url": "https://www.goodreads.com/book/show/4381",
+    "readers": 10312
+   },
+   "49": {
+    "book_id": 49,
+    "title": "New Moon",
+    "authors": [
+     "Stephenie Meyer"
+    ],
+    "series": "Twilight",
+    "series_position": "2",
+    "year": 2006,
+    "language": "eng",
+    "average_rating": 3.52,
+    "ratings_count": 1149630,
+    "pages": 563,
+    "description": "",
+    "genres": [
+     "Young adult",
+     "Paranormal",
+     "Fantasy",
+     "Romance"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1361039440m/49041.jpg",
+    "isbn": "9780316160193",
+    "source_url": "https://www.goodreads.com/book/show/49041",
+    "readers": 9712
+   },
+   "180": {
+    "book_id": 180,
+    "title": "Siddhartha",
+    "authors": [
+     "Hermann Hesse",
+     "Hilda Rosner"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1922,
+    "language": "eng",
+    "average_rating": 3.99,
+    "ratings_count": 372099,
+    "pages": 152,
+    "description": "",
+    "genres": [
+     "Classics",
+     "Philosophy",
+     "Religion",
+     "Literary fiction"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1428715580m/52036.jpg",
+    "isbn": "9780553208849",
+    "source_url": "https://www.goodreads.com/book/show/52036",
+    "readers": 4610
+   },
+   "55": {
+    "book_id": 55,
+    "title": "Brave New World",
+    "authors": [
+     "Aldous Huxley"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1932,
+    "language": "eng",
+    "average_rating": 3.97,
+    "ratings_count": 1022601,
+    "pages": 268,
+    "description": "",
+    "genres": [
+     "Classics",
+     "Science fiction",
+     "Dystopian",
+     "Literary fiction"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1487389574m/5129.jpg",
+    "isbn": "9780060929879",
+    "source_url": "https://www.goodreads.com/book/show/5129",
+    "readers": 9612
+   },
+   "59": {
+    "book_id": 59,
+    "title": "Charlotte's Web",
+    "authors": [
+     "E.B. White",
+     "Garth Williams",
+     "Rosemary Wells"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1952,
+    "language": "eng",
+    "average_rating": 4.15,
+    "ratings_count": 1064521,
+    "pages": 184,
+    "description": "",
+    "genres": [
+     "Children's",
+     "Classics",
+     "Young adult",
+     "Fantasy"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1439632243m/24178.jpg",
+    "isbn": "9780064410939",
+    "source_url": "https://www.goodreads.com/book/show/24178",
+    "readers": 9391
+   },
+   "192": {
+    "book_id": 192,
+    "title": "The Name of the Wind",
+    "authors": [
+     "Patrick Rothfuss"
+    ],
+    "series": "The Kingkiller Chronicle",
+    "series_position": "1",
+    "year": 2007,
+    "language": "eng",
+    "average_rating": 4.55,
+    "ratings_count": 400101,
+    "pages": 662,
+    "description": "",
+    "genres": [
+     "Fantasy"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1472068073m/186074.jpg",
+    "isbn": "9780756404079",
+    "source_url": "https://www.goodreads.com/book/show/186074",
+    "readers": 3948
+   },
+   "70": {
+    "book_id": 70,
+    "title": "Ender's Game",
+    "authors": [
+     "Orson Scott Card"
+    ],
+    "series": "Ender's Saga",
+    "series_position": "1",
+    "year": 1985,
+    "language": "eng",
+    "average_rating": 4.3,
+    "ratings_count": 813439,
+    "pages": 324,
+    "description": "",
+    "genres": [
+     "Science fiction",
+     "Young adult",
+     "Fantasy",
+     "Dystopian"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1408303130m/375802.jpg",
+    "isbn": "9780812550702",
+    "source_url": "https://www.goodreads.com/book/show/375802",
+    "readers": 8849
+   },
+   "200": {
+    "book_id": 200,
+    "title": "And Then There Were None",
+    "authors": [
+     "Agatha Christie"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1939,
+    "language": "eng",
+    "average_rating": 4.23,
+    "ratings_count": 408983,
+    "pages": 264,
+    "description": "",
+    "genres": [
+     "Mystery",
+     "Classics",
+     "Crime",
+     "Thriller"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1391120695m/16299.jpg",
+    "isbn": "9780312330873",
+    "source_url": "https://www.goodreads.com/book/show/16299",
+    "readers": 4011
+   },
+   "458": {
+    "book_id": 458,
+    "title": "Station Eleven",
+    "authors": [
+     "Emily St. John Mandel"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 2014,
+    "language": "eng",
+    "average_rating": 4.02,
+    "ratings_count": 160466,
+    "pages": 336,
+    "description": "",
+    "genres": [
+     "Science fiction",
+     "Dystopian",
+     "Literary fiction",
+     "Fantasy"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1451446835m/20170404.jpg",
+    "isbn": "9780385353304",
+    "source_url": "https://www.goodreads.com/book/show/20170404",
+    "readers": 2556
+   },
+   "330": {
+    "book_id": 330,
+    "title": "The Eye of the World",
+    "authors": [
+     "Robert Jordan"
+    ],
+    "series": "Wheel of Time",
+    "series_position": "1",
+    "year": 1990,
+    "language": "eng",
+    "average_rating": 4.18,
+    "ratings_count": 260184,
+    "pages": 814,
+    "description": "",
+    "genres": [
+     "Fantasy"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1337818095m/228665.jpg",
+    "isbn": "9780812511819",
+    "source_url": "https://www.goodreads.com/book/show/228665",
+    "readers": 2924
+   },
+   "1105": {
+    "book_id": 1105,
+    "title": "Dune Messiah",
+    "authors": [
+     "Frank Herbert"
+    ],
+    "series": "Dune Chronicles",
+    "series_position": "2",
+    "year": 1969,
+    "language": "eng",
+    "average_rating": 3.86,
+    "ratings_count": 82580,
+    "pages": 331,
+    "description": "",
+    "genres": [
+     "Science fiction",
+     "Fantasy",
+     "Classics",
+     "Science"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1392528394m/106.jpg",
+    "isbn": "9780441172696",
+    "source_url": "https://www.goodreads.com/book/show/106",
+    "readers": 1293
+   },
+   "90": {
+    "book_id": 90,
+    "title": "The Outsiders",
+    "authors": [
+     "S.E. Hinton"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 1967,
+    "language": "en-US",
+    "average_rating": 4.06,
+    "ratings_count": 659248,
+    "pages": 192,
+    "description": "",
+    "genres": [
+     "Young adult",
+     "Classics",
+     "Contemporary",
+     "Children's"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1442129426m/231804.jpg",
+    "isbn": "9780140385724",
+    "source_url": "https://www.goodreads.com/book/show/231804",
+    "readers": 6190
+   },
+   "352": {
+    "book_id": 352,
+    "title": "Yes Please",
+    "authors": [
+     "Amy Poehler"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 2014,
+    "language": "eng",
+    "average_rating": 3.81,
+    "ratings_count": 251082,
+    "pages": 329,
+    "description": "",
+    "genres": [
+     "Non-fiction",
+     "Biography & memoir",
+     "Humour"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1402815435m/20910157.jpg",
+    "isbn": "9780062268341",
+    "source_url": "https://www.goodreads.com/book/show/20910157",
+    "readers": 2378
+   },
+   "104": {
+    "book_id": 104,
+    "title": "The Road",
+    "authors": [
+     "Cormac McCarthy"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 2006,
+    "language": "eng",
+    "average_rating": 3.95,
+    "ratings_count": 504793,
+    "pages": 241,
+    "description": "",
+    "genres": [
+     "Science fiction",
+     "Dystopian",
+     "Literary fiction",
+     "Classics"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1439197219m/6288.jpg",
+    "isbn": "9780307265432",
+    "source_url": "https://www.goodreads.com/book/show/6288",
+    "readers": 6779
+   },
+   "110": {
+    "book_id": 110,
+    "title": "A Clash of Kings",
+    "authors": [
+     "George R.R. Martin"
+    ],
+    "series": "A Song of Ice and Fire",
+    "series_position": "2",
+    "year": 1998,
+    "language": "eng",
+    "average_rating": 4.4,
+    "ratings_count": 523303,
+    "pages": 761,
+    "description": "",
+    "genres": [
+     "Fantasy"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1358254974m/10572.jpg",
+    "isbn": "9780553381696",
+    "source_url": "https://www.goodreads.com/book/show/10572",
+    "readers": 6854
+   },
+   "250": {
+    "book_id": 250,
+    "title": "Wonder",
+    "authors": [
+     "R.J. Palacio"
+    ],
+    "series": null,
+    "series_position": null,
+    "year": 2012,
+    "language": "eng",
+    "average_rating": 4.43,
+    "ratings_count": 228538,
+    "pages": 316,
+    "description": "",
+    "genres": [
+     "Young adult",
+     "Children's",
+     "Contemporary"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1309285027m/11387515.jpg",
+    "isbn": "9780375869020",
+    "source_url": "https://www.goodreads.com/book/show/11387515",
+    "readers": 2648
+   },
+   "126": {
+    "book_id": 126,
+    "title": "Dune",
+    "authors": [
+     "Frank Herbert"
+    ],
+    "series": "Dune Chronicles",
+    "series_position": "1",
+    "year": 1965,
+    "language": "eng",
+    "average_rating": 4.19,
+    "ratings_count": 485032,
+    "pages": 604,
+    "description": "",
+    "genres": [
+     "Science fiction",
+     "Fantasy",
+     "Classics"
+    ],
+    "tags": [],
+    "image_url": "https://images.gr-assets.com/books/1434908555m/234225.jpg",
+    "isbn": "9780340839935",
+    "source_url": "https://www.goodreads.com/book/show/234225",
+    "readers": 5864
+   }
+  },
+  "drinks": {
+   "257": {
+    "drink_id": 257,
+    "name": "Negroni",
+    "alcoholic": "Alcoholic",
+    "category": "Ordinary Drink",
+    "glass": "Old-fashioned glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Gin",
+      "measure": "1 oz"
+     },
+     {
+      "name": "Campari",
+      "measure": "1 oz"
+     },
+     {
+      "name": "Sweet Vermouth",
+      "measure": "1 oz"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/qgdu971561574065.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "66": {
+    "drink_id": 66,
+    "name": "Cosmopolitan",
+    "alcoholic": "Alcoholic",
+    "category": "Cocktail",
+    "glass": "Cocktail glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Vodka",
+      "measure": "1 1/4 oz"
+     },
+     {
+      "name": "Lime Juice",
+      "measure": "1/4 oz"
+     },
+     {
+      "name": "Cointreau",
+      "measure": "1/4 oz"
+     },
+     {
+      "name": "Cranberry juice",
+      "measure": "1/4 cup"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/kpsajh1504368362.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "262": {
+    "drink_id": 262,
+    "name": "Nuked Hot Chocolate",
+    "alcoholic": "Non alcoholic",
+    "category": "Cocoa",
+    "glass": "Coffee mug",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Cocoa powder",
+      "measure": "2 tsp"
+     },
+     {
+      "name": "Sugar",
+      "measure": "1 tsp"
+     },
+     {
+      "name": "Vanilla extract",
+      "measure": "1/2 tsp"
+     },
+     {
+      "name": "Milk",
+      "measure": "12 oz"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/xcu6nb1487603142.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "136": {
+    "drink_id": 136,
+    "name": "Gluehwein",
+    "alcoholic": "Optional alcohol",
+    "category": "Punch / Party Drink",
+    "glass": "Irish coffee cup",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Red wine",
+      "measure": "1 L"
+     },
+     {
+      "name": "Water",
+      "measure": "125 ml"
+     },
+     {
+      "name": "Sugar",
+      "measure": "60 gr"
+     },
+     {
+      "name": "Cinnamon",
+      "measure": "1"
+     },
+     {
+      "name": "Cloves",
+      "measure": "3"
+     },
+     {
+      "name": "Lemon peel",
+      "measure": "1 tblsp"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/vuxwvt1468875418.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "9": {
+    "drink_id": 9,
+    "name": "Apello",
+    "alcoholic": "Non alcoholic",
+    "category": "Other / Unknown",
+    "glass": "Collins Glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Orange juice",
+      "measure": "4 cl"
+     },
+     {
+      "name": "Grapefruit Juice",
+      "measure": "3 cl"
+     },
+     {
+      "name": "Apple juice",
+      "measure": "1 cl"
+     },
+     {
+      "name": "Maraschino cherry",
+      "measure": "1"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/uptxtv1468876415.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "265": {
+    "drink_id": 265,
+    "name": "Orangeade",
+    "alcoholic": "Non alcoholic",
+    "category": "Cocktail",
+    "glass": "Highball glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Lemon juice",
+      "measure": "5 cl"
+     },
+     {
+      "name": "Orange juice",
+      "measure": "15 cl"
+     },
+     {
+      "name": "Sugar Syrup",
+      "measure": "2-3 cl"
+     },
+     {
+      "name": "Soda Water",
+      "measure": null
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/ytsxxw1441167732.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "75": {
+    "drink_id": 75,
+    "name": "Cranberry Punch",
+    "alcoholic": "Non alcoholic",
+    "category": "Punch / Party Drink",
+    "glass": "Punch bowl",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Cranberry juice",
+      "measure": "4 cups"
+     },
+     {
+      "name": "Sugar",
+      "measure": "1 1/2 cup"
+     },
+     {
+      "name": "Pineapple juice",
+      "measure": "4 cups"
+     },
+     {
+      "name": "Almond flavoring",
+      "measure": "1 tblsp"
+     },
+     {
+      "name": "Ginger ale",
+      "measure": "2 qt"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/mzgaqu1504389248.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "269": {
+    "drink_id": 269,
+    "name": "Old Fashioned",
+    "alcoholic": "Alcoholic",
+    "category": "Cocktail",
+    "glass": "Old-fashioned glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Bourbon",
+      "measure": "4.5 cL"
+     },
+     {
+      "name": "Angostura Bitters",
+      "measure": "2 dashes"
+     },
+     {
+      "name": "Sugar",
+      "measure": "1 cube"
+     },
+     {
+      "name": "Water",
+      "measure": "dash"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/vrwquq1478252802.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "78": {
+    "drink_id": 78,
+    "name": "Daiquiri",
+    "alcoholic": "Alcoholic",
+    "category": "Ordinary Drink",
+    "glass": "Cocktail glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Light rum",
+      "measure": "1 1/2 oz"
+     },
+     {
+      "name": "Lime",
+      "measure": "Juice of 1/2"
+     },
+     {
+      "name": "Powdered sugar",
+      "measure": "1 tsp"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/mrz9091589574515.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "335": {
+    "drink_id": 335,
+    "name": "Spritz",
+    "alcoholic": "Alcoholic",
+    "category": "Ordinary Drink",
+    "glass": "Old-fashioned glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Prosecco",
+      "measure": "6 cl"
+     },
+     {
+      "name": "Campari",
+      "measure": "4 cl"
+     },
+     {
+      "name": "Soda Water",
+      "measure": "splash"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/j9evx11504373665.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "403": {
+    "drink_id": 403,
+    "name": "Wine Cooler",
+    "alcoholic": "Optional alcohol",
+    "category": "Punch / Party Drink",
+    "glass": "Collins Glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Red wine",
+      "measure": "2 oz white or"
+     },
+     {
+      "name": "Lemon-lime soda",
+      "measure": "5 oz"
+     },
+     {
+      "name": "Ice",
+      "measure": "cubes"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/yutxtv1473344210.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "20": {
+    "drink_id": 20,
+    "name": "Afterglow",
+    "alcoholic": "Non alcoholic",
+    "category": "Cocktail",
+    "glass": "Highball glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Grenadine",
+      "measure": "1 part"
+     },
+     {
+      "name": "Orange juice",
+      "measure": "4 parts"
+     },
+     {
+      "name": "Pineapple juice",
+      "measure": "4 parts"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/vuquyv1468876052.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "405": {
+    "drink_id": 405,
+    "name": "Whiskey Sour",
+    "alcoholic": "Alcoholic",
+    "category": "Ordinary Drink",
+    "glass": "Old-fashioned glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Blended whiskey",
+      "measure": "2 oz"
+     },
+     {
+      "name": "Lemon",
+      "measure": "Juice of 1/2"
+     },
+     {
+      "name": "Powdered sugar",
+      "measure": "1/2 tsp"
+     },
+     {
+      "name": "Cherry",
+      "measure": "1"
+     },
+     {
+      "name": "Lemon",
+      "measure": "1/2 slice"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/hbkfsh1589574990.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "340": {
+    "drink_id": 340,
+    "name": "Sidecar",
+    "alcoholic": "Alcoholic",
+    "category": "Ordinary Drink",
+    "glass": "Cocktail glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Cognac",
+      "measure": "2 oz"
+     },
+     {
+      "name": "Cointreau",
+      "measure": "1/2 oz"
+     },
+     {
+      "name": "Lemon juice",
+      "measure": "1 oz"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/x72sik1606854964.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "87": {
+    "drink_id": 87,
+    "name": "Dark and Stormy",
+    "alcoholic": "Alcoholic",
+    "category": "Ordinary Drink",
+    "glass": "Highball glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Dark rum",
+      "measure": "5 cl"
+     },
+     {
+      "name": "Ginger Beer",
+      "measure": "10 cl"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/t1tn0s1504374905.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "220": {
+    "drink_id": 220,
+    "name": "Lassi - Mango",
+    "alcoholic": "Non alcoholic",
+    "category": "Other / Unknown",
+    "glass": "Highball glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Mango",
+      "measure": "2"
+     },
+     {
+      "name": "Yoghurt",
+      "measure": "2 cups"
+     },
+     {
+      "name": "Sugar",
+      "measure": "1/2 cup"
+     },
+     {
+      "name": "Water",
+      "measure": "1 cup iced"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/1bw6sd1487603816.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "221": {
+    "drink_id": 221,
+    "name": "Lassi - Sweet",
+    "alcoholic": "Non alcoholic",
+    "category": "Other / Unknown",
+    "glass": "Highball glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Yoghurt",
+      "measure": "1 cup"
+     },
+     {
+      "name": "Water",
+      "measure": "2 cups cold"
+     },
+     {
+      "name": "Sugar",
+      "measure": "4 tblsp"
+     },
+     {
+      "name": "Salt",
+      "measure": "pinch"
+     },
+     {
+      "name": "Lemon juice",
+      "measure": "2 tblsp"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/9jeifz1487603885.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "95": {
+    "drink_id": 95,
+    "name": "Egg Nog #4",
+    "alcoholic": "Optional alcohol",
+    "category": "Punch / Party Drink",
+    "glass": "Punch bowl",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Egg yolk",
+      "measure": "6"
+     },
+     {
+      "name": "Sugar",
+      "measure": "1/4 cup"
+     },
+     {
+      "name": "Milk",
+      "measure": "2 cups"
+     },
+     {
+      "name": "Light rum",
+      "measure": "1/2 cup"
+     },
+     {
+      "name": "Bourbon",
+      "measure": "1/2 cup"
+     },
+     {
+      "name": "Vanilla extract",
+      "measure": "1 tsp"
+     },
+     {
+      "name": "Salt",
+      "measure": "1/4 tsp"
+     },
+     {
+      "name": "Whipping cream",
+      "measure": "1 cup"
+     },
+     {
+      "name": "Egg white",
+      "measure": "6"
+     },
+     {
+      "name": "Sugar",
+      "measure": "1/4 cup"
+     },
+     {
+      "name": "Nutmeg",
+      "measure": "Ground"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/wpspsy1468875747.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "31": {
+    "drink_id": 31,
+    "name": "Bellini",
+    "alcoholic": "Alcoholic",
+    "category": "Ordinary Drink",
+    "glass": "Champagne flute",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Champagne",
+      "measure": "6 oz"
+     },
+     {
+      "name": "Peach schnapps",
+      "measure": "1 oz"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/eaag491504367543.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "97": {
+    "drink_id": 97,
+    "name": "Espresso Martini",
+    "alcoholic": "Alcoholic",
+    "category": "Cocktail",
+    "glass": "Cocktail glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Vodka",
+      "measure": "5 cl"
+     },
+     {
+      "name": "Kahlua",
+      "measure": "1 cl"
+     },
+     {
+      "name": "Sugar Syrup",
+      "measure": "1 dash"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/n0sx531504372951.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "36": {
+    "drink_id": 36,
+    "name": "Bora Bora",
+    "alcoholic": "Non alcoholic",
+    "category": "Cocktail",
+    "glass": "Highball glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Pineapple juice",
+      "measure": "10 cl"
+     },
+     {
+      "name": "Passion fruit juice",
+      "measure": "6 cl"
+     },
+     {
+      "name": "Lemon juice",
+      "measure": "1 cl"
+     },
+     {
+      "name": "Grenadine",
+      "measure": "1 cl"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/xwuqvw1473201811.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "102": {
+    "drink_id": 102,
+    "name": "Egg-Nog - Classic Cooked",
+    "alcoholic": "Optional alcohol",
+    "category": "Punch / Party Drink",
+    "glass": "Pitcher",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Egg",
+      "measure": "6"
+     },
+     {
+      "name": "Sugar",
+      "measure": "1/4 cup"
+     },
+     {
+      "name": "Salt",
+      "measure": "1/4 tsp"
+     },
+     {
+      "name": "Milk",
+      "measure": "1 qt"
+     },
+     {
+      "name": "Vanilla extract",
+      "measure": "1 tsp"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/quxsvt1468875505.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "233": {
+    "drink_id": 233,
+    "name": "Mojito",
+    "alcoholic": "Alcoholic",
+    "category": "Cocktail",
+    "glass": "Highball glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Light rum",
+      "measure": "2-3 oz"
+     },
+     {
+      "name": "Lime",
+      "measure": "Juice of 1"
+     },
+     {
+      "name": "Sugar",
+      "measure": "2 tsp"
+     },
+     {
+      "name": "Mint",
+      "measure": "2-4"
+     },
+     {
+      "name": "Soda Water",
+      "measure": null
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/metwgh1606770327.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "236": {
+    "drink_id": 236,
+    "name": "Martini",
+    "alcoholic": "Alcoholic",
+    "category": "Cocktail",
+    "glass": "Cocktail glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Gin",
+      "measure": "1 2/3 oz"
+     },
+     {
+      "name": "Dry Vermouth",
+      "measure": "1/3 oz"
+     },
+     {
+      "name": "Olive",
+      "measure": "1"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/71t8581504353095.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "238": {
+    "drink_id": 238,
+    "name": "Manhattan",
+    "alcoholic": "Alcoholic",
+    "category": "Cocktail",
+    "glass": "Cocktail glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Sweet Vermouth",
+      "measure": "3/4 oz"
+     },
+     {
+      "name": "Bourbon",
+      "measure": "2 1/2 oz Blended"
+     },
+     {
+      "name": "Angostura Bitters",
+      "measure": "dash"
+     },
+     {
+      "name": "Ice",
+      "measure": "2 or 3"
+     },
+     {
+      "name": "Maraschino cherry",
+      "measure": "1"
+     },
+     {
+      "name": "Orange peel",
+      "measure": "1 twist of"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/yk70e31606771240.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "239": {
+    "drink_id": 239,
+    "name": "Margarita",
+    "alcoholic": "Alcoholic",
+    "category": "Ordinary Drink",
+    "glass": "Cocktail glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Tequila",
+      "measure": "1 1/2 oz"
+     },
+     {
+      "name": "Triple sec",
+      "measure": "1/2 oz"
+     },
+     {
+      "name": "Lime Juice",
+      "measure": "1 oz"
+     },
+     {
+      "name": "Salt",
+      "measure": null
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/5noda61589575158.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "372": {
+    "drink_id": 372,
+    "name": "Thai Iced Tea",
+    "alcoholic": "Non alcoholic",
+    "category": "Coffee / Tea",
+    "glass": "Highball glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Tea",
+      "measure": "1/4 cup Thai"
+     },
+     {
+      "name": "Water",
+      "measure": "1/2 cup boiling"
+     },
+     {
+      "name": "Condensed milk",
+      "measure": "2 tsp sweetened"
+     },
+     {
+      "name": "Ice",
+      "measure": "cubes"
+     },
+     {
+      "name": "Mint",
+      "measure": "garnish"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/trvwpu1441245568.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "53": {
+    "drink_id": 53,
+    "name": "Caipirinha",
+    "alcoholic": "Alcoholic",
+    "category": "Ordinary Drink",
+    "glass": "Old-fashioned glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Sugar",
+      "measure": "2 tsp"
+     },
+     {
+      "name": "Lime",
+      "measure": "1"
+     },
+     {
+      "name": "Cachaca",
+      "measure": "2 1/2 oz"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/jgvn7p1582484435.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "246": {
+    "drink_id": 246,
+    "name": "Moscow Mule",
+    "alcoholic": "Alcoholic",
+    "category": "Punch / Party Drink",
+    "glass": "Copper Mug",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Vodka",
+      "measure": "2 oz"
+     },
+     {
+      "name": "Lime Juice",
+      "measure": "2 oz"
+     },
+     {
+      "name": "Ginger ale",
+      "measure": "8 oz"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/3pylqc1504370988.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "248": {
+    "drink_id": 248,
+    "name": "Masala Chai",
+    "alcoholic": "Non alcoholic",
+    "category": "Coffee / Tea",
+    "glass": "Coffee mug",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Water",
+      "measure": "2 cups"
+     },
+     {
+      "name": "Tea",
+      "measure": "3-4 tsp"
+     },
+     {
+      "name": "Ginger",
+      "measure": "1 chunk dried"
+     },
+     {
+      "name": "Cardamom",
+      "measure": "3-4 crushed"
+     },
+     {
+      "name": "Cloves",
+      "measure": "3"
+     },
+     {
+      "name": "Cinnamon",
+      "measure": "1 piece"
+     },
+     {
+      "name": "Black pepper",
+      "measure": "1-2 whole"
+     },
+     {
+      "name": "Sugar",
+      "measure": "to taste"
+     },
+     {
+      "name": "Milk",
+      "measure": "to taste"
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/uyrpww1441246384.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   },
+   "381": {
+    "drink_id": 381,
+    "name": "Thai Iced Coffee",
+    "alcoholic": "Non alcoholic",
+    "category": "Coffee / Tea",
+    "glass": "Highball glass",
+    "instructions": "",
+    "ingredients": [
+     {
+      "name": "Coffee",
+      "measure": "black"
+     },
+     {
+      "name": "Sugar",
+      "measure": null
+     },
+     {
+      "name": "Cream",
+      "measure": "pods"
+     },
+     {
+      "name": "Cardamom",
+      "measure": null
+     }
+    ],
+    "image_url": "https://www.thecocktaildb.com/images/media/drink/rqpypv1441245650.jpg",
+    "source_url": "https://www.thecocktaildb.com/"
+   }
+  }
+ },
+ "vocabulary": {
+  "book_titles": [
+   "14",
+   "1984",
+   "300",
+   "A Clash of Kings",
+   "A Game of Thrones",
+   "A Storm of Swords",
+   "After",
+   "And Then There Were None",
+   "Animal Farm",
+   "Ash",
+   "Ashes",
+   "Blaze",
+   "Brave New World",
+   "Cash",
+   "Catching Fire",
+   "Charlotte's Web",
+   "Chocolat",
+   "Clash",
+   "Cross",
+   "Crush",
+   "Darke",
+   "Dune",
+   "Dune Messiah",
+   "Easy",
+   "Ender's Game",
+   "Eon",
+   "Eve",
+   "Fahrenheit 451",
+   "Fire",
+   "For You",
+   "Found",
+   "George",
+   "Glass",
+   "Glue",
+   "Gold",
+   "Gone",
+   "Gone Girl",
+   "Grey",
+   "Half-Blood",
+   "Harry Potter and the Chamber of Secrets",
+   "Harry Potter and the Deathly Hallows",
+   "Harry Potter and the Goblet of Fire",
+   "Harry Potter and the Half-Blood Prince",
+   "Harry Potter and the Order of the Phoenix",
+   "Harry Potter and the Prisoner of Azkaban",
+   "Hunger",
+   "Iced",
+   "It",
+   "Jane Eyre",
+   "King",
+   "Leo",
+   "Lies",
+   "Light",
+   "Lit",
+   "Little Women",
+   "Lord of the Flies",
+   "Loser",
+   "Meg",
+   "Mockingjay",
+   "Need",
+   "Neuromancer",
+   "Never Let Me Go",
+   "New Moon",
+   "Night",
+   "Of Mice and Men",
+   "One",
+   "Out",
+   "Page",
+   "Paris",
+   "Parts",
+   "Passion",
+   "Perfect",
+   "Play",
+   "Pride and Prejudice",
+   "Rage",
+   "Rebecca",
+   "Run",
+   "Rush",
+   "S.",
+   "Sapiens: A Brief History of Humankind",
+   "Shirley",
+   "Siddhartha",
+   "Skin",
+   "Son",
+   "Station Eleven",
+   "Storm",
+   "Swimsuit",
+   "Temple",
+   "The Alchemist",
+   "The Boy in the Striped Pajamas",
+   "The Chamber",
+   "The Eye of the World",
+   "The Fellowship of the Ring",
+   "The Great Gatsby",
+   "The Hobbit",
+   "The Hunger Games",
+   "The Martian",
+   "The Name of the Wind",
+   "The Outsiders",
+   "The Road",
+   "The Three",
+   "The Wave",
+   "Twilight",
+   "UR",
+   "Us",
+   "Wave",
+   "We",
+   "Willow",
+   "Wit",
+   "Women",
+   "Wonder",
+   "Wool",
+   "X",
+   "Yes Please",
+   "You"
+  ],
+  "book_other_names": [
+   "Adventure",
+   "Adventurous",
+   "Agatha Christie",
+   "Aldous Huxley",
+   "Amy Poehler",
+   "Andy Weir",
+   "Biography & memoir",
+   "Business",
+   "Charlotte Brontë",
+   "Children's",
+   "Classics",
+   "Contemporary",
+   "Cormac McCarthy",
+   "Cosy",
+   "Crime",
+   "Daphne du Maurier",
+   "Dark",
+   "Dystopian",
+   "E.B. White",
+   "Emily St. John Mandel",
+   "Emotional",
+   "Epic",
+   "F. Scott Fitzgerald",
+   "Fantasy",
+   "Frank Herbert",
+   "Funny",
+   "George Orwell",
+   "George R.R. Martin",
+   "Gillian Flynn",
+   "Graphic novels",
+   "Hermann Hesse",
+   "Historical fiction",
+   "History",
+   "Horror",
+   "Humour",
+   "J.K. Rowling",
+   "J.R.R. Tolkien",
+   "Jane Austen",
+   "John Boyne",
+   "John Steinbeck",
+   "Kazuo Ishiguro",
+   "Literary fiction",
+   "Louisa May Alcott",
+   "Mystery",
+   "Non-fiction",
+   "Orson Scott Card",
+   "Paranormal",
+   "Patrick Rothfuss",
+   "Paulo Coelho",
+   "Philip K. Dick",
+   "Philosophy",
+   "Plays",
+   "Poetry",
+   "Psychology",
+   "R.J. Palacio",
+   "Ray Bradbury",
+   "Religion",
+   "Robert Jordan",
+   "Romance",
+   "Romantic",
+   "S.E. Hinton",
+   "Science",
+   "Science fiction",
+   "Self-help",
+   "Short reads",
+   "Short stories",
+   "Stephenie Meyer",
+   "Suzanne Collins",
+   "Thought-provoking",
+   "Thriller",
+   "William Gibson",
+   "William Goldman",
+   "Young adult",
+   "Yuval Noah Harari"
+  ],
+  "drink_names": [
+   "Afterglow",
+   "Apello",
+   "Bellini",
+   "Bora Bora",
+   "Caipirinha",
+   "Cosmopolitan",
+   "Cranberry Punch",
+   "Daiquiri",
+   "Dark and Stormy",
+   "Egg Nog #4",
+   "Egg-Nog - Classic Cooked",
+   "Espresso Martini",
+   "GG",
+   "Gluehwein",
+   "Kir",
+   "Lassi - Mango",
+   "Lassi - Sweet",
+   "Manhattan",
+   "Margarita",
+   "Martini",
+   "Masala Chai",
+   "Mojito",
+   "Moscow Mule",
+   "Negroni",
+   "Nuked Hot Chocolate",
+   "Old Fashioned",
+   "Orangeade",
+   "Rose",
+   "Sidecar",
+   "Spritz",
+   "Thai Iced Tea",
+   "Whiskey Sour",
+   "Wine Cooler"
+  ],
+  "ingredients": [
+   "Angostura Bitters",
+   "Aperol",
+   "Apple",
+   "Apple juice",
+   "Beer",
+   "Bitters",
+   "Black pepper",
+   "Blended whiskey",
+   "Bourbon",
+   "Cachaca",
+   "Campari",
+   "Cardamom",
+   "Champagne",
+   "Cherry",
+   "Chocolate",
+   "Cinnamon",
+   "Cloves",
+   "Cocoa powder",
+   "Cognac",
+   "Cointreau",
+   "Condensed milk",
+   "Cranberry juice",
+   "Cream",
+   "Dark rum",
+   "Egg",
+   "Egg yolk",
+   "Espresso",
+   "Fruit",
+   "Fruit juice",
+   "Gin",
+   "Ginger",
+   "Ginger Beer",
+   "Ginger ale",
+   "Grenadine",
+   "Hot Chocolate",
+   "Ice",
+   "Iced tea",
+   "Kahlua",
+   "Lemon",
+   "Lemon juice",
+   "Lemon peel",
+   "Lemon-lime soda",
+   "Light rum",
+   "Lime",
+   "Lime Juice",
+   "Mango",
+   "Maraschino cherry",
+   "Milk",
+   "Mint",
+   "Nutmeg",
+   "Orange",
+   "Orange juice",
+   "Passion fruit juice",
+   "Pepper",
+   "Pineapple",
+   "Pineapple juice",
+   "Powdered sugar",
+   "Prosecco",
+   "Red wine",
+   "Rose",
+   "Rum",
+   "Salt",
+   "Soda Water",
+   "Sugar",
+   "Sugar Syrup",
+   "Sweet Vermouth",
+   "Tea",
+   "Tequila",
+   "Triple sec",
+   "Vanilla",
+   "Vanilla extract",
+   "Vermouth",
+   "Vodka",
+   "Water",
+   "Whipping cream",
+   "Whiskey",
+   "Wine",
+   "Yoghurt"
+  ],
+  "glasses": [
+   "Champagne flute",
+   "Cocktail glass",
+   "Copper Mug",
+   "Highball glass",
+   "Old-fashioned glass"
+  ],
+  "categories": [
+   "Beer",
+   "Cocktail",
+   "Cocoa",
+   "Coffee / Tea",
+   "Homemade Liqueur",
+   "Ordinary Drink",
+   "Other / Unknown",
+   "Punch / Party Drink",
+   "Shake",
+   "Shot",
+   "Soft Drink"
+  ],
+  "ordinary_drink_names": [
+   "Bellini",
+   "Cosmopolitan",
+   "Dark and Stormy",
+   "Manhattan",
+   "Margarita",
+   "Martini",
+   "Old Fashioned",
+   "Rose"
+  ],
+  "product_names": [
+   "Alaskan",
+   "Amy",
+   "Apple",
+   "Arthur slim fit shirt",
+   "Ava",
+   "BUD",
+   "Baretta Sweater (Bari)",
+   "Basquiat blazer",
+   "Berry",
+   "Blake Slim",
+   "Blake Slim Trs",
+   "Bora Bora",
+   "CYNTHIA BUMBAG",
+   "Cactus Coat",
+   "Campari",
+   "Cherry",
+   "Cinnamon",
+   "Coco",
+   "Curvy Jegging HW.",
+   "Cynthia Bumbag",
+   "Dash",
+   "Dr",
+   "Eleonor button dress",
+   "Emily",
+   "Enna",
+   "Floyd Sweater",
+   "Ford",
+   "Frank",
+   "GREY Scale Tee",
+   "Gibson",
+   "Ginger",
+   "Grape",
+   "Grey Scale Tee",
+   "Hamilton Swimsuit",
+   "Hello cross",
+   "Hendrix slacks",
+   "Hilma sunglasses",
+   "Italian Carpet coat",
+   "Jenna",
+   "Jenna knitted midi speed dress",
+   "Jennifer",
+   "Jennifer Wool/cash Shacket",
+   "Jess blazer",
+   "Jess blazer(1)",
+   "Kafka boot",
+   "LOUIS",
+   "Lake",
+   "Lee",
+   "Lemon",
+   "Lime",
+   "Lina Linen scarf",
+   "Lorena flannel shirt",
+   "Louis",
+   "MC Malena dress",
+   "MC Shihtzu Coat (Ester)",
+   "MY",
+   "Mac",
+   "Malena Dress",
+   "Mara",
+   "Moscow",
+   "Nick super skinny",
+   "Nick super skinny blazer",
+   "Noa",
+   "Norway Hood",
+   "Norway hood",
+   "Norway hood jacket",
+   "Orange",
+   "PQ JENNIFER WOOL/CASH SHACKET",
+   "Paris",
+   "Paris Trench",
+   "Patsy high chelsea",
+   "Pea",
+   "Pineapple",
+   "Pudong dress",
+   "R-NECK SS BASIC 3 PK",
+   "Robert Button Cardigan",
+   "Rose",
+   "Shacket",
+   "Shirt",
+   "Sid",
+   "Siv",
+   "Skirt Midi Straight N.W",
+   "Skirt Mini",
+   "Storm",
+   "Sun",
+   "Tambov",
+   "Tia",
+   "Tim",
+   "Tua sneaker",
+   "Uma",
+   "VANILLA",
+   "Vanilla",
+   "Viva",
+   "Vivi basic beanie",
+   "Wallaby Way Swimsuit",
+   "Waverly hoodie",
+   "Willow slingbag",
+   "id"
+  ],
+  "product_words": [
+   "&",
+   "Accessories",
+   "Baby/Children",
+   "Backpack",
+   "Bag",
+   "Bags",
+   "Ballerinas",
+   "Beanie",
+   "Beige",
+   "Belt",
+   "Bikini",
+   "Bikini top",
+   "Black",
+   "Blazer",
+   "Blouse",
+   "Blue",
+   "Bodysuit",
+   "Bootie",
+   "Boots",
+   "Bra",
+   "Bra extender",
+   "Bracelet",
+   "Bronze/Copper",
+   "Brown",
+   "Bucket",
+   "Bucket hat",
+   "Cap",
+   "Cap/peaked",
+   "Cardigan",
+   "Coat",
+   "Cosmetic",
+   "Costumes",
+   "Cross-body",
+   "Cross-body bag",
+   "Dark",
+   "Dark Beige",
+   "Dark Blue",
+   "Dark Green",
+   "Dark Grey",
+   "Dark Orange",
+   "Dark Pink",
+   "Dark Purple",
+   "Dark Red",
+   "Dark Turquoise",
+   "Dark Yellow",
+   "Divided",
+   "Dog",
+   "Dog wear",
+   "Dress",
+   "Dungarees",
+   "Earring",
+   "Earrings",
+   "Eyeglasses",
+   "Felt",
+   "Felt hat",
+   "Fine",
+   "Fine cosmetics",
+   "Flat",
+   "Flat shoe",
+   "Flat shoes",
+   "Flip",
+   "Flip flop",
+   "Full",
+   "Garment",
+   "Garment Full body",
+   "Garment Lower body",
+   "Garment Set",
+   "Garment Upper body",
+   "Gloves",
+   "Gold",
+   "Green",
+   "Greenish",
+   "Greenish Khaki",
+   "Grey",
+   "Greyish",
+   "Greyish Beige",
+   "Hair",
+   "Hair clip",
+   "Hair string",
+   "Hair ties",
+   "Hair/alice",
+   "Hair/alice band",
+   "Hairband",
+   "Hat/beanie",
+   "Hat/brim",
+   "Heeled",
+   "Heeled sandals",
+   "Heels",
+   "Hoodie",
+   "Items",
+   "Jacket",
+   "Jumpsuit/Playsuit",
+   "Khaki",
+   "Kids",
+   "Kids Underwear top",
+   "Ladieswear",
+   "Leggings/Tights",
+   "Light",
+   "Light Beige",
+   "Light Blue",
+   "Light Green",
+   "Light Grey",
+   "Light Orange",
+   "Light Pink",
+   "Light Purple",
+   "Light Red",
+   "Light Turquoise",
+   "Light Yellow",
+   "Lower",
+   "Marker",
+   "Marker pen",
+   "Menswear",
+   "Mobile",
+   "Mobile case",
+   "Necklace",
+   "Night",
+   "Night gown",
+   "Nightwear",
+   "Nipple",
+   "Nipple covers",
+   "Off",
+   "Off White",
+   "Orange",
+   "Other",
+   "Other Blue",
+   "Other Green",
+   "Other Orange",
+   "Other Pink",
+   "Other Purple",
+   "Other Red",
+   "Other Turquoise",
+   "Other Yellow",
+   "Other accessories",
+   "Other shoe",
+   "Outdoor",
+   "Outdoor Waistcoat",
+   "Outdoor overall",
+   "Outdoor trousers",
+   "Pink",
+   "Polo",
+   "Polo shirt",
+   "Pumps",
+   "Purple",
+   "Pyjama",
+   "Pyjama bottom",
+   "Pyjama jumpsuit/playsuit",
+   "Pyjama set",
+   "Red",
+   "Ring",
+   "Robe",
+   "Sandals",
+   "Sarong",
+   "Scarf",
+   "Set",
+   "Shirt",
+   "Shoes",
+   "Shorts",
+   "Shoulder",
+   "Shoulder bag",
+   "Silver",
+   "Skirt",
+   "Slippers",
+   "Sneakers",
+   "Socks",
+   "Socks & Tights",
+   "Sport",
+   "Stationery",
+   "Straw",
+   "Straw hat",
+   "Sunglasses",
+   "Sweater",
+   "Swimsuit",
+   "Swimwear",
+   "Swimwear bottom",
+   "Swimwear set",
+   "T-shirt",
+   "Tailored",
+   "Tailored Waistcoat",
+   "Tie",
+   "Tights",
+   "Top",
+   "Tote",
+   "Tote bag",
+   "Transparent",
+   "Trousers",
+   "Turquoise",
+   "Umbrella",
+   "Underdress",
+   "Underwear",
+   "Underwear Tights",
+   "Underwear body",
+   "Underwear bottom",
+   "Underwear set",
+   "Unknown",
+   "Upper",
+   "Vest",
+   "Vest top",
+   "Waistcoat",
+   "Wallet",
+   "Watch",
+   "Waterbottle",
+   "Wedge",
+   "Weekend/Gym",
+   "Weekend/Gym bag",
+   "White",
+   "Wireless",
+   "Wireless earphone case",
+   "Yellow",
+   "Yellowish",
+   "Yellowish Brown",
+   "accessories",
+   "bag",
+   "band",
+   "body",
+   "bottom",
+   "case",
+   "clip",
+   "cosmetics",
+   "covers",
+   "earphone",
+   "extender",
+   "flop",
+   "gown",
+   "hat",
+   "jumpsuit/playsuit",
+   "overall",
+   "pen",
+   "sandals",
+   "set",
+   "shirt",
+   "shoe",
+   "shoes",
+   "string",
+   "ties",
+   "top",
+   "trousers",
+   "wear"
+  ]
+ }
+}
