@@ -1,0 +1,12 @@
+{
+  "scorer_version": "3.0.0",
+  "files": {
+    "evals/tasks.yaml": "58c5cda676a879cc060cc9bbdc08d65bdc7f9d5100e2a9a634549a5b56115f8c",
+    "evals/scoring.py": "73c457b7f64876683119a5c04860983593fc40205f5b8b91c74ddcaaf6af69c0",
+    "evals/tasks.py": "f0510a7187b9c7bf774e855c5f4928fbcf14410464949d906cf608bb5e67f512"
+  },
+  "tasks": 61,
+  "turns": 69,
+  "frozen_on": "2026-11-07",
+  "note": "Frozen before the rerun with a real model. Changing any of these files after that run has been seen needs a recorded rescore note (run_eval --rescore --rescore-note) and a new freeze; docs/agent-eval.md#the-freeze."
+}
