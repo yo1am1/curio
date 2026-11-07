@@ -49,7 +49,7 @@ describe("ChatPage", () => {
           status: "complete",
           intent: { query: "save" },
           applied: [{ kind: "shortlist", product_ids: [2] }],
-          grounding: { status: "verified", checked: 1, issues: [] },
+          grounding: { status: "verified", checked: 1, issues: [], counts: { price: 1 } },
         },
       }),
     ];
@@ -96,7 +96,7 @@ describe("ChatPage", () => {
     });
     expect(screen.getByText("Approved.")).toBeInTheDocument();
     expect(screen.getByTestId("grounding-badge")).toHaveTextContent(
-      "Prices verified against the catalog",
+      "Checked 1 price against the catalog",
     );
   });
 });

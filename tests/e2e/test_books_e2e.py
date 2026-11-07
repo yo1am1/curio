@@ -197,7 +197,7 @@ def test_book_agent_end_to_end(web):
     web.send("Fantasy like The Name of the Wind")
     turn = web.last_turn()
     expect(turn.get_by_test_id("grounding-badge")).to_have_text(
-        "Titles and ratings checked against the catalog"
+        re.compile(r"^Checked \d+ titles?, \d+ ratings? .+ against the catalog$")
     )
     assert turn.get_by_test_id("book-card").count() >= 3
     turn.get_by_role("button", name=re.compile(r"How Curio worked")).click()

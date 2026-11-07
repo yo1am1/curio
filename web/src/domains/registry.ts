@@ -11,6 +11,8 @@ export const DEFAULT_DOMAIN: Domain = "evening";
 export type Tone = "green" | "orange" | "red" | "violet" | "blue" | "gray" | "accent";
 export type GroundingStatus = "verified" | "repaired" | "fallback";
 export type Badge = { label: string; tone: Tone };
+/** A verified badge says what was checked ("Checked 3 prices and 2 names"), then against what. */
+export type CheckedBadge = { against: string; tone: Tone };
 
 export interface DomainCopy {
   title: string;
@@ -35,7 +37,7 @@ export interface DomainView {
   unavailable: string;
   setupHint: string;
   copy: DomainCopy;
-  badges: Record<GroundingStatus, Badge>;
+  badges: { verified: CheckedBadge; repaired: Badge; fallback: Badge };
   approvalTools: Partial<Record<PolicySetting, ApprovalTool>>;
   credit: (health: Health | undefined) => string;
 }
@@ -89,7 +91,7 @@ export const DOMAINS: Record<Domain, DomainView> = {
       askShortlist: "Ask before saving to my shortlist",
     },
     badges: {
-      verified: { label: "Prices verified against the catalog", tone: "green" },
+      verified: { against: "the catalog", tone: "green" },
       repaired: { label: "Self-corrected to match the catalog", tone: "orange" },
       fallback: { label: "Unverified answer replaced with catalog facts", tone: "red" },
     },
@@ -130,7 +132,7 @@ export const DOMAINS: Record<Domain, DomainView> = {
       askShortlist: "Ask before saving to my shortlist",
     },
     badges: {
-      verified: { label: "Checked against the recipes", tone: "green" },
+      verified: { against: "the recipes", tone: "green" },
       repaired: { label: "Self-corrected to match the recipes", tone: "orange" },
       fallback: { label: "Unverified answer replaced with recipe facts", tone: "red" },
     },
@@ -170,7 +172,7 @@ export const DOMAINS: Record<Domain, DomainView> = {
       askShortlist: "Ask before adding to my reading list",
     },
     badges: {
-      verified: { label: "Titles and ratings checked against the catalog", tone: "green" },
+      verified: { against: "the catalog", tone: "green" },
       repaired: { label: "Self-corrected to match the catalog", tone: "orange" },
       fallback: { label: "Unverified answer replaced with catalog facts", tone: "red" },
     },
@@ -207,7 +209,7 @@ export const DOMAINS: Record<Domain, DomainView> = {
       askShortlist: "Ask before saving an evening",
     },
     badges: {
-      verified: { label: "Prices, titles and drinks checked", tone: "green" },
+      verified: { against: "the catalogs", tone: "green" },
       repaired: { label: "Self-corrected to match the catalogs", tone: "orange" },
       fallback: { label: "Unverified answer replaced with catalog facts", tone: "red" },
     },

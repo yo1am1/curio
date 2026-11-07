@@ -249,7 +249,9 @@ def test_date_night_under_100_in_chat_with_a_swap_and_an_approved_save(web):
     expect(card).to_be_visible()
     expect(card.get_by_text("of €100.00", exact=False)).to_be_visible()
     expect(card.get_by_text("Romantic", exact=True)).to_be_visible()
-    expect(turn.get_by_test_id("grounding-badge")).to_have_text("Prices, titles and drinks checked")
+    expect(turn.get_by_test_id("grounding-badge")).to_have_text(
+        re.compile(r"^Checked \d+ prices, .+ against the catalogs$")
+    )
     web.shot("evening-04-chat-date-night", full_page=True)
     web.click_and_answer(card.get_by_role("button", name="A cheaper shoes"))
     expect(web.page.get_by_role("log", name="Conversation")).to_contain_text("Cheaper shoes")
