@@ -51,6 +51,12 @@ All notable changes to Curio are recorded here. The format follows
 - Shopper text is no longer logged at INFO: agent steps log their kind, name, status and
   duration; the summaries, which quote the request, moved to DEBUG (as did the fashion
   intent's "Ignoring unknown value" line).
+- Dependencies: filelock 4.1.1 → 4.2.4 (17 advisories, fixed in 4.2.1) and setuptools
+  84.0.0 → 84.2.1 (GHSA-xmj3-9gf7-h52w). `pip-audit` now reports no known vulnerabilities
+  (torch's local `+cpu` build cannot be audited); `npm audit --omit=dev` reports none.
+- The Dockerfile pins every base image by exact version and digest: `node:26.12.1`,
+  `python:3.13.17-slim` (was the floating `3.13-slim`) and `uv:0.11.32` (was the floating
+  `0.11`, now the same uv as CI).
 
 ### Removed
 

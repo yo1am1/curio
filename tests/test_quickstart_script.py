@@ -235,3 +235,21 @@ def test_compose_publishes_ports_on_loopback_only_unless_opted_in():
 def test_compose_never_publishes_qdrant():
     qdrant = _compose_services()["qdrant"]
     assert "ports" not in qdrant and "expose" not in qdrant
+
+
+def test_every_base_image_is_pinned_by_version_and_digest():
+    """`uv:0.11` floated across patch releases; a tag can also be re-pushed."""
+    import re
+
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    images = re.findall(r"^FROM (\S+)", dockerfile, re.M) + re.findall(
+        r"COPY --from=(\S+:\S+)", dockerfile
+    )
+    assert len(images) == 3
+    for image in images:
+        name, _, digest = image.partition("@sha256:")
+        assert re.fullmatch(r"[0-9a-f]{64}", digest), image
+        assert re.search(r":\d+\.\d+\.\d+", name), image  # an exact version, not 3.13 or 0.11
+    assert "ghcr.io/astral-sh/uv:0.11.32@" in dockerfile
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    assert 'version: "0.11.32"' in ci  # CI and the image use one uv
