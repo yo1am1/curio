@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="980" viewBox="0 0 1200 980" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
   <title>Curio architecture</title>
-  <desc>Three layers. curio.app (the Streamlit UI, the FastAPI service and the domain registry) calls curio.engine, a domain-free agent engine that plans, calls policy-gated tools, asks for signed approval before state changes and verifies answers against tool evidence, with any LangChain chat model on the side. The engine runs one toolkit per domain: fashion, cocktails and books, each with its own recommenders and data. Two composed domains build on them: pairings (a book to a drink, from books and cocktails) and evening (Plan my evening: an outfit, a book and a paired drink). An architecture test keeps the engine free of domain imports.</desc>
+  <desc>Three layers. curio.app (the React web app, served by the FastAPI service, and the domain registry) calls curio.engine, a domain-free agent engine that plans, calls policy-gated tools, asks for signed approval before state changes and verifies answers against tool evidence, with any LangChain chat model on the side. The engine runs one toolkit per domain: fashion, cocktails and books, each with its own recommenders and data. Two composed domains build on them: pairings (a book to a drink, from books and cocktails) and evening (Plan my evening: an outfit, a book and a paired drink). An architecture test keeps the engine free of domain imports.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0,0 L10,5 L0,10 z" fill="#8a7f72"/>
@@ -30,17 +30,17 @@
   <rect x="40" y="100" width="1120" height="150" rx="12" class="card"/>
   <text x="58" y="128" class="tag">APP</text>
   <text x="92" y="128" class="code">curio.app</text>
-  <text x="58" y="156" class="h2">Streamlit UI</text>
-  <text x="58" y="178" class="t">Domain switch, live step trace</text>
-  <text x="58" y="197" class="t">Approval cards: approve, narrow, decline</text>
+  <text x="58" y="156" class="h2">React web app</text>
+  <text x="58" y="178" class="t">Domain switch, live step trace, dark mode</text>
+  <text x="58" y="197" class="t">Approval drawer: approve, narrow, decline</text>
   <text x="58" y="216" class="t">Plan my evening, outfit and pairing cards</text>
-  <text x="58" y="235" class="s">Holds the shortlist, memory and outfit</text>
+  <text x="58" y="235" class="s">Served by the API · holds the session client-side</text>
 
   <text x="430" y="156" class="h2">FastAPI</text>
   <text x="430" y="178" class="t">/chat, /chat/stream (NDJSON steps)</text>
   <text x="430" y="197" class="t">/search, /users/{id}/recommendations, /outfits</text>
   <text x="430" y="216" class="t">/cocktails, /books, /pairings, /evening</text>
-  <text x="430" y="235" class="s">Stateless; OpenAPI at /docs</text>
+  <text x="430" y="235" class="s">Stateless; serves web/dist; OpenAPI at /docs</text>
 
   <text x="820" y="156" class="h2">Domain registry</text>
   <text x="820" y="178" class="t">Serves whichever domains are prepared</text>

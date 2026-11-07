@@ -26,7 +26,8 @@ The code has three layers, and `tests/test_architecture.py` enforces their bound
   and approved effects). A domain imports the engine and itself; only the composed domains
   build on others: `pairings` on `books` and `cocktails`, and `evening` on `fashion`,
   `books`, `cocktails` and `pairings`.
-- `curio.app`: settings, the domain registry, the API and the UI. `app/schemas.py` combines
+- `curio.app`: settings, the domain registry and the API, which also serves the React web
+  app (`web/`). `app/schemas.py` combines
   every domain's payloads into the one `/chat` wire format, and `app/assistants.py` binds
   each toolkit to the engine with it (`Schemas`).
 
@@ -432,7 +433,7 @@ actions. Gaps addressed here:
 | No actions on shopper state, so no human-in-the-loop surface | Approval-gated shortlist and memory with signed, narrow-only proposals |
 | A 6–57 s request behind one spinner | Live step progress and a turn time budget |
 | No quality signal from real use | Answer feedback endpoint |
-| The UI crashed on empty 204 responses | `call_api` returns an empty result for responses without a body |
+| The UI crashed on empty 204 responses | The client returns an empty result for responses without a body |
 
 ## Limits
 
@@ -453,7 +454,7 @@ actions. Gaps addressed here:
   lemon, sugar" does not yet find Whiskey Sour, whose recipe lists "Blended whiskey" and
   "Powdered sugar".
 - Feedback stays in memory and resets when the API restarts.
-- Unit and UI tests use scripted models. The [agent evaluation](agent-eval.md) measures a
+- Unit and browser tests use scripted models. The [agent evaluation](agent-eval.md) measures a
   real model on 45 tasks, a small set that shows failure modes rather than precise rates.
 - Outfit coherence is a CLIP query per slot plus co-purchase and photo similarity; there is
   no colour-harmony or style model, so a dress and earrings can clash. Occasion templates

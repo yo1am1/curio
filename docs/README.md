@@ -1,12 +1,12 @@
 # Curio documentation
 
 [Project overview](../README.md) · [Changelog](../CHANGELOG.md) ·
-[Architecture diagram](architecture.svg)
+[Architecture diagram](architecture.svg) · [Web app](technical-guide.md#web-app)
 
 ## Guides
 
 - [Technical guide](technical-guide.md): data preparation, local setup, Docker, the code
-  layout, the API, tests and releases.
+  layout, the API, the React web app it serves, tests and releases.
 - [Agent architecture](agent-architecture.md): the engine, the toolkits, tool policies,
   signed approvals and grounding checks.
 - [Agent evaluation](agent-eval.md): 45 tasks that score a real model's tool choice,

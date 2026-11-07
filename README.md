@@ -9,7 +9,7 @@ anything.**
 [![Release](https://img.shields.io/github/v/release/yo1am1/curio?color=a0412d)](https://github.com/yo1am1/curio/releases/latest)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 ![Python 3.13](https://img.shields.io/badge/python-3.13-3776ab)
-![FastAPI](https://img.shields.io/badge/FastAPI-Streamlit-009688)
+![FastAPI · React](https://img.shields.io/badge/FastAPI-React-009688)
 
 [Why three domains](#why-three-domains) · [The engine](#the-engine) ·
 [Add a domain](#add-a-domain-in-one-file) · [Plan my evening](#plan-my-evening) ·
@@ -23,10 +23,10 @@ and books. Each domain stresses a different recommendation problem. The engine i
 for all three. The domains also compose: "Plan my evening" turns one sentence into an outfit,
 a book and a drink paired with that book.
 
-![A tour: Plan my evening for a date night, the agent's step trace and grounding check, and a drink paired with The Great Gatsby](docs/screenshots/curio-overview.webp)
+![A tour: Plan my evening for a date night, the agent's step trace and grounding check, a save narrowed in the approval drawer, a drink paired with The Great Gatsby, and dark mode](docs/screenshots/curio-overview.webp)
 
 Try it in one command, with no H&M download: `docker compose --profile demo up --build` serves
-cocktails, books and Plan my evening ([quick start](#quick-start)).
+cocktails, books and Plan my evening at http://localhost:8000 ([quick start](#quick-start)).
 
 ## Why three domains
 
@@ -62,7 +62,7 @@ The second and third domains forced the engine to generalise:
   against what the tools returned. A failed check gets one self-correction, then a
   deterministic fallback built from catalog facts.
 - **Budgets and streaming.** A turn allows five tool calls and 90 seconds. Every step
-  streams to the UI as NDJSON, so you see what the agent did.
+  streams to the web app as NDJSON, so you see what the agent did.
 - **Stateless server.** The client holds the shortlist, memory and outfit. Client-held text
   is display-only and never counts as evidence.
 - **Enforced layering.** `curio.engine` imports no domain. Each `curio.domains.<name>`
@@ -74,7 +74,7 @@ The second and third domains forced the engine to generalise:
 Saving or remembering anything is only proposed. You approve it, untick what you don't want,
 or decline.
 
-![Approval card for saving two pieces, with one unticked](docs/screenshots/curio-approval.webp)
+![The approval drawer for saving two pieces, with one unticked](docs/screenshots/curio-approval.webp)
 
 In the chat screenshots the replies come from the scripted test model in
 `tests/e2e/llm_stub.py`, because no LLM was configured. The catalog, tool results, step
@@ -158,7 +158,7 @@ domain, or if a domain imports another one outside the two composed domains.
 
 ## Plan my evening
 
-The Evening tab composes all three domains. Give it an occasion: "rainy Sunday in", "date
+Plan my evening composes all three domains. Give it an occasion: "rainy Sunday in", "date
 night under €100" or "book club, alcohol-free". It picks one theme. It plans an outfit from
 the fashion catalog, a book from the book recommender, and a drink paired with that book.
 Each part has a reason, and one line says why they go together. You can swap any part, then
@@ -187,6 +187,11 @@ the nearest products in Qdrant. Ask for an outfit ("a summer outfit for a weddin
 €80") and Curio fills each slot from the photo index within the budget.
 
 ![Photo search results for an example garment](docs/screenshots/curio-discover-photo.webp)
+
+Product connections draws a piece's neighbourhood: what shoppers bought with it and the
+attributes and category it shares with them. Selecting a piece opens it.
+
+![The product connections graph of a black T-shirt: co-purchased pieces and shared attributes](docs/screenshots/curio-connections.webp)
 
 **Cocktails.** "What can I make?" ranks drinks by the ingredients you have, shows what is
 missing and allows up to three missing ingredients. Shots are left out unless a search or a
@@ -217,8 +222,10 @@ scripts/quickstart.sh
 
 Both prepare the cocktail recipes (a checksum-verified ~400 KB download) and goodbooks-10k
 (~150 MB, under a minute) on the first run. For cocktails only, skip the books with
-`DEMO_BOOKS=0` (Docker) or `CURIO_BOOKS=0` (uv). Open http://localhost:8501. The quick start
-serves this computer only; `UI_HOST=0.0.0.0` opens the UI to your network.
+`DEMO_BOOKS=0` (Docker) or `CURIO_BOOKS=0` (uv). Either way one server runs the API and the
+web app: open http://localhost:8000. `scripts/quickstart.sh` builds the web app first when
+npm (Node 22) is installed. The quick start serves this computer only; `CURIO_HOST=0.0.0.0`
+opens it to your network.
 
 Search and recommendations work without an LLM. Chat needs one: copy `.env.example` to
 `.env` and set `LLM_MODEL` (plus `LLM_API_KEY` / `LLM_BASE_URL`). The Docker demo can also
@@ -236,8 +243,8 @@ index](docs/technical-guide.md#fashion-data), then run the full stack:
 ```bash
 uv sync --all-extras
 cp .env.example .env
-uv run uvicorn curio.app.api:create_app --factory
-uv run streamlit run src/curio/app/ui/main.py     # in a second terminal
+(cd web && npm ci && npm run build)               # the web app, served by the API
+uv run uvicorn curio.app.api:create_app --factory # http://localhost:8000
 ```
 
 With Docker, `docker compose --profile fashion up --build` starts it. Every domain is
@@ -251,17 +258,18 @@ Books use TF-IDF search and item-item collaborative filtering on goodbooks-10k r
 Cocktails, books and the pairing need no model and no network call to serve. Every dataset
 is downloaded from a pinned commit and checked by SHA-256.
 
-Tests: about 1,700 offline tests, and 76 browser tests that run the real API and UI in
-Chromium on the real data, with a scripted LLM. An [agent evaluation](docs/agent-eval.md)
+Tests: about 1,570 offline Python tests, 63 Vitest tests of the web app, and 85 end-to-end
+tests that run the real API and the React app in Chromium on the real data, with a scripted
+LLM. An [agent evaluation](docs/agent-eval.md)
 measures a real model instead: 45 tasks over the four domains, scored on tool choice,
 arguments, grounding, approvals, clarifying questions, safety and prompt injection. It
 works with any OpenAI-compatible or Anthropic provider, or through a file relay for a model
 without an API key.
 
-**A React web app is on its way.** `web/` holds a React, TypeScript and Vite client for
-Plan my evening and the chat of every domain; build it with `npm ci && npm run build` in
-`web/` and the API serves it at http://localhost:8000. Streamlit remains the default UI
-until it covers every page ([web app](docs/technical-guide.md#web-app)).
+**The web app** is React, TypeScript and Vite in `web/`, with hand-written CSS, light and
+dark themes and no chart or component library. The API serves its build on the same port,
+so one process (or one container) is the whole app
+([web app](docs/technical-guide.md#web-app)).
 
 [Technical guide](docs/technical-guide.md) · [Agent architecture](docs/agent-architecture.md) ·
 [LLM setup](docs/technical-guide.md#llm-configuration) ·
@@ -270,8 +278,8 @@ until it covers every page ([web app](docs/technical-guide.md#web-app)).
 
 ## How it's built and released
 
-CI runs lint, format, the offline tests and a quick-start boot on every pull request and
-every push to `main`. When CI passes on `main` with a new version, a tag, a GitHub release
+CI runs lint, format, the offline tests, the web app's checks and build, and a quick-start
+boot checked in Chromium on every pull request and every push to `main`. When CI passes on `main` with a new version, a tag, a GitHub release
 and the container image are published automatically.
 [How it was built](docs/how-it-was-built.md) · [Security policy](SECURITY.md).
 
