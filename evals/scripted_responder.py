@@ -12,6 +12,7 @@ import argparse
 import json
 import sys
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from evals.relay import DEFAULT_QUEUE, RelayQueue
@@ -34,11 +35,15 @@ def scripted_answer(request: dict) -> tuple[str | None, list[dict]]:
     return decided.get("content"), calls
 
 
-def answer_pending(queue: RelayQueue) -> int:
-    """Answer every pending request once; return how many were answered."""
+def answer_pending(
+    queue: RelayQueue,
+    answerer: Callable[[dict], tuple[str | None, list[dict]]] = scripted_answer,
+) -> int:
+    """Answer every pending request once with `answerer` (the scripted model by default,
+    or a control policy from `evals.controls`); return how many were answered."""
     answered = 0
     for seq in queue.pending():
-        text, calls = scripted_answer(queue.read_request(seq))
+        text, calls = answerer(queue.read_request(seq))
         try:
             answer(queue, seq, text, calls)
         except AnswerError as error:
