@@ -63,7 +63,8 @@ def test_build_outfit_streams_a_step_per_slot_and_verifies_the_total(
     assert steps[6].summary == "Outfit ready: 4 pieces for €75.96 of a €80.00 budget."
     reply = events[-1].reply
     assert isinstance(events[-1], ReplyEvent)
-    assert reply.grounding.status == "verified" and reply.grounding.checked == 7
+    assert reply.grounding.status == "verified" and reply.grounding.checked == 11
+    assert reply.grounding.counts == {"price": 7, "name": 4}
     assert [p.product_id for p in reply.products] == [1, 3, 5, 6]
     assert reply.outfit.total == 75.96 and reply.outfit.status == "complete"
     first = reply.outfit.slots[0]
@@ -83,7 +84,9 @@ def test_a_wrong_outfit_total_is_corrected(chat_model_replying, outfit_search, o
     reply = assistant(model, outfit_search, outfit_catalog).reply("A wedding outfit", [])
 
     assert reply.grounding.status == "repaired"
-    assert reply.grounding.issues == ["€73.50 does not match any catalog price in the evidence"]
+    assert reply.grounding.issues == [
+        "€73.50 is not attributed to any item the tools returned (unattributed)"
+    ]
     assert reply.text == "Four pieces for a total of €75.96."
 
 

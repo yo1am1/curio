@@ -31,11 +31,19 @@ class Clarification(BaseModel):
 
 
 class GroundingReport(BaseModel):
-    """Result of checking the final answer's claims against tool evidence."""
+    """Result of checking an answer's claims against tool evidence.
+
+    `verified`: at least one fact was checked and every one matched. `not_applicable`:
+    nothing checkable was found. `repaired`: the first draft failed and the rewrite passed.
+    `fallback`: the answer was replaced by catalog facts. `checked` counts the facts the
+    first check covered and `counts` splits them by kind ("price", "id", "rating", "title",
+    "name", "author", "amount", "alcohol", "pages", "year", "claim", "fact").
+    """
 
     status: Literal["verified", "repaired", "fallback", "not_applicable"]
     checked: int = 0
     issues: list[str] = Field(default_factory=list)
+    counts: dict[str, int] = Field(default_factory=dict)
 
 
 class Intent(BaseModel):

@@ -17,7 +17,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel
 
-from curio.domains.fashion.agent.grounding import check_grounding
+from curio.domains.fashion.agent.grounding import OCCASION_WORDS, FashionGroundingCheck
 from curio.domains.fashion.agent.intent import IntentExtractor, SearchIntent
 from curio.domains.fashion.agent.prompts import (
     ANSWER_PROMPT,
@@ -46,6 +46,7 @@ from curio.domains.fashion.agent.tools import (
 from curio.domains.fashion.catalog import ProductCatalog
 from curio.domains.fashion.currency import budget_in_text, foreign_note
 from curio.domains.fashion.models import Product
+from curio.domains.fashion.names import display_name
 from curio.domains.fashion.navigator import CatalogNavigator, NoPersonalHistoryError
 from curio.domains.fashion.outfits import (
     AUDIENCE_SECTIONS,
@@ -61,7 +62,6 @@ from curio.domains.fashion.outfits import (
     audience_in,
 )
 from curio.domains.fashion.search import ProductSearch
-from curio.engine.grounding import amounts_in
 from curio.engine.schemas import AgentStep, GroundingReport
 from curio.engine.toolkit import BaseToolkit, ToolError, Turn
 
@@ -86,7 +86,7 @@ class FashionToolkit(BaseToolkit[Product]):
     policies = POLICIES
     invalid_action = INVALID_ACTION
     repair_instruction = REPAIR_INSTRUCTION
-    grounding_subject = "prices and IDs"
+    grounding_subject = "prices, IDs and names"
 
     def __init__(
         self,
@@ -107,6 +107,16 @@ class FashionToolkit(BaseToolkit[Product]):
             name: {value.lower(): value for value in catalog.distinct(name)}
             for name in ("section", "colour")
         }
+        raw_names = catalog.distinct("name")
+        words = [
+            value
+            for field in ("product_type", "product_group", "section", "colour")
+            for value in catalog.distinct(field)
+        ]
+        words += [word for value in words for word in value.split()]
+        self._grounding = FashionGroundingCheck(
+            [*raw_names, *map(display_name, raw_names)], [*words, *OCCASION_WORDS]
+        )
 
     def key(self, item: Product) -> int:
         return item.product_id
@@ -417,7 +427,9 @@ class FashionToolkit(BaseToolkit[Product]):
     # --- Verification and reply -----------------------------------------------------------
 
     def check(self, turn: Turn[Product], text: str) -> GroundingReport:
-        return check_grounding(text, list(turn.evidence.values()), self._allowed_amounts(turn))
+        return self._grounding.check(
+            text, list(turn.evidence.values()), self._allowed_amounts(turn), turn.message
+        )
 
     def fallback(self, items: Sequence[Product], extras: Mapping[str, Any] | None = None) -> str:
         if not items:
@@ -496,7 +508,6 @@ class FashionToolkit(BaseToolkit[Product]):
         intent, preferences = turn.intent, turn.context.preferences
         outfits = [turn.extras[key] for key in (OUTFIT, CURRENT_OUTFIT) if key in turn.extras]
         return [
-            *amounts_in(turn.message),
             *(
                 value
                 for value in (intent.min_price, intent.max_price, preferences.max_price)

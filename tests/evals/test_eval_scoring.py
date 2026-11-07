@@ -142,6 +142,8 @@ def test_applied_effects_allow_confirmations():
         ([step("Tool budget", "guardrail", "blocked")], "verified", "budget_fallback"),
         ([step("Time budget", "guardrail", "blocked")], "verified", "budget_fallback"),
         ([], "verified", "empty_fallback"),
+        ([step("Empty answer", "guardrail", "blocked")], "not_applicable", "empty_fallback"),
+        ([step("Empty answer", "guardrail", "blocked")], "verified", "empty_fallback"),
     ],
 )
 def test_grounding_outcomes(steps, grounding, outcome):

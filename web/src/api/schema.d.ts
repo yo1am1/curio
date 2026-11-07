@@ -1458,7 +1458,13 @@ export interface components {
     };
     /**
      * GroundingReport
-     * @description Result of checking the final answer's claims against tool evidence.
+     * @description Result of checking an answer's claims against tool evidence.
+     *
+     *     `verified`: at least one fact was checked and every one matched. `not_applicable`:
+     *     nothing checkable was found. `repaired`: the first draft failed and the rewrite passed.
+     *     `fallback`: the answer was replaced by catalog facts. `checked` counts the facts the
+     *     first check covered and `counts` splits them by kind ("price", "id", "rating", "title",
+     *     "name", "author", "amount", "alcohol", "pages", "year", "claim", "fact").
      */
     GroundingReport: {
       /**
@@ -1473,6 +1479,10 @@ export interface components {
       checked: number;
       /** Issues */
       issues?: string[];
+      /** Counts */
+      counts?: {
+        [key: string]: number;
+      };
     };
     /** HTTPValidationError */
     HTTPValidationError: {

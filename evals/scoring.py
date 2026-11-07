@@ -94,6 +94,9 @@ def grounding_outcome(reply: dict | None) -> str:
     if any(name in BUDGET_STEPS for name in names):
         return "budget_fallback"
     status = (reply.get("grounding") or {}).get("status")
+    if "Empty answer" in names:
+        return "empty_fallback"
+    # Before grounding v2 the empty-answer fallback had no step and read "verified".
     if status == "verified" and "Grounding check" not in names:
         return "empty_fallback"
     return status or "none"

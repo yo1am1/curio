@@ -52,6 +52,7 @@ class CocktailPairing:
         self._pairer = pairer
         self._cocktails = cocktails
         self._books = books
+        self._drink_names = {c.name.casefold() for c in cocktails}
         self._drinks = PairedDrinkCheck(
             (c.name for c in cocktails),
             cocktails.ingredients(),
@@ -128,7 +129,16 @@ class CocktailPairing:
         drinks = list(turn.extras.get(PAIRED_DRINKS, {}).values())
         book_names = [b.title for b in books] + [b.series for b in books if b.series]
         book_names += [author for b in books for author in b.authors]
-        return self._drinks.check(text, drinks, typed=turn.message, also_allowed=book_names)
+        return self._drinks.check(
+            text,
+            drinks,
+            typed=turn.message,
+            also_allowed=book_names,
+            quoted=turn.extras.get(PAIRED_TEXT, []),
+        )
+
+    def is_drink_name(self, name: str) -> bool:
+        return name.casefold() in self._drink_names
 
     def fallback(self, extras: Mapping[str, Any]) -> list[str]:
         pairing: BookPairing | None = extras.get(PAIRING)

@@ -44,7 +44,6 @@ from curio.domains.fashion.catalog import ProductCatalog
 from curio.domains.fashion.currency import foreign_note
 from curio.domains.fashion.models import Product
 from curio.domains.fashion.outfits import SECTION_AUDIENCE, SLOT_LABELS
-from curio.engine.grounding import amounts_in
 from curio.engine.schemas import AgentStep, GroundingReport
 from curio.engine.toolkit import BaseToolkit, ToolError, Turn
 
@@ -99,6 +98,7 @@ class EveningToolkit(BaseToolkit[EveningItem]):
             ingredients=cocktails.ingredients(),
             glass_names={c.glass for c in cocktails},
             ordinary=ordinary_names(drink_names, (f"{b.title} {b.description}" for b in books)),
+            product_words=_product_words(products),
         )
 
     def key(self, item: EveningItem) -> int:
@@ -263,6 +263,8 @@ class EveningToolkit(BaseToolkit[EveningItem]):
             text.append(plan.book.reason)
         # The plan's own words may be repeated: "a dark and stormy night" is not the drink.
         text += [plan.occasion, plan.theme.feeling, plan.why, *plan.notes]
+        if plan.change:
+            text.append(plan.change)  # "An alcohol-free drink: Figgy Thyme → Masala Chai"
 
     def apply(
         self, action: BaseModel, *, dry_run: bool = False
@@ -341,7 +343,7 @@ class EveningToolkit(BaseToolkit[EveningItem]):
             products=evidence["products"],
             books=evidence["books"],
             drinks=list(turn.extras.get(PLAN_DRINKS, {}).values()),
-            amounts=[*amounts, *amounts_in(turn.message)],
+            amounts=amounts,
             typed=turn.message,
             cited=turn.extras.get(PLAN_TEXT, []),
         )
@@ -557,3 +559,15 @@ def _and(items: Sequence[str]) -> str:
     if len(items) <= 1:
         return "".join(items)
     return ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def _product_words(products: ProductCatalog | None) -> list[str]:
+    """Product types, groups, sections and colours, and their words: never product names."""
+    if products is None:
+        return []
+    values = [
+        value
+        for field in ("product_type", "product_group", "section", "colour")
+        for value in products.distinct(field)
+    ]
+    return [*values, *(word for value in values for word in value.split())]

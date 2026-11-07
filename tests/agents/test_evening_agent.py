@@ -178,8 +178,8 @@ def test_an_invented_price_rating_and_drink_fall_back_to_the_plan(agent):
     reply = assistant.reply("Plan a rainy Sunday in", [])
     assert reply.grounding.status == "fallback"
     issues = reply.grounding.issues
-    assert "€9.99 does not match any catalog price in the evidence" in issues
-    assert "a rating of 4.9 does not match any book in the evidence" in issues
+    assert "€9.99 does not match the price of Chunky Knit Sweater (€24.99)" in issues
+    assert "4.9 does not match the rating of The Name of the Wind (4.55)" in issues
     assert "drink 2 was not returned by PairCocktail" in issues
     assert "Manhattan was not returned by PairCocktail" in issues
     assert [s.name for s in reply.steps[-2:]] == ["Grounding check", "Self-correction"]

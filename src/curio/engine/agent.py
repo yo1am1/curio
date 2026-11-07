@@ -30,6 +30,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMe
 from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel, ValidationError
 
+from curio.engine.grounding import describe_counts
 from curio.engine.schemas import (
     ActionDecision,
     AgentEvent,
@@ -219,6 +220,15 @@ class AgentEngine[T]:
             if not answer.tool_calls:
                 text = StrOutputParser().invoke(answer).strip()
                 if not text:
+                    yield self._record(
+                        turn,
+                        AgentStep(
+                            kind="guardrail",
+                            name="Empty answer",
+                            summary="The model's answer was empty; showing verified items.",
+                            status="blocked",
+                        ),
+                    )
                     yield self._fallback_reply(turn)
                     return
                 yield from self._verify(turn, messages, answer, text, started)
@@ -410,13 +420,13 @@ class AgentEngine[T]:
         report = self._toolkit.check(turn, text)
         if report.status != "fallback":
             if report.status == "verified":
-                subject = self._toolkit.grounding_subject
                 yield self._record(
                     turn,
                     AgentStep(
                         kind="guardrail",
                         name="Grounding check",
-                        summary=f"Verified {report.checked} {subject} against the catalog.",
+                        summary=f"Verified {describe_counts(report.counts)} against the catalog.",
+                        detail={"counts": report.counts},
                     ),
                     started,
                 )
@@ -433,7 +443,7 @@ class AgentEngine[T]:
             ),
             started,
         )
-        final = GroundingReport(status="fallback", checked=report.checked, issues=report.issues)
+        final = _with_status(report, "fallback")
         if self._out_of_time(turn):
             yield self._record(turn, _time_budget_step())
             yield self._reply(turn, self._toolkit.fallback(turn.items, turn.extras), final)
@@ -444,7 +454,7 @@ class AgentEngine[T]:
         repaired_text = "" if repaired.tool_calls else StrOutputParser().invoke(repaired).strip()
         second = self._toolkit.check(turn, repaired_text) if repaired_text else None
         if second is not None and second.status in ("verified", "not_applicable"):
-            final = GroundingReport(status="repaired", checked=report.checked, issues=report.issues)
+            final = _with_status(report, "repaired")
             yield self._record(
                 turn,
                 AgentStep(
@@ -501,12 +511,14 @@ class AgentEngine[T]:
         return StepEvent(step=step)
 
     def _fallback_reply(self, turn: Turn[T]) -> ReplyEvent:
-        # Built from catalog rows only, so it is grounded by construction.
-        return self._reply(
-            turn,
-            self._toolkit.fallback(turn.items, turn.extras),
-            GroundingReport(status="verified", checked=0),
-        )
+        """Catalog facts when a budget ends the turn or the model's answer is empty. They are
+        checked like an answer, so the report says what they state ("verified" with its
+        counts), or "not_applicable" when they state nothing checkable."""
+        text = self._toolkit.fallback(turn.items, turn.extras)
+        report = self._toolkit.check(turn, text)
+        if report.status != "verified":
+            report = GroundingReport(status="not_applicable")
+        return self._reply(turn, text, report)
 
     def _reply(
         self, turn: Turn[T], text: str, grounding: GroundingReport | None, **fields: Any
@@ -524,6 +536,11 @@ class AgentEngine[T]:
                 **fields,
             )
         )
+
+
+def _with_status(report: GroundingReport, status: str) -> GroundingReport:
+    """`report`'s counts and issues under another status ("repaired", "fallback")."""
+    return report.model_copy(update={"status": status})
 
 
 def _final(events: Iterable[AgentEvent]) -> AssistantReply:

@@ -3677,6 +3677,13 @@
             },
             "type": "array",
             "title": "Issues"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
           }
         },
         "type": "object",
@@ -3684,7 +3691,7 @@
           "status"
         ],
         "title": "GroundingReport",
-        "description": "Result of checking the final answer's claims against tool evidence."
+        "description": "Result of checking an answer's claims against tool evidence.\n\n`verified`: at least one fact was checked and every one matched. `not_applicable`:\nnothing checkable was found. `repaired`: the first draft failed and the rewrite passed.\n`fallback`: the answer was replaced by catalog facts. `checked` counts the facts the\nfirst check covered and `counts` splits them by kind (\"price\", \"id\", \"rating\", \"title\",\n\"name\", \"author\", \"amount\", \"alcohol\", \"pages\", \"year\", \"claim\", \"fact\")."
       },
       "HTTPValidationError": {
         "properties": {

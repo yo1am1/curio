@@ -79,7 +79,7 @@ class CocktailToolkit(BaseToolkit[Cocktail]):
     policies = COCKTAIL_POLICIES
     invalid_action = INVALID_ACTION
     repair_instruction = COCKTAIL_REPAIR_INSTRUCTION
-    grounding_subject = "drinks, IDs and amounts"
+    grounding_subject = "drinks, IDs, amounts and alcohol labels"
 
     def __init__(
         self, catalog: CocktailCatalog, recommender: CocktailRecommender, top_k: int = 5
@@ -93,6 +93,7 @@ class CocktailToolkit(BaseToolkit[Cocktail]):
             (c.name for c in catalog),
             catalog.ingredients(),
             glass_names={c.glass for c in catalog},
+            categories=catalog.categories(),
         )
 
     def key(self, item: Cocktail) -> int:

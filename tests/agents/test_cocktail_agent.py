@@ -81,9 +81,12 @@ def test_stream_searches_then_verifies_a_grounded_answer(chat_model_replying, co
     assert reply.domain == "cocktails" and reply.products == []
     assert ids(reply) == [1, 3]
     assert reply.intent.query == "A mojito please"
-    assert reply.grounding.status == "verified" and reply.grounding.checked == 4
+    assert reply.grounding.status == "verified" and reply.grounding.checked == 5
+    assert reply.grounding.counts == {"id": 1, "name": 1, "amount": 2, "alcohol": 1}
     assert reply.steps[0].summary == "No remembered filters to apply."
-    assert reply.steps[-1].summary == "Verified 4 drinks, IDs and amounts against the catalog."
+    assert reply.steps[-1].summary == (
+        "Verified 1 ID, 1 name, 2 amounts and 1 alcohol label against the catalog."
+    )
     assert reply.suggestions == [
         "Something similar to Mojito",
         "Make it alcohol-free",
@@ -452,7 +455,9 @@ def test_invented_measure_falls_back_to_recipe_facts(chat_model_replying, cockta
     )
     reply = build(model, cocktail_catalog).reply("Mojito", [])
     assert reply.grounding.status == "fallback"
-    assert reply.grounding.issues == ["3 oz does not match any amount in the evidence recipes"]
+    assert reply.grounding.issues == [
+        "3 oz does not match the recipe amount of Mojito (2 oz, 1 oz, 6 leaf, 2 tsp)"
+    ]
     assert reply.text == (
         "Here are the drinks I could confirm:\n"
         "- Mojito · contains alcohol · Highball glass\n"

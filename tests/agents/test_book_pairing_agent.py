@@ -90,7 +90,8 @@ def test_pairs_a_book_by_title_with_verified_drinks(agent):
     )
     reply = events[-1].reply
     assert reply.grounding.status == "verified"
-    assert reply.grounding.checked == 3  # the book title, the drink name and its number
+    # the book title, the drink name, its number and its alcohol label
+    assert reply.grounding.counts == {"title": 1, "id": 1, "name": 1, "alcohol": 1}
     assert drinks(reply) == ["Manhattan", "Sazerac", "Martini"]
     assert reply.pairing is not None and reply.pairing.profile.source == "The Big Sleep"
     assert reply.books == []  # pairing shows drinks, not book cards
@@ -238,7 +239,9 @@ def test_an_invented_amount_is_rewritten_once(agent):
     )
     reply = assistant.reply("Pair The Big Sleep", [])
     assert reply.grounding.status == "repaired"
-    assert reply.grounding.issues == ["3 oz does not match any amount in the paired recipes"]
+    assert reply.grounding.issues == [
+        "3 oz does not match the recipe amount of Manhattan (2 oz, 1 oz, 1 dash)"
+    ]
 
 
 def test_drinks_from_an_earlier_turn_are_not_evidence(agent):

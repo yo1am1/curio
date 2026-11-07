@@ -99,6 +99,10 @@ class DrinkPairing(Protocol):
         """Ground the drinks the answer names against this turn's pairings."""
         ...
 
+    def is_drink_name(self, name: str) -> bool:
+        """Whether `name` is a catalog drink's name (its check is the pairing's)."""
+        ...
+
     def fallback(self, extras: Mapping[str, Any]) -> list[str]:
         """Fallback paragraphs for this turn's paired drinks ([] when it paired none)."""
         ...
@@ -380,7 +384,10 @@ class BookToolkit(BaseToolkit[Book]):
     def check(self, turn: Turn[Book], text: str) -> GroundingReport:
         books = list(turn.evidence.values())
         paired = self._pairing.allowed_names(turn) if self._pairing is not None else []
-        report = self._grounding.check(text, books, typed=turn.message, also_allowed=paired)
+        skip = self._pairing.is_drink_name if self._pairing is not None else (lambda _: False)
+        report = self._grounding.check(
+            text, books, typed=turn.message, also_allowed=paired, skip_name=skip
+        )
         if self._pairing is None:
             return report
         return merge_reports(report, self._pairing.check(turn, text, books))
