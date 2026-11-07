@@ -847,6 +847,29 @@ the detail says which. The flat `chat_enabled`, `ranking_enabled` and catalog co
 version in `/openapi.json` (and at `/docs` with `API_DOCS=true`) come from the installed
 package metadata.
 
+### HTTP limits and security settings
+
+The API has no login. These settings bound what an anonymous client can do; all are read
+from the environment or `.env` (see `.env.example`), and SECURITY.md says what they do not
+cover.
+
+| Setting | Default | Effect |
+|---|---|---|
+| `CURIO_HOST`, `CURIO_PORT` | `127.0.0.1`, `8000` | Where `scripts/quickstart.sh` listens and where Docker Compose publishes the port. Qdrant is never published. |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Host names (the `Host` header, without the port) the API answers; others get 400. Stops DNS rebinding. Add the names browsers use when serving a network; `*` turns the check off. |
+| `MAX_CONCURRENT_TURNS` | `8` (1-32) | Agent turns at once per process. Over it, `/chat` and `/chat/stream` answer 503 with `Retry-After: 5`, so search and `/health` keep their worker threads. |
+| `MAX_BODY_BYTES` | 1 MiB | Largest request body; 413 beyond it, before the body is read in full. `POST /search/image` allows 10 MB, also enforced while the upload streams in. |
+| `API_DOCS` | off | Swagger UI at `/docs`, with swagger-ui-dist pinned by SRI hash. `/redoc` is not served; `/openapi.json` always is. |
+| `AGENT_SIGNING_KEY` | random per process | Approval-signing key, at least 32 bytes. Required when `WEB_CONCURRENCY` is above 1. |
+| `WEB_CONCURRENCY` | `1` | API worker processes (uvicorn reads it for `--workers`). Above 1 with chat on, the API refuses to start without `AGENT_SIGNING_KEY` and warns that each worker keeps its own record of answered proposals. |
+
+Every response carries a Content-Security-Policy (scripts, styles, fonts and requests from
+the app's origin; images also from TheCocktailDB, Goodreads, Open Library and archive.org;
+`frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: strict-origin-when-cross-origin` and `X-Frame-Options: DENY`. Uploaded
+images are decoded only as PNG or JPEG. Agent-step summaries, which quote the shopper, are
+logged at DEBUG only.
+
 ## Offline evaluation
 
 Train the optional learned model before starting the API. Its default leaves the
