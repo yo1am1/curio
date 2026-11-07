@@ -492,7 +492,12 @@ class AgentEngine[T]:
         if started is not None:
             step.duration_ms = max(0, round((self._clock() - started) * 1000))
         turn.steps.append(step)
-        logger.info("agent step %s/%s: %s (%s)", step.kind, step.name, step.summary, step.status)
+        # Summaries quote the shopper ("Found 3 drinks for "..."") and model text: they go
+        # to DEBUG only. INFO keeps the step's kind, name, status and duration.
+        logger.info(
+            "agent step %s/%s (%s, %d ms)", step.kind, step.name, step.status, step.duration_ms
+        )
+        logger.debug("agent step %s/%s: %s", step.kind, step.name, step.summary)
         return StepEvent(step=step)
 
     def _fallback_reply(self, turn: Turn[T]) -> ReplyEvent:

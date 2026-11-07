@@ -48,6 +48,9 @@ All notable changes to Curio are recorded here. The format follows
   documented interface for a shared store. The web app sends a random per-tab session id.
 - `AGENT_SIGNING_KEY` must be at least 32 bytes (shorter keys stop the API at startup), and
   with `WEB_CONCURRENCY` above 1 and chat on, the API refuses to start without it.
+- Shopper text is no longer logged at INFO: agent steps log their kind, name, status and
+  duration; the summaries, which quote the request, moved to DEBUG (as did the fashion
+  intent's "Ignoring unknown value" line).
 
 ### Removed
 

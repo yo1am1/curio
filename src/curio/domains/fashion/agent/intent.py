@@ -101,7 +101,8 @@ def _known(values: Sequence[str], vocabulary: dict[str, str], field: str) -> lis
     for value in values:
         canonical = vocabulary.get(value.strip().lower())
         if canonical is None:
-            logger.info("Ignoring unknown %s value %r from the LLM.", field, value)
+            # The value can echo the shopper's words: DEBUG only.
+            logger.debug("Ignoring unknown %s value %r from the LLM.", field, value)
         else:
             known.append(canonical)
     return known

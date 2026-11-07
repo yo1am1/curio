@@ -28,7 +28,9 @@ with credit to you unless you ask otherwise.
   never renders images from model text, so a prompt-injected answer cannot make the browser
   send data to another host. `/docs` is off unless `API_DOCS=true`.
 - LLM keys come from the environment (`.env`) and are never written to logs, traces or
-  replies. Never commit a `.env` file.
+  replies. Never commit a `.env` file. Shopper messages are not logged at INFO (the default
+  level); agent-step summaries, which quote them, appear only at DEBUG. Feedback is logged
+  as the rating and tool names only.
 - Agent approvals are HMAC-signed with `AGENT_SIGNING_KEY` (at least 32 bytes; left empty,
   each process uses a random key). Each proposal is bound to the client's session id and
   can be answered once: the signer records answered proposals in memory until they expire.
