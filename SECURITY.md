@@ -6,9 +6,10 @@ Only the latest release on `main` receives fixes. Older tags are not patched.
 
 ## Reporting a vulnerability
 
-Please do **not** open a public issue. Use GitHub's private
+Please do **not** describe a vulnerability in a public issue. Use GitHub's private
 [security advisory form](https://github.com/yo1am1/curio/security/advisories/new) instead.
-Include the version, the steps to reproduce, and the impact you expect.
+Include the version, the steps to reproduce, and the impact you expect. If the form is
+unavailable, open an issue asking for a private contact, without details.
 
 You can expect a first reply within a week. Once a fix is released, the advisory is published
 with credit to you unless you ask otherwise.
@@ -24,9 +25,10 @@ with credit to you unless you ask otherwise.
   authenticating reverse proxy in front if anyone you do not trust can reach it.
 - The API answers only the host names in `ALLOWED_HOSTS` (default `localhost,127.0.0.1`), so
   a web page cannot reach a local Curio through DNS rebinding. Responses carry a
-  Content-Security-Policy, `nosniff`, a referrer policy and frame protection, and the chat
-  never renders images from model text, so a prompt-injected answer cannot make the browser
-  send data to another host. `/docs` is off unless `API_DOCS=true`.
+  Content-Security-Policy, `nosniff`, a referrer policy and frame protection. The chat never
+  renders images from model text, and links in it open only `https:` addresses (no
+  `javascript:` or `data:`), so a prompt-injected answer cannot make the browser send data
+  to another host without a click. `/docs` is off unless `API_DOCS=true`.
 - LLM keys come from the environment (`.env`) and are never written to logs, traces or
   replies. Never commit a `.env` file. Shopper messages are not logged at INFO (the default
   level); agent-step summaries, which quote them, appear only at DEBUG. Feedback is logged

@@ -5,6 +5,12 @@
 what the engine guarantees in return. Anything not written here is internal and may change
 in any release; a change to anything written here is listed in the changelog.
 
+You use the engine from a clone of this repository: it is not published on PyPI, so there is
+no `pip install` for it. Installing the project installs torch, because fashion's CLIP search
+is a core dependency. Its import name, `curio`, collides with the unrelated
+[`curio`](https://pypi.org/project/curio/) package on PyPI, so the two cannot be installed in
+one environment.
+
 The worked example is [`examples/hello_domain/`](../examples/hello_domain/): a tea guide whose
 twelve teas come from [`teas.csv`](../examples/hello_domain/teas.csv) through a loader, with a
 search tool, a save tool behind approval, fact references and a backstop.
@@ -269,7 +275,10 @@ editing these files, as the books domain did:
    `AssistantReply` (with its place in `_REPLY_ORDER`).
 3. `src/curio/app/assistants.py`: an `AgentEngine[T]` subclass that builds the toolkit and
    passes `schemas=WIRE`. Its `reply_fields` must set `"domain"`: the reply's domain
-   defaults to `"fashion"`.
+   defaults to `"fashion"`. Every `AssistantReply` also requires an `intent`, and its wire type
+   is fashion's `SearchIntent` (`WIRE.intent`): the engine fills it with
+   `SearchIntent(query=message)` for every domain, so a domain cannot put an intent type of
+   its own on the wire, and a reply built outside the engine (a test double) must pass one.
 4. `src/curio/app/services.py`: a runtime dataclass (`assistant`, `item_count()`,
    `close()`), a loader that returns `None` while the data is missing, a `DomainSpec`
    appended to `DOMAINS`.
@@ -281,6 +290,7 @@ editing these files, as the books domain did:
    `npm run openapi:export && npm run gen:api` to regenerate `web/openapi.json` and the
    client types.
 7. Tests that list the domains by hand (`tests/app/test_optional_domains.py`,
+   `tests/app/test_evening_api.py`, whose `services.domains` assertions name the domains,
    `tests/app/test_web.py::test_committed_openapi_matches_the_api` and the `/health`
    assertions in `.github/workflows/ci.yml`).
 

@@ -18,8 +18,8 @@ anything.**
 
 </div>
 
-Curio is one agent engine and three recommendation domains built on it: fashion, cocktails
-and books. Each domain stresses a different recommendation problem. The engine is the same
+Curio is one agent engine and three recommendation domains built on it (fashion, cocktails
+and books), plus Evening, which composes them. Each domain stresses a different recommendation problem. The engine is the same
 for all three. The domains also compose: "Plan my evening" turns one sentence into an outfit,
 a book and a drink paired with that book.
 
@@ -75,7 +75,8 @@ The second and third domains forced the engine to generalise:
   facts that can be rendered; the backstop catches some of them (allergen, health, stock and
   foreign-currency claims), and genres and descriptions are not checked
   ([details](docs/agent-architecture.md#grounding-guardrail)).
-- **Budgets and streaming.** A turn allows five tool calls and 90 seconds. Every step
+- **Budgets and streaming.** A turn allows five tool calls, and its 90-second deadline is
+  checked before each model call (a call already running is not cut short). Every step
   streams to the web app as NDJSON, so you see what the agent did.
 - **Stateless server.** The client holds the shortlist, memory and outfit. Client-held text
   is display-only and never counts as evidence.
@@ -106,7 +107,7 @@ optional). The tasks and scorer were frozen by hash before the run.
 
 | Policy | Tasks passed (95 % interval) |
 |---|---|
-| A Claude model, answering through the [file relay](docs/agent-eval.md) | **59/61** (89–99 %) |
+| A Claude model (no pinned model ID; one run, k=1), answering through the [file relay](docs/agent-eval.md) | **59/61** (89–99 %) |
 | Always asks a question (control) | 4/61 (3–16 %) |
 | Always refuses (control) | 0/61 (0–6 %) |
 | Calls one search and echoes the names (control) | 0/61 (0–6 %) |
@@ -119,8 +120,11 @@ can't see delivery times… whether it would arrive by Friday, please check the 
 read as a delivery promise. The frozen number is kept as is
 ([full report](docs/evals/frozen-relay-1.md)).
 
-What it does not show: one run of each task by one model, answered through a relay (no
-latency or cost figures), 61 tasks written by the project. The first run's "42/42" was weak
+What it does not show: one run of each task (k=1) by one model with no pinned model ID,
+answered through a relay (no latency or cost figures), 61 tasks written by the project.
+Relevance is not graded: nothing scores whether the recommendations are good. The 4/4
+injections are direct, in the shopper's own message; injection through catalog text is
+untested. The first run's "42/42" was weak
 evidence and is withdrawn
 ([why](docs/agent-eval.md#what-the-first-run-did-and-did-not-show)). Any provider runs the
 same tasks with one command.
@@ -132,6 +136,11 @@ your own agent domain to the engine: what a catalog item needs, the `Toolkit` ho
 signatures, tool policies, effects and approvals, fact references, the grounding backstop,
 the edits that register a domain in the app, the tests a domain should have and what is not
 supported.
+
+The engine is used from a clone of this repository. It is not published on PyPI, installing
+it installs torch (fashion's CLIP search is a core dependency), and its import name `curio`
+collides with the unrelated [`curio`](https://pypi.org/project/curio/) package on PyPI, so the
+two cannot share an environment.
 
 [`examples/hello_domain/`](examples/hello_domain/) is the worked example: a tea guide whose
 twelve teas load from [`teas.csv`](examples/hello_domain/teas.csv) through a validating
@@ -235,7 +244,8 @@ Both prepare the cocktail recipes (a checksum-verified ~260 KB download) and goo
 `DEMO_BOOKS=0` (Docker) or `CURIO_BOOKS=0` (uv). Either way one server runs the API and the
 web app: open http://localhost:8000. `scripts/quickstart.sh` builds the web app first when
 npm (Node 22 or newer) is installed. Both quick starts serve this computer only (Docker publishes
-port 8000 on 127.0.0.1); `CURIO_HOST=0.0.0.0` opens them to your network, and
+port 8000 on 127.0.0.1); `CURIO_HOST=0.0.0.0` opens them to your network, and add the name
+or address others will use to `ALLOWED_HOSTS` (other names get 400).
 [SECURITY.md](SECURITY.md) says what that exposes.
 
 Search and recommendations work without an LLM. Chat needs one: copy `.env.example` to
@@ -275,7 +285,7 @@ Tests: 2,118 offline Python tests (with the data prepared here, 2,115 pass and 3
 a local Shopify taxonomy cache or the H&M articles as Parquet), 77 Vitest tests of the web app, and 85 end-to-end tests that run the
 real API and the React app in Chromium on the real data with a scripted LLM (CI runs the 39
 that need no H&M data). An [agent evaluation](docs/agent-eval.md)
-measures a real model instead: 61 tasks over the four domains, scored on tool choice,
+measures a real model instead: 61 tasks over the three domains and Evening, which composes them, scored on tool choice,
 arguments, grounding, approvals, clarifying questions, safety, prompt injection and
 factual questions, next to three control policies, on a frozen task file and scorer. It
 works with any OpenAI-compatible or Anthropic provider, or through a file relay for a model
@@ -303,8 +313,11 @@ GitHub release are published.
 ## Data and licences
 
 The code is under the [Apache License 2.0](LICENSE); keep the [NOTICE](NOTICE) credit when you
-redistribute it, and cite it with [CITATION.cff](CITATION.cff). The data is not part of this
-repository and is not covered by that licence. H&M data is for non-commercial research use.
+redistribute it, and cite it with [CITATION.cff](CITATION.cff). The datasets are not part of
+this repository and are not covered by that licence. The README screenshots are the
+exception: they contain H&M product images (research data, shown for illustration), book
+covers and TheCocktailDB drink photos, which remain their owners' material under their
+terms. H&M data is for non-commercial research use.
 goodbooks-10k is CC BY-SA 4.0, collected from Goodreads. Cocktail recipes and photos remain
 under TheCocktailDB's terms. Details: [data and licences](docs/data-and-licences.md).
 

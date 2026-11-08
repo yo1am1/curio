@@ -6,7 +6,8 @@ Curio has three domains, fashion, cocktails and books, behind one API, one React
 (served by that API) and one agent engine. Fashion needs the prepared H&M data and image index; cocktails need
 only `data/cocktails.parquet`; books need `data/books.parquet` and
 `data/book_neighbours.parquet`. Every domain is optional at serving time: the API serves
-whichever domains are prepared, so the [quick start](#quick-start) runs with cocktails alone.
+whichever domains are prepared. The [quick start](#quick-start) prepares and serves
+cocktails and books (cocktails alone with `CURIO_BOOKS=0`, or `DEMO_BOOKS=0` in Docker).
 
 ## Fashion engine
 
@@ -119,7 +120,9 @@ shoe type.
 
 The cocktail domain serves 425 recipes from `data/cocktails.parquet`, in memory, with no
 model, index or network call at serving time. `CocktailRecommender`
-(`domains/cocktails/recommend.py`) is deterministic, and ties go to the lower drink ID.
+(`domains/cocktails/recommend.py`) is deterministic: search and similar-drink ties go to the
+lower drink ID, a search with only filters lists drinks by name, and "What can I make?"
+breaks its ties by name, then drink ID.
 
 | Feature | How it works |
 |---|---|
@@ -755,9 +758,10 @@ docker compose --profile fashion up --build
 docker compose --profile fashion exec api python -m scripts.build_index --limit 3000
 ```
 
-The image is built in two stages: a `node:22` stage runs `npm ci && npm run build` in `web/`,
-and the Python image copies `web/dist` from it, so one container serves the API and the app
-on one port. It includes the `anthropic` extra, so `LLM_PROVIDER=anthropic` works in Docker;
+The image is built in three stages: a `node:26` stage runs `npm ci && npm run build` in
+`web/`, a Python stage builds the virtual environment with uv, and the final Python image
+copies the environment and `web/dist` (without uv), so one container serves the API and the
+app on one port. It includes the `anthropic` extra, so `LLM_PROVIDER=anthropic` works in Docker;
 development tools are left out. The API mounts `./data` read-only, so prepare the
 cocktail recipes with the one-off `prepare-cocktails` service, which mounts it writable,
 then restart the API so it loads the file:
@@ -1129,8 +1133,11 @@ the Docker base images.
 
 ### Release scope and compatibility
 
-Version 1.0.0 covers fashion and cocktails; see the [changelog](../CHANGELOG.md). The
-installable distribution is `curio-recommendations`; the `curio` import path
+For code that builds on Curio, the stable surface is the contract in
+[Extending Curio](extending.md) (contract version 1); anything not written there is internal.
+Each release's API changes are in the [changelog](../CHANGELOG.md), and 3.1.0 makes a few
+breaking changes as security exceptions (listed there). The history below is kept for older
+clients: version 1.0.0 covered fashion and cocktails. The installable distribution is `curio-recommendations`; the `curio` import path
 remains stable for existing scripts. `ChatRequest.domain` defaults to `fashion`, so fashion
 clients written for 0.2.0 keep working. Changes in 1.1.0: `/health` and `/domains` only
 gain fields; the UI still reads an older API's `/health`. In Docker the full stack now

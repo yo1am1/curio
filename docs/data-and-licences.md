@@ -4,8 +4,13 @@ The code is under the [Apache License 2.0](../LICENSE). If you redistribute Curi
 based on it, keep the [NOTICE](../NOTICE) file's credit ("Based on Curio by Yehor Trepalin",
 with a link to this repository) in your documentation or credits, as section 4(d) of the
 licence requires. To cite the project, use [CITATION.cff](../CITATION.cff). Versions up to
-1.0.0 were released under MIT. The data is not part of this repository and is not covered
-by that licence:
+1.0.0 were released under MIT. The datasets are not part of this repository and are not
+covered by that licence. The README screenshots in `docs/screenshots/` are the one exception:
+they contain H&M product images (research data, shown for illustration: `curio-agent.webp`,
+`curio-approval.webp`, `curio-connections.webp`, `curio-discover-photo.webp`,
+`curio-evening.webp` and the overview animation `curio-overview.webp`), book covers and
+TheCocktailDB drink photos. That material remains its owners' under the terms below and is
+not licensed by this repository.
 
 - **H&M data**: the [H&M Personalized Fashion Recommendations](https://www.kaggle.com/competitions/h-and-m-personalized-fashion-recommendations)
   dataset, licensed by H&M for non-commercial research use. You download it yourself.

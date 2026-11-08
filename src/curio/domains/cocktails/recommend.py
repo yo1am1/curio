@@ -1,7 +1,8 @@
 """Offline cocktail search, similar recipes and "what can I make?" pantry matching.
 
-Everything is precomputed from the catalog at construction, deterministic, and ties are broken
-by the lower drink_id.
+Everything is precomputed from the catalog at construction and deterministic: search and
+similar-drink ties go to the lower drink_id, a search with only filters lists drinks by name,
+and pantry ties go by name, then drink_id.
 
 Words are normalised the same way for recipes and requests (`term`): a light plural rule
 ("limes" -> "lime", "cherries" -> "cherry") and the spelling variants in `VARIANTS`
