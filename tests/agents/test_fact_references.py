@@ -97,7 +97,7 @@ def test_totals_and_differences_are_computed_by_the_server():
     rendered = render("{total:weight:1,2} in all, {diff:weight:2,1} apart.", SHEET)
     assert rendered.text == "3.75 kg in all, 1.25 kg apart."
     assert rendered.counts == {"total": 1, "diff": 1}
-    assert render("{total:weight:widget:1, 2, 1}", SHEET).text == "6.25 kg"
+    assert render("{total:weight:widget:1, 2}", SHEET).text == "3.75 kg"
     assert render("{difference:weight:1,2}", SHEET).text == "1.25 kg"
 
 
@@ -128,6 +128,146 @@ def test_a_reference_that_cannot_be_rendered_fails_and_is_dropped(text, issue):
     # Dropped from what the client sees, masked in the backstop's copy; no braces in issues.
     assert rendered.text == "Before  after." and "{" not in rendered.errors[0]
     assert rendered.check_text == f"Before {MASK} after."
+
+
+# --- Malformed references (re-audit, November 2026) ---------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "{total:weight:1,2,1}",
+        "{total:weight:widget:1, #1}",
+        "{total:weight:1,01}",
+        "{diff:weight:2,2}",
+    ],
+)
+def test_a_total_or_difference_may_not_repeat_an_item(text):
+    rendered = render(f"Before {text} after.", SHEET)
+    assert rendered.text == "Before  after."
+    assert len(rendered.errors) == 1 and "may be counted only once" in rendered.errors[0]
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["\u00b2", "1\u00b2", "\u0661", "\uff11", "1" * 5000, "1" * 20],
+    ids=["superscript", "digit-and-superscript", "arabic-indic", "fullwidth", "5000", "20"],
+)
+def test_an_id_that_is_not_plain_ascii_digits_fails_instead_of_crashing(raw):
+    # str.isdigit() accepts these and int() raises on them (or on 4,300+ digits).
+    for text in (f"{{widget:{raw}}}", f"{{weight:{raw}}}", f"{{total:weight:1,{raw}}}"):
+        rendered = render(text, SHEET)
+        assert rendered.text == "" and len(rendered.errors) == 1, rendered.errors
+        assert "is not a widget ID" in rendered.errors[0]
+        assert len(rendered.errors[0]) < 200  # a 5,000-digit ID is not echoed back
+
+
+def test_a_nineteen_digit_id_is_still_an_id():
+    big = Widget(10**18 + 7, "Big", 1.0)
+    assert render(f"{{weight:{big.id}}}", widget_sheet(big)).text == "1 kg"
+
+
+def test_a_domain_value_that_raises_becomes_a_reference_error():
+    def broken(widget, _argument):
+        raise KeyError("weight")
+
+    sheet = FactSheet(
+        {"widget": ItemKind(lambda w: w.name, {1: SPROCKET})},
+        {"weight": Attribute("weight", "widget", broken, str)},
+    )
+    rendered = render("It weighs {weight:1}.", sheet)
+    assert rendered.text == "It weighs ." and rendered.errors == [
+        "fact reference “{weight:1}” could not be rendered"
+    ]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "is rated ★ {weight:1}9 today",  # a digit after
+        "has 1{weight:1} in it",  # a digit before
+        "weighs {weight:1},000 in all",  # a thousands separator and digits after
+        "weighs {weight:1}.5 more",  # a decimal point and digits after
+        "weighs 4.{weight:1} now",  # digits and a point before
+        "a total of 1{total:weight:1,2}",
+        "a {part:widget:1:Bolt}0 bolt",
+    ],
+)
+def test_a_value_reference_glued_to_typed_digits_fails(text):
+    rendered = render(text, SHEET)
+    assert len(rendered.errors) == 1 and "touches a typed number" in rendered.errors[0]
+    assert "kg" not in rendered.text and "mm" not in rendered.text
+
+
+def test_punctuation_and_names_next_to_a_reference_are_fine():
+    rendered = render(
+        "1. {widget:1} weighs {weight:1}, the {widget:2} ({weight:2}). "
+        "Total: {total:weight:1,2}; {weight:1}/{weight:2}, item {widget:1}2.",
+        SHEET,
+    )
+    assert not rendered.errors, rendered.errors
+    assert rendered.text == (
+        "1. **Sprocket** weighs 2.5 kg, the **Gear** (1.25 kg). "
+        "Total: 3.75 kg; 2.5 kg/1.25 kg, item **Sprocket**2."
+    )
+
+
+@pytest.mark.parametrize(
+    "text", ["Try {widget:{widget:1}} now.", "Try {{widget:1}} now.", "Try {weight:{weight:1} now."]
+)
+def test_a_reference_nested_in_braces_fails(text):
+    rendered = render(text, SHEET)
+    assert rendered.errors, rendered.text
+    assert "Sprocket" not in rendered.text and "kg" not in rendered.text
+
+
+def test_a_leftover_reference_opening_fails():
+    # "{widget:" with no closing brace before the next reference.
+    rendered = render("Try {widget: and the {widget:1}", SHEET)
+    assert any("malformed fact reference" in e for e in rendered.errors), rendered.errors
+
+
+@pytest.mark.parametrize(
+    ("answer", "shown"),
+    [
+        # The rows of the re-audit (regressions-backend-security.md, section 1).
+        ("{book:1} is rated ★ {rating:book:1}9 on Goodreads.", "4.559"),
+        ("{book:1} has 1{pages:book:1} pages.", "1662"),
+        ("{book:1} was first published in 1{year:book:1}.", "12007"),
+        ("{book:1} runs to {pages:book:1},000 pages.", "662,000"),
+        ("{book:1} has a rating of 4{rating:book:1} out of 5", "44.55"),
+    ],
+)
+def test_glued_book_references_are_not_verified(answer, shown, book_catalog):
+    sheet = book_facts(book_catalog.get_many([1]))
+    rendered = render(answer, sheet)
+    assert shown not in rendered.text
+    report = checked_report(rendered, lambda text: GroundingReport(status="not_applicable"))
+    assert report.status == "fallback"
+    assert "touches a typed number" in report.issues[0]
+
+
+def test_glued_drink_amounts_and_nested_drinks_are_not_verified(cocktail_catalog):
+    sheet = drink_facts([cocktail_catalog.get(1)])
+    glued = render("{drink:1} takes 1{amount:drink:1:Light rum} of light rum.", sheet)
+    assert "12 oz" not in glued.text and glued.errors
+    for nested in ("Try {drink:{drink:1}} now.", "Try {{drink:1}} now."):
+        rendered = render(nested, sheet)
+        assert "Mojito" not in rendered.text and rendered.errors, rendered.text
+    assert render("Try {drink:\u00b2} or {drink:1}.", sheet).errors
+
+
+def test_a_malformed_id_in_a_turn_is_repaired_not_a_crash(chat_model_replying, search, catalog):
+    search.results = [ScoredProduct(3, 0.9)]
+    model = chat_model_replying(
+        {"query": "dress"},
+        "Try the {product:\u00b2} or the {product:3}.",
+        "The {product:3}: {price:3}.",
+    )
+    reply = _assistant(model, search, catalog).reply("a red dress", [])
+    assert reply.grounding.status == "repaired"
+    assert "is not a product ID" in reply.grounding.issues[0]
+    assert reply.text == "The **Summer Dress**: €24.99."
 
 
 def test_braces_that_are_not_references_are_left_alone():

@@ -1,8 +1,9 @@
 """Cite mode: catalog facts the model refers to and the server renders.
 
 The model does not type a catalog value. It writes a fact reference, and the engine replaces
-it with the value from the catalog row a tool returned this turn, so every fact stated this
-way is correct by construction. The grammar is one brace-delimited form:
+it with the value from the catalog row a tool returned this turn, so the value is the cited
+item's catalog value; cite mode does not check that the cited item is the one the sentence
+names. The grammar is one brace-delimited form:
 
     {KIND:ID}                       an item's name, in bold: {product:843614008}, {book:3}
     {ATTRIBUTE:ID}                  one of its values: {price:843614008}, {rating:3}
@@ -22,6 +23,9 @@ evidence (what its tools returned this turn, plus the cards the client carried t
 grounding check already accepts). An unknown kind, attribute or item, an item no tool
 returned, a value the item lacks or an argument it does not know is a verification
 failure: the engine asks for one rewrite, then falls back, as for any unverified claim.
+So is a malformed reference: an ID that is not plain ASCII digits (at most 19), the same
+item twice in a total or difference, a value reference with a typed digit next to it
+("4{rating:3}", "{pages:3},000"), or a reference nested inside braces.
 
 `render` returns the client's text, where no reference is left (a failed one is dropped),
 and a copy for the free-text check (the backstop for values the model still types): there
@@ -42,6 +46,10 @@ from curio.engine.schemas import GroundingReport
 
 # A reference: "{" name, optionally ":" and a body, "}". The body has no braces or line breaks.
 REFERENCE = re.compile(r"\{\s*([A-Za-z][A-Za-z_-]*)\s*(?::([^{}\n]*))?\}")
+# What is left of a malformed reference after rendering: "{drink:" with no closing brace.
+_LEFTOVER = re.compile(r"\{\s*[A-Za-z][A-Za-z_-]*\s*:")
+# A reference opened and not closed before the text that follows: "{drink:" in "{drink:{drink:1}}".
+_OPEN = re.compile(r"\{\s*[A-Za-z][A-Za-z_-]*\s*:[^{}\n]*$")
 # What a rendered value becomes in the backstop's copy: a character no check reads.
 MASK = ""
 # Computed references and the attribute kinds of their counts.
@@ -155,7 +163,10 @@ def render(text: str, sheet: FactSheet) -> Rendered:
         check.append(text[position : match.start()])
         position = match.end()
         try:
-            shown, kind, is_name = _resolve(match, sheet)
+            shown, kind, is_name = _resolve_safely(match, sheet)
+            if not is_name:
+                _not_glued(text, match)
+            _not_wrapped(text, match)
         except FactReferenceError as error:
             if str(error) not in result.errors:
                 result.errors.append(str(error))
@@ -173,9 +184,52 @@ def render(text: str, sheet: FactSheet) -> Rendered:
             check.append(MASK)
     out.append(text[position:])
     check.append(text[position:])
+    for leftover in _LEFTOVER.finditer("".join(out)):
+        start = leftover.group(0).strip()
+        error = f"a malformed fact reference starting “{start}” was left in the text"
+        if error not in result.errors:
+            result.errors.append(error)
     result.text = "".join(out)
     result.check_text = "".join(check)
     return result
+
+
+def _resolve_safely(match: re.Match[str], sheet: FactSheet) -> tuple[str, str, bool]:
+    """`_resolve`, with any failure (a domain's reader or formatter raising, say) reported
+    as a reference error, so a bad reference never crashes the turn."""
+    try:
+        return _resolve(match, sheet)
+    except FactReferenceError:
+        raise
+    except Exception as error:
+        label = match.group(0)[:60]
+        raise FactReferenceError(f"fact reference “{label}” could not be rendered") from error
+
+
+def _not_glued(text: str, match: re.Match[str]) -> None:
+    """A value reference must stand apart from typed digits: "4{rating:7}" or "{pages:7},000"
+    would join the catalog value to a number the model typed, which no check reads. A digit
+    directly before or after it fails, and so does "." or "," with a digit beyond it; a
+    sentence's own full stop or comma ("costs {price:1}.") is fine."""
+    before, after = text[: match.start()], text[match.end() :]
+    glued_before = before[-1:].isdigit() or (before[-1:] in ".," and before[-2:-1].isdigit())
+    glued_after = after[:1].isdigit() or (after[:1] in ".," and after[1:2].isdigit())
+    if glued_before or glued_after:
+        raise FactReferenceError(
+            f"fact reference “{match.group(0)[1:-1].strip()}” touches a typed number; "
+            "leave a space around it and type no digits next to it"
+        )
+
+
+def _not_wrapped(text: str, match: re.Match[str]) -> None:
+    """A reference inside another brace ("{drink:{drink:1}}", "{{drink:1}}") is malformed:
+    rendering it would leave the outer braces in the client's text."""
+    before, after = text[: match.start()], text[match.end() :]
+    opened = _OPEN.match(before[before.rfind("{") :]) if "{" in before else None
+    if before.rstrip().endswith("{") or after.lstrip().startswith("}") or opened:
+        raise FactReferenceError(
+            f"fact reference “{match.group(0)[1:-1].strip()}” is nested inside braces"
+        )
 
 
 def _marked(text: str, start: int, end: int) -> bool:
@@ -188,7 +242,8 @@ def _resolve(match: re.Match[str], sheet: FactSheet) -> tuple[str, str, bool]:
     name = match.group(1).casefold()
     body = (match.group(2) or "").strip()
     parts = [part.strip() for part in body.split(":")] if body else []
-    label = f"fact reference “{name}{':' + ':'.join(parts) if parts else ''}”"
+    shown = f"{name}{':' + ':'.join(parts) if parts else ''}"
+    label = f"fact reference “{shown if len(shown) <= 60 else shown[:57] + '...'}”"
     if name in sheet.kinds:
         if len(parts) != 1:
             raise FactReferenceError(f"{label} needs exactly one {name} ID")
@@ -250,6 +305,9 @@ def _computed(operation: str, parts: Sequence[str], sheet: FactSheet, label: str
         raise FactReferenceError(f"{label}: a total needs two or more {attribute.item} IDs")
     if operation == DIFFERENCE and len(ids) != 2:
         raise FactReferenceError(f"{label}: a difference needs exactly two {attribute.item} IDs")
+    keys = [_item_id(raw, attribute.item, label) for raw in ids]
+    if len(set(keys)) != len(keys):
+        raise FactReferenceError(f"{label}: each {attribute.item} may be counted only once")
     values = []
     for raw in ids:
         item = _item(sheet, attribute.item, raw, label)
@@ -264,15 +322,24 @@ def _computed(operation: str, parts: Sequence[str], sheet: FactSheet, label: str
     return attribute.derived(result)
 
 
-def _item(sheet: FactSheet, kind: str, raw: str, label: str) -> Any:
+# The longest ID a reference may carry: a 64-bit integer has at most 19 digits.
+_MAX_ID_DIGITS = 19
+
+
+def _item_id(raw: str, kind: str, label: str) -> int:
+    """The ID in a reference: ASCII digits only ("²" and other Unicode digits fail), and
+    at most 19 of them, so `int` never raises."""
     raw = raw.strip().lstrip("#")
-    if not raw.isdigit():
-        raise FactReferenceError(f"{label}: “{raw}” is not a {kind} ID")
-    item = sheet.kinds[kind].items.get(int(raw)) if kind in sheet.kinds else None
+    if not (raw.isascii() and raw.isdigit()) or len(raw) > _MAX_ID_DIGITS:
+        raise FactReferenceError(f"{label}: “{raw[:24]}” is not a {kind} ID")
+    return int(raw)
+
+
+def _item(sheet: FactSheet, kind: str, raw: str, label: str) -> Any:
+    key = _item_id(raw, kind, label)
+    item = sheet.kinds[kind].items.get(key) if kind in sheet.kinds else None
     if item is None:
-        raise FactReferenceError(
-            f"{label}: {kind} {int(raw)} was not returned by any tool this turn"
-        )
+        raise FactReferenceError(f"{label}: {kind} {key} was not returned by any tool this turn")
     return item
 
 
