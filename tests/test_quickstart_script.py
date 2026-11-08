@@ -245,7 +245,8 @@ def test_every_base_image_is_pinned_by_version_and_digest():
     images = re.findall(r"^FROM (\S+)", dockerfile, re.M) + re.findall(
         r"COPY --from=(\S+:\S+)", dockerfile
     )
-    assert len(images) == 3
+    # node, python (twice: the uv stage and the runtime stage, the same bytes) and uv.
+    assert len(images) == 4 and len(set(images)) == 3
     for image in images:
         name, _, digest = image.partition("@sha256:")
         assert re.fullmatch(r"[0-9a-f]{64}", digest), image
@@ -253,3 +254,14 @@ def test_every_base_image_is_pinned_by_version_and_digest():
     assert "ghcr.io/astral-sh/uv:0.11.32@" in dockerfile
     ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
     assert 'version: "0.11.32"' in ci  # CI and the image use one uv
+
+
+def test_the_runtime_image_has_a_healthcheck_and_no_uv():
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    runtime = dockerfile.rsplit("\nFROM ", 1)[1]  # the last stage is the image
+    assert "uv" not in runtime.replace("uvicorn", "")
+    assert "COPY --from=python /app/.venv ./.venv" in runtime
+    assert "HEALTHCHECK" in runtime and '"curio.app.healthcheck"' in runtime
+    assert "USER app" in runtime
+    demo_api = _compose_services()["demo-api"]
+    assert demo_api["healthcheck"]["test"] == ["CMD", "python", "-m", "curio.app.healthcheck"]

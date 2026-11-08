@@ -57,7 +57,7 @@ services:
       # Only with `--profile ollama`: wait until the local model is pulled.
       ollama-pull: { condition: service_completed_successfully, required: false }
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-m", "curio.app.healthcheck"]
       interval: 3s
       timeout: 3s
       retries: 40
