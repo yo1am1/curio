@@ -1,10 +1,19 @@
 name: Release
 
-# Runs after CI passes on main. When pyproject.toml carries a version without a release yet, it
-# tags that exact commit, publishes the GitHub release (notes = the matching CHANGELOG.md
-# section), then deploys the Docker image to ghcr.io through the `release` environment.
-# Both steps are idempotent: an existing release is kept, and the image is built only while
-# ghcr.io lacks that version's tag, so any later run repairs a failed deployment.
+# Runs after CI passes on a push to main (or by hand). When pyproject.toml carries a version
+# without a published release, three jobs run in order:
+#
+#   1. plan:    reads the version, checks that CHANGELOG.md has its section, and works out
+#               whether the image and the release still need to be made.
+#   2. image:   builds the Docker image of that exact commit, smoke-tests it (the API must
+#               report healthy), and pushes it to ghcr.io through the `release` environment.
+#   3. publish: once the image is on ghcr.io, tags the commit and publishes the GitHub release
+#               (notes = the matching CHANGELOG.md section).
+#
+# So a release never points at an image that does not exist: a failed build or smoke test
+# stops before the release is created. Every step is idempotent: an image already on ghcr.io
+# is not rebuilt, a published release is kept, and any later run (the next green push to main
+# or a manual dispatch) finishes whatever an earlier run left undone.
 on:
   workflow_run:
     workflows: [CI]
@@ -16,25 +25,27 @@ concurrency:
   group: release
   cancel-in-progress: false
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
-  release:
+  plan:
     if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
-      contents: write
+      contents: read
     outputs:
-      created: ${{ steps.release.outputs.created }}
-      version: ${{ steps.release.outputs.version }}
-      sha: ${{ steps.release.outputs.sha }}
+      version: ${{ steps.plan.outputs.version }}
+      sha: ${{ steps.plan.outputs.sha }}
+      released: ${{ steps.plan.outputs.released }}
+      latest: ${{ steps.plan.outputs.latest }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - name: Create the release if this version is new
-        id: release
+          persist-credentials: false
+      - name: Read the version and check its changelog section
+        id: plan
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -43,10 +54,12 @@ jobs:
           tag="v$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          if gh release view "$tag" >/dev/null 2>&1; then
+          # `gh release view` sees published releases with a read-only token.
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "$tag is already released"
-            echo "created=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "released=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
           fi
           awk -v v="$version" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on {print}' \
             CHANGELOG.md > notes.md
@@ -54,12 +67,16 @@ jobs:
             echo "::error::CHANGELOG.md has no '## [$version]' section; add it before releasing."
             exit 1
           fi
-          gh release create "$tag" --target "$sha" --title "Curio $version" --notes-file notes.md
-          echo "created=true" >> "$GITHUB_OUTPUT"
+          # `latest` moves only to the highest released version, never back to an older line.
+          highest=$( (gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts \
+            --json tagName --jq '.[].tagName' 2>/dev/null; echo "$tag") | sed 's/^v//' | sort -V | tail -1)
+          if [ "$highest" = "$version" ]; then latest=true; else latest=false; fi
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
 
   image:
-    needs: release
+    needs: plan
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment:
       name: release
       url: https://github.com/${{ github.repository }}/pkgs/container/curio
@@ -68,10 +85,14 @@ jobs:
       packages: write
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/curio
-      VERSION: ${{ needs.release.outputs.version }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      SHA: ${{ needs.plan.outputs.sha }}
+      LATEST: ${{ needs.plan.outputs.latest }}
     steps:
       - name: Log in to ghcr.io
-        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        env:
+          TOKEN: ${{ github.token }}
+        run: echo "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
       - name: Skip if this version is already published
         id: published
         run: |
@@ -81,10 +102,11 @@ jobs:
           else
             echo "done=false" >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.published.outputs.done == 'false'
         with:
-          ref: ${{ needs.release.outputs.sha }}
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
       - name: Free disk space for the PyTorch layer
         if: steps.published.outputs.done == 'false'
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
@@ -94,18 +116,59 @@ jobs:
           docker build \
             --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
             --label org.opencontainers.image.version="$VERSION" \
-            --label org.opencontainers.image.revision="${{ needs.release.outputs.sha }}" \
+            --label org.opencontainers.image.revision="$SHA" \
             --label org.opencontainers.image.licenses="Apache-2.0" \
             --label org.opencontainers.image.description="Curio: one tool-using AI agent, three recommendation domains" \
-            -t "$IMAGE:$VERSION" -t "$IMAGE:latest" .
+            -t "$IMAGE:$VERSION" .
       - name: Smoke test
         if: steps.published.outputs.done == 'false'
-        run: |
-          docker run --rm "$IMAGE:$VERSION" python -c "import curio.app.api, curio.domains.pairings; print('ok')"
-          # The one container serves the React app too: the build must be in the image.
-          docker run --rm "$IMAGE:$VERSION" test -s web/dist/index.html
+        run: .github/scripts/smoke-image.sh "$IMAGE:$VERSION"
       - name: Push to ghcr.io
         if: steps.published.outputs.done == 'false'
         run: |
           docker push "$IMAGE:$VERSION"
-          docker push "$IMAGE:latest"
+          if [ "$LATEST" = true ]; then
+            docker tag "$IMAGE:$VERSION" "$IMAGE:latest"
+            docker push "$IMAGE:latest"
+          fi
+
+  publish:
+    needs: [plan, image]
+    if: needs.plan.outputs.released == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      packages: read
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/curio
+      VERSION: ${{ needs.plan.outputs.version }}
+      SHA: ${{ needs.plan.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
+      - name: The image must be on ghcr.io before the release exists
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          echo "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker manifest inspect "$IMAGE:$VERSION" >/dev/null
+      - name: Tag the commit and publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v$VERSION"
+          draft=$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null || echo none)
+          if [ "$draft" = false ]; then
+            echo "$tag is already released"
+            exit 0
+          fi
+          if [ "$draft" = true ]; then
+            gh release edit "$tag" --draft=false --target "$SHA"
+            exit 0
+          fi
+          awk -v v="$VERSION" '$0 ~ "^## \\[" v "\\]" {on=1; next} on && /^## \[/ {exit} on {print}' \
+            CHANGELOG.md > notes.md
+          gh release create "$tag" --target "$SHA" --title "Curio $VERSION" --notes-file notes.md
