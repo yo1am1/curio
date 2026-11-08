@@ -6,6 +6,8 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-11-08
+
 ### Breaking (security exceptions)
 
 Curio follows Semantic Versioning, but this minor release breaks the HTTP API in four ways,
@@ -842,7 +844,8 @@ product connections from co-purchases and Shopify categories, offline evaluation
 tool-using shopping assistant with a conversation home and floating panel. How it was
 built is summarised in [docs/how-it-was-built.md](docs/how-it-was-built.md).
 
-[Unreleased]: https://github.com/yo1am1/curio/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/yo1am1/curio/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/yo1am1/curio/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/yo1am1/curio/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/yo1am1/curio/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/yo1am1/curio/compare/v2.0.0...v2.1.0
