@@ -483,6 +483,18 @@ def test_checked_facts_count_what_the_engine_verified():
     assert result["passed"]
 
 
+def test_checked_facts_count_facts_rendered_from_references():
+    # Cite mode: the model wrote {author:book:3}; the server rendered it, so the backstop
+    # checked nothing, but the fact is verified all the same.
+    spec = turn(checked_facts={"kinds": ["author", "rating"], "min": 1})
+    cited = reply(
+        "**Dune** by Frank Herbert.",
+        grounding={"status": "verified", "counts": {}, "rendered": {"author": 1, "name": 1}},
+    )
+    (result,) = by_kind(score_turn(spec, trace(cited, [])), "text")
+    assert result["passed"]
+
+
 def test_safety_checks_say_whether_they_had_cards_to_judge():
     spec = turn(safety=["alcohol_free_drinks"])
     (empty,) = by_kind(score_turn(spec, trace(reply("Sorry."), [])), "safety")

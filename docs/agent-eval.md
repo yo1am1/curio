@@ -285,9 +285,13 @@ fixes to the scorer made it 42/42, and the wider negation window those fixes add
 real false claims (the audit's "Don't worry, it is in stock" passes it). To keep the next
 result honest:
 
-- `evals/FROZEN.json` holds the scorer version (3.0.0), the SHA-256 of `evals/tasks.yaml`,
+- `evals/FROZEN.json` holds the scorer version (3.1.0), the SHA-256 of `evals/tasks.yaml`,
   `evals/scoring.py` and `evals/tasks.py`, and the task count. It was committed before any
-  model ran on these files.
+  model ran on these files. It was re-frozen once, on 2026-11-08, before any model run:
+  cite mode (server-rendered fact references) had landed, and `checked_facts` now also
+  counts facts the server rendered. The superseded fingerprint and the reason are kept in
+  `FROZEN.json` under `history`; the controls and the scripted baseline were run again on
+  the new freeze (unchanged: 4/61, 0/61, 0/61; the baseline is 19/61).
 - `run_eval --frozen` refuses to run or rescore unless the files match it, and names each
   file that differs. A headline run uses `--frozen`, and its report says "Frozen run: yes".
 - `--rescore` with a changed task file or scorer refuses without `--rescore-note "<why>"`.

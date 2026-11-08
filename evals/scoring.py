@@ -20,7 +20,7 @@ from evals.tasks import DEFAULT_GROUNDING, ArgCheck, Condition, Expect, Task, Tu
 # Bumped whenever a change to this file or to evals/tasks.py can change a verdict. A run
 # records it with the files' hashes (evals/freeze.py); changes after a run is seen are
 # recorded as rescore notes, never silently.
-SCORER_VERSION = "3.0.0"
+SCORER_VERSION = "3.1.0"
 BUDGET_STEPS = ("Tool budget", "Time budget")
 GROUNDING_STEPS = ("Grounding check", "Question grounding")
 NON_ALCOHOLIC = "Non alcoholic"
@@ -367,14 +367,18 @@ def score_turn(spec: TurnSpec, trace: dict) -> list[dict]:
     if expect.cards is not None:
         results.extend(_card_checks(expect, reply))
     if (facts := expect.checked_facts) is not None:
-        counts = (reply.get("grounding") or {}).get("counts") or {}
-        stated = sum(counts.get(kind, 0) for kind in facts.kinds)
+        # Facts the backstop checked plus facts the server rendered from fact references
+        # (cite mode): both are verified against the catalog.
+        grounding = reply.get("grounding") or {}
+        counts = grounding.get("counts") or {}
+        rendered = grounding.get("rendered") or {}
+        stated = sum(counts.get(kind, 0) + rendered.get(kind, 0) for kind in facts.kinds)
         results.append(
             check(
                 "text",
                 f"states at least {facts.min} checked {'/'.join(facts.kinds)} facts",
                 stated >= facts.min,
-                f"checked {counts}",
+                f"checked {counts}, rendered {rendered}",
             )
         )
     return results

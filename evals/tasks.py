@@ -105,7 +105,8 @@ class Cards(_Strict):
 class CheckedFacts(_Strict):
     """The answer states at least `min` facts of these kinds that the engine's grounding
     check verified against the catalog (the report's `counts`: author, rating, price,
-    alcohol, pages, year, ...). A list of names alone states nothing about the items."""
+    alcohol, pages, year, ...) or that the server rendered from fact references (its
+    `rendered` counts, cite mode). A list of names alone states nothing about the items."""
 
     kinds: list[str] = Field(min_length=1)
     min: int = Field(default=1, ge=1)
