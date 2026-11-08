@@ -8,7 +8,7 @@
 # Needs uv (https://docs.astral.sh/uv/); uv fetches Python 3.13 itself. The web app is built
 # with npm (Node 22) when web/dist is missing or older than its sources; without npm, a build
 # that is already there is served as it is. The first run installs the dependencies and
-# downloads the pinned ~400 KB recipe file; later runs start in seconds. Chat works when
+# downloads the pinned ~260 KB recipe file; later runs start in seconds. Chat works when
 # LLM_* is set in .env (see .env.example). Fashion stays opt-in: prepare the H&M data
 # (docs/technical-guide.md#fashion-data), then run with ENABLED_DOMAINS=fashion,cocktails,books.
 # The first run also prepares the book catalog once (goodbooks-10k: a checksum-verified
@@ -55,7 +55,7 @@ say "Installing dependencies (first run only takes a while)"
 uv sync --locked --extra anthropic --quiet
 
 if [[ ! -s "$DATA_DIR/cocktails.parquet" ]]; then
-    say "Preparing the cocktail recipes (one-off ~400 KB download)"
+    say "Preparing the cocktail recipes (one-off ~260 KB download)"
     uv run --no-sync python -m scripts.prepare_cocktails
 fi
 

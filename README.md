@@ -57,7 +57,8 @@ The second and third domains forced the engine to generalise:
   tools, their policies, a grounding check and a fallback.
 - **Policy-gated tools.** A tool is READ (runs), ASK (pauses with a question) or APPROVE
   (only proposes). Proposals are HMAC-signed and bound to the tool, arguments, domain,
-  the client's session and time, and each can be answered once. You can approve or narrow
+  the client's session and time, and each can be answered once (the record of answered
+  proposals is per process unless you plug in a shared store). You can approve or narrow
   one. You cannot widen it, move it to another domain or session, or answer it twice.
   Auto-approval is the shopper's own setting, held by their client: the signature stops the
   model from approving itself, not the client from opting in.
@@ -177,7 +178,8 @@ demo, it plans the book and the drink and says the outfit needs the fashion cata
 ### Pair a book with a drink
 
 In the book dialog, "Pair a drink" maps the book's genres, reader shelves and setting words
-(Paris, the Jazz Age) to a flavour profile and scores the 425 recipes. Each drink shows the
+(Paris, the Jazz Age) to a flavour profile and scores the recipes it may offer (371 of the
+425: no shots, crude names or overproof spirits). Each drink shows the
 evidence from both catalogs. The Great Gatsby gets the gin rickeys Tom Buchanan mixes.
 Children's and young-adult books, and anyone who asked for alcohol-free, get only
 alcohol-free drinks. The pairing is deterministic and offline. The book agent answers "what
@@ -215,7 +217,7 @@ come from readers' shelves.
 ## Quick start
 
 One command gives you Curio with cocktails, books and Plan my evening (without the outfit),
-and no 3.5 GB H&M download. With Docker:
+and no 3.7 GB H&M download. With Docker:
 
 ```bash
 docker compose --profile demo up --build
@@ -227,7 +229,7 @@ Or with [uv](https://docs.astral.sh/uv/) and no Docker:
 scripts/quickstart.sh
 ```
 
-Both prepare the cocktail recipes (a checksum-verified ~400 KB download) and goodbooks-10k
+Both prepare the cocktail recipes (a checksum-verified ~260 KB download) and goodbooks-10k
 (~150 MB, under a minute) on the first run. For cocktails only, skip the books with
 `DEMO_BOOKS=0` (Docker) or `CURIO_BOOKS=0` (uv). Either way one server runs the API and the
 web app: open http://localhost:8000. `scripts/quickstart.sh` builds the web app first when
@@ -263,12 +265,15 @@ optional: the API serves whichever domains are prepared.
 Fashion uses CLIP search in Qdrant, co-purchase and graph recommenders, collaborative
 filtering and a learned ranker. Cocktails use TF-IDF and ingredient overlap in memory.
 Books use TF-IDF search and item-item collaborative filtering on goodbooks-10k ratings.
-Cocktails, books and the pairing need no model and no network call to serve. Every dataset
-is downloaded from a pinned commit and checked by SHA-256.
+Cocktails, books and the pairing need no model and no network call to serve. The recipes and
+goodbooks-10k are downloaded from a pinned commit and checked by SHA-256; the H&M CSVs are
+the ones you download from Kaggle (or the Hugging Face mirror at a pinned revision, not
+checksum-checked), and product photos come from that pinned mirror.
 
-Tests: about 2,090 offline Python tests, 77 Vitest tests of the web app, and 85 end-to-end
-tests that run the real API and the React app in Chromium on the real data, with a scripted
-LLM. An [agent evaluation](docs/agent-eval.md)
+Tests: 2,118 offline Python tests (with the data prepared here, 2,115 pass and 3 skip that need
+a local Shopify taxonomy cache or the H&M articles as Parquet), 77 Vitest tests of the web app, and 85 end-to-end tests that run the
+real API and the React app in Chromium on the real data with a scripted LLM (CI runs the 39
+that need no H&M data). An [agent evaluation](docs/agent-eval.md)
 measures a real model instead: 61 tasks over the four domains, scored on tool choice,
 arguments, grounding, approvals, clarifying questions, safety, prompt injection and
 factual questions, next to three control policies, on a frozen task file and scorer. It

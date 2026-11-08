@@ -1,5 +1,9 @@
 # Complementary retrieval experiment — 2026-10-28
 
+> **Status: research record** (October 2026, fashion recommender), kept as written. Its
+> experiments changed nothing unless it says so; the serving recommender is described in the
+> [technical guide](../../technical-guide.md#fashion-engine).
+
 The new channels recover substantially more candidate purchases on both development
 weeks. The end-to-end challenger improves observed hit rate and recall, but MAP gains
 are uneven and uncertain against v1. **No model is promoted.** Serving data, model,

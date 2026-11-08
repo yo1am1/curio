@@ -26,11 +26,14 @@
 
 ## Fashion research notes
 
+Research records from October 2026, kept as written; each says so at the top.
+
 How the fashion recommender was evaluated and tuned, including the ideas that did not hold.
 A gain on one validation week does not mean a model was promoted to the app.
 
 - [Recommendation audit](research/fashion/recommendation-audit.md): baselines,
-  chronological evaluation and uncertainty. The README's numbers come from here.
+  chronological evaluation and uncertainty. The technical guide's offline-evaluation
+  numbers come from here.
 - [Research direction](research/fashion/recommendation-research.md): retrieval bottlenecks
   and proposed experiments.
 - [Initial tuning](research/fashion/recommendation-tuning.md)

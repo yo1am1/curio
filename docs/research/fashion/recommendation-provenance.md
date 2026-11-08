@@ -1,5 +1,9 @@
 # Fixed-pool provenance ablation — October 28, 2026
 
+> **Status: research record** (October 2026, fashion recommender), kept as written. Its
+> experiments changed nothing unless it says so; the serving recommender is described in the
+> [technical guide](../../technical-guide.md#fashion-engine).
+
 The application now supports an **opt-in feature version 2**, adding explicit repeat,
 collaborative and popularity retrieval flags, plus reciprocal repeat/popularity
 source ranks. Version 1 remains the default, with its original ten features.

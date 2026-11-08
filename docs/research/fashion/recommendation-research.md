@@ -1,5 +1,9 @@
 # Recommendation quality: research and implementation direction
 
+> **Status: research record** (October 2026, fashion recommender), kept as written. Its
+> experiments changed nothing unless it says so; the serving recommender is described in the
+> [technical guide](../../technical-guide.md#fashion-engine).
+
 Research date: 2026-10-28. Inspected application revision: `4edafb8`.
 
 The limited tuning round failed its promotion gate. That does **not** establish that H&M is broken or that useful improvement is impossible. Keep the purchase benchmark, improve retrieval and the information retained during preparation, and separately measure the discovery tasks the product offers. No replacement model is promoted by this research.

@@ -142,7 +142,7 @@ The book domain serves the 10,000 most-rated Goodreads books of
 [goodbooks-10k](https://github.com/zygmuntz/goodbooks-10k), in memory, with numpy and scipy
 only: no model, index or network call at serving time. `BookRecommender`
 (`domains/books/recommend.py`) is deterministic, and ties go to the lower book ID (goodbooks-10k
-numbers books by popularity). It loads in about 2 seconds.
+numbers books by popularity). It loads in about 3 seconds (2.8 s measured, imports included).
 
 | Feature | How it works |
 |---|---|
@@ -328,9 +328,9 @@ The source is [zygmuntz/goodbooks-10k](https://github.com/zygmuntz/goodbooks-10k
 commit `6dd165b`: `books.csv`, `ratings.csv` (5,976,479 ratings), `book_tags.csv`,
 `tags.csv` and `books_xml/books_xml.zip` (page counts and descriptions). Each file is
 checked against its SHA-256 at that commit, also for a local `--source`; `--no-verify`
-skips the check for another version. It takes about 40 seconds with a ~150 MB download
-(25 seconds from a local copy) and about 1 GB of RAM at its peak, and writes two files
-of about 9 MB together:
+skips the check for another version. The download is 148.6 MB; on the machine these docs
+were checked on it took 11 seconds, preparing took 18 seconds (from a local copy too) with a
+peak of about 0.9 GB of RAM, and it writes two files of about 9 MB together:
 
 - `books.parquet`: one row per book. Titles lose the "(Series, #1)" suffix, which becomes
   `series` and `series_position`; authors are split; reader shelves are cleaned of
@@ -634,12 +634,12 @@ scripts/quickstart.sh                      # uv, no Docker
 ```
 
 The first run prepares goodbooks-10k besides the recipes (about 150 MB to download, under a
-minute and about 1 GB of RAM; ~9 MB on disk), so the one-command demo has book pairings and
+minute on a fast connection and about 0.9 GB of RAM; ~9 MB on disk), so the one-command demo has book pairings and
 Plan my evening. Opt out with `DEMO_BOOKS=0 docker compose --profile demo up --build` or
 `CURIO_BOOKS=0 scripts/quickstart.sh` for cocktails only. Both ways serve books whenever they
 are prepared.
 
-On the first run both download the pinned recipe file (about 400 KB, SHA-256 checked) and
+On the first run both download the pinned recipe file (about 260 KB, SHA-256 checked) and
 then start one server on port 8000: the API, which also serves the web app. Open
 http://localhost:8000; later runs reuse the recipes. Expect
 a few minutes for the first Docker build or `uv sync` (PyTorch is a dependency of the

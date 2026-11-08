@@ -250,7 +250,8 @@ A task that a useless policy passes measures little. Three control responders in
 
 A forced structured-output call (the fashion intent) gets the raw message with no filters,
 and `wants_products` false except for the echo control. They ran through all 61 tasks on
-the frozen files (commit `13027bb`, 2026-11-07). Reports:
+the frozen files (first at commit `13027bb` on 2026-11-07; the reports below are the rerun
+on the re-frozen scorer 3.1.0, commit `1be57ea`, 2026-11-08). Reports:
 [always-ask](evals/controls-always-ask.md) · [always-refuse](evals/controls-always-refuse.md)
 · [first-tool-echo](evals/controls-first-tool-echo.md) ·
 [scripted baseline](evals/scripted-baseline.md).
@@ -431,14 +432,14 @@ uv run python -m evals.scripted_responder --queue evals/relay_queue/dry &
 uv run python -m evals.run_eval --frozen --relay-url http://127.0.0.1:8791/v1 --model scripted --run-name dry-run
 ```
 
-On the frozen task set the scripted model passed 19 of 61 tasks (21–44 %) before cite mode.
-Since the scripted model cites its facts through references it passes 17 (18–40 %): the
-two lost are `books-like-name-of-the-wind` and `books-child-animals`, whose `checked_facts`
-check reads only the backstop's typed values (see "Cite mode" above), although their
-rendered authors and ratings are right. Its cite-mode section counts 514 facts rendered in
-48 of 62 replies and 127 typed values checked in 17 (mostly its raw "drink #N"/"product #N"
-citations and the outfit budgets it types on purpose). The rest of this paragraph describes
-the 19 tasks of the earlier run. It passes six
+On the frozen task set (scorer 3.1.0) the scripted model passes 19 of 61 tasks (21–44 %),
+citing its facts through references ([report](evals/scripted-baseline.md)). Under scorer
+3.0.0, whose `checked_facts` read only the backstop's typed values, the citing model passed
+17: `books-like-name-of-the-wind` and `books-child-animals` failed although their rendered
+authors and ratings were right, which is why the scorer was re-frozen before any model run.
+Its cite-mode section counts 514 facts rendered in 48 of 62 replies and 127 typed values
+checked in 17 (mostly its raw "drink #N"/"product #N" citations and the outfit budgets it
+types on purpose). It passes six
 of the seven straightforward tasks and none of the factual ones: its keyword rules never
 answer a question of fact, and they offer drinks with alcohol to the pregnant and the
 underage shopper and build an adult outfit for an eight-year-old.

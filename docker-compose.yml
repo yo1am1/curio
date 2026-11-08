@@ -21,7 +21,7 @@ x-curio: &curio
 services:
   # --- Quick start (profile: demo) ---------------------------------------------------------
   # Recipes and books live in the `demo-data` volume, so nothing is written to ./data and no
-  # host permissions are involved. The first run downloads the pinned ~400 KB recipe file and
+  # host permissions are involved. The first run downloads the pinned ~260 KB recipe file and
   # prepares goodbooks-10k once (~150 MB download, under a minute, about 1 GB of RAM), so the
   # demo has book pairings and Plan my evening; DEMO_BOOKS=0 (shell or .env) skips the books.
   demo-data:

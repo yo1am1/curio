@@ -1,5 +1,9 @@
 # Recommendation audit and MVP continuation
 
+> **Status: research record** (October 2026, fashion recommender), kept as written. Its
+> experiments changed nothing unless it says so; the serving recommender is described in the
+> [technical guide](../../technical-guide.md#fashion-engine).
+
 The October 25 branch improved discovery signals but excluded every previous
 purchase. Its new-item MAP therefore did not answer whether personalization beat
 the strong H&M baseline: recent unique purchases, followed by last-week best-sellers.
