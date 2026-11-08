@@ -469,7 +469,7 @@ src/curio/
     ├── api.py            # FastAPI app
     └── web.py            # Serves the built React app (web/dist) beside the API routes
 web/                      # The React app (Vite, React 19, TypeScript); see "Web app" below
-examples/hello_domain/    # A complete teas domain on the engine, in one file (teas.py)
+examples/hello_domain/    # A complete teas domain on the engine (teas.py, its catalog teas.csv)
 scripts/prepare_data.py # Sample the H&M Kaggle archive (or its unzipped CSVs) into data/
 scripts/fetch_photos.py # Download the sampled products' photos from the mirror
 scripts/fetch_query_photos.py # Example image-search photos of garments outside the catalog
@@ -523,9 +523,10 @@ dependency, and a `DomainView` with its pages in the web app's registry. Its age
 the shared engine ([agent architecture](agent-architecture.md)). The shared parts needed
 only data-driven additions: the domain's approval tools in `ApprovalTool`, its context
 fields on `TurnContext` (`book_preferences`, `book_shortlist`), its effect kinds on
-`AppliedEffect` (serialized with their own fields only), and one entry each in the engine's
-`_MEMORY_EFFECTS` and `_SHORTLIST_EFFECTS` tables. The engine loop, budgets, signing,
-grounding flow and chat code did not change.
+`AppliedEffect` (serialized with their own fields only), whose `remembers` and `adds` say
+which context fields an approved effect updates. The engine loop, budgets, signing,
+grounding flow and chat code did not change. [Extending Curio](extending.md#8-registering-the-domain-in-the-app)
+lists every file a new domain touches.
 
 A **composed domain** has no data of its own: its `DomainSpec` has `compose` instead of
 `load`, and `build_services` builds it from the loaded domains after linking. `evening` is the

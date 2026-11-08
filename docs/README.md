@@ -15,7 +15,11 @@
   an API key.
 - [Multi-domain contract](multidomain-contract.md): data layouts, Python interfaces, agent
   tools, API and UI rules for cocktails, books, outfits, pairings and Plan my evening.
-- [Hello, domain](../examples/hello_domain/teas.py): a complete tea domain in one file.
+- [Extending Curio](extending.md): the contract for your own dataset and your own agent
+  domain (data, toolkit hooks, policies, approvals, fact references, the backstop, app
+  registration, tests, what is not supported).
+- [Hello, domain](../examples/hello_domain/teas.py): the worked example, a tea domain in one
+  file whose catalog loads from a CSV.
 - [Data and licences](data-and-licences.md): where each dataset comes from and its terms.
 - [How it was built](how-it-was-built.md): the review loops, test gates and release
   automation.

@@ -33,7 +33,7 @@ The code has three layers, and `tests/test_architecture.py` enforces their bound
   each toolkit to the engine with it (`Schemas`).
 
 [`examples/hello_domain`](../examples/hello_domain) is a complete small domain on the same
-engine, without the app.
+engine, without the app; [Extending Curio](extending.md) is the contract it follows.
 
 | | Fashion (`ShoppingAssistant`) | Cocktails (`CocktailAssistant`) | Books (`BookAssistant`) | Evening (`EveningAssistant`) |
 |---|---|---|---|---|

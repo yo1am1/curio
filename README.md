@@ -12,7 +12,7 @@ anything.**
 ![FastAPI · React](https://img.shields.io/badge/FastAPI-React-009688)
 
 [Why three domains](#why-three-domains) · [The engine](#the-engine) ·
-[Add a domain](#add-a-domain-in-one-file) · [Plan my evening](#plan-my-evening) ·
+[Add a domain](#add-a-domain) · [Plan my evening](#plan-my-evening) ·
 [The domains](#the-domains) · [Quick start](#quick-start) ·
 [Data and licences](#data-and-licences) · [Changelog](CHANGELOG.md)
 
@@ -123,12 +123,19 @@ evidence and is withdrawn
 ([why](docs/agent-eval.md#what-the-first-run-did-and-did-not-show)). Any provider runs the
 same tasks with one command.
 
-## Add a domain in one file
+## Add a domain
 
-[`examples/hello_domain/teas.py`](examples/hello_domain/teas.py) is a complete domain in
-148 lines: twelve teas, a search tool, a save tool behind approval and a grounding check.
-It subclasses `BaseToolkit`, which gives every optional hook a no-op default. The engine
-does the rest. An excerpt:
+**[docs/extending.md](docs/extending.md)** is the contract for bringing your own dataset and
+your own agent domain to the engine: what a catalog item needs, the `Toolkit` hooks with their
+signatures, tool policies, effects and approvals, fact references, the grounding backstop,
+the edits that register a domain in the app, the tests a domain should have and what is not
+supported.
+
+[`examples/hello_domain/`](examples/hello_domain/) is the worked example: a tea guide whose
+twelve teas load from [`teas.csv`](examples/hello_domain/teas.csv) through a validating
+loader, with a search tool, a save tool behind approval, fact references (`{tea:4}`,
+`{price:4}`) and a backstop, in one file of 172 lines. It subclasses `BaseToolkit`, which
+gives every optional hook a default; the engine does the rest:
 
 ```python
 class TeaToolkit(BaseToolkit[Tea]):
@@ -136,39 +143,18 @@ class TeaToolkit(BaseToolkit[Tea]):
     policies: ClassVar = dict(
         SearchTeas=Policy.READ, AskShopper=Policy.ASK, SaveTeas=Policy.APPROVE
     )
-    grounding_subject = "tea names and IDs"
 
-    def read(self, turn: Turn[Tea], action: SearchTeas) -> tuple[str, AgentStep]:
-        words = action.query.lower().split()
-        text = {t.tea_id: f"{t.name} {t.kind} {t.notes}".lower() for t in self._teas.values()}
-        turn.show([t for t in self._teas.values() if any(w in text[t.tea_id] for w in words)][:5])
-        step = AgentStep(kind="tool", name="SearchTeas", summary=f"Found {len(turn.items)} teas.")
-        return _lines(turn.items) or "(none)", step
-
-    def apply(self, action: SaveTeas, *, dry_run: bool = False) -> tuple[TeaEffect, list[Tea], str]:
-        teas = self.proposed({"tea_ids": list(dict.fromkeys(action.tea_ids))})
-        if not teas:
-            raise ToolError("None of those tea IDs exist.")
-        verb = "Would save" if dry_run else "Saved"
-        names = ", ".join(t.name for t in teas)
-        return TeaEffect(tea_ids=[t.tea_id for t in teas]), teas, f"{verb} {names}."
-
-    def check(self, turn: Turn[Tea], text: str) -> GroundingReport:
-        """Every tea ID, and every catalog tea name, must be one a tool returned."""
-        returned = list(turn.evidence.values())
-        checked, issues = check_ids(text, _TEA_ID, (t.tea_id for t in returned), "tea")
-        for name in dict.fromkeys(m.group(0) for m in self._names.finditer(text)):
-            checked += 1
-            if name.casefold() not in {t.name.casefold() for t in returned}:
-                issues.append(f"{name} was not returned by any tool")
-        return grounding_report(checked, issues)
+    def read(self, turn, action): ...  # run SearchTeas, turn.show(the teas found)
+    def apply(self, action, *, dry_run=False): ...  # validate SaveTeas into a TeaEffect
+    def facts(self, turn): ...  # what {tea:ID} and {price:ID} render to
+    def check(self, turn, text): ...  # the backstop for typed names, IDs and prices
 
     # key, prompt, proposed, fallback and reply_fields complete the class.
 ```
 
-Its tests drive the real engine with a scripted model: a grounded answer, an invented tea
-caught by the check, and a signed proposal that is narrowed and approved, while widened or
-forged ones are refused.
+Its tests drive the real engine with a scripted model: the CSV loader, a grounded answer
+whose references the server renders, an invented tea and a wrong typed price caught, and a
+signed proposal that is narrowed and approved while widened or forged ones are refused.
 
 ```bash
 uv run pytest tests/test_hello_domain.py tests/test_architecture.py
