@@ -38,3 +38,12 @@ def test_top_skips_excluded_ids_and_respects_top_k(recommender) -> None:
 
 def test_no_purchases_means_no_ranking() -> None:
     assert PopularityRecommender(purchases([])).top(5) == []
+
+
+def test_the_label_names_the_datas_last_day():
+    purchases = pd.DataFrame({"product_id": [1, 2], "purchase_date": ["2020-09-15", "2020-09-22"]})
+    assert PopularityRecommender(purchases).label() == (
+        "Popular as of 22 Sep 2020 (the data's last week)"
+    )
+    empty = pd.DataFrame({"product_id": [], "purchase_date": []})
+    assert PopularityRecommender(empty).label() == "Popular in the data's last week"

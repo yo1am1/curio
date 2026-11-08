@@ -534,7 +534,8 @@ def _known(values: Iterable[str], vocabulary: dict[str, str]) -> list[str]:
 
 _RELATED_HINTS = {
     "complement": "No shopper bought it together with pieces from another product group. "
-    "Try relation 'similar' for look-alikes or 'alternative' for upgrades, and say that "
+    "Try relation 'similar' for look-alikes or 'alternative' for higher-priced pieces of "
+    "the same category, and say that "
     "there is no bought-together evidence.",
     "similar": "It has no photo in the image index, or no look-alike in its audience's "
     "sections. Try relation 'complement' or a "

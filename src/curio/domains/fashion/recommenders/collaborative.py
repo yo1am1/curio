@@ -89,7 +89,7 @@ class CollaborativeRecommender:
                     if together:
                         contributions.append((weight * together, together, pid))
         if not contributions:
-            return ["Popular in the last week; no shopper bought it with this customer's items."]
+            return [f"{self._popular.label()}; no shopper bought it with this customer's items."]
         contributions.sort(key=lambda c: (-c[0], c[2]))
         return [
             f"{together} {'shopper' if together == 1 else 'shoppers'} who bought "

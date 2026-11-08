@@ -27,7 +27,10 @@ def test_recent_unique_purchases_then_popularity_with_deterministic_ties(make_cu
     assert len(recommender.recommend(1, 1)) == 1
     assert recommender.recommend(1, 0) == []
     assert recommender.reasons(1, 1) == ["Buy again: last purchased on 2020-01-02."]
-    assert recommender.reasons(1, 3)[0].startswith("Popular in the last week")
+    # The data ends on its own date: not "last week" from today.
+    assert recommender.reasons(1, 3) == [
+        "Popular as of 2 Jan 2020 (the data's last week); fills the list after recent purchases."
+    ]
     with pytest.raises(UnknownUserError):
         recommender.recommend(99)
 

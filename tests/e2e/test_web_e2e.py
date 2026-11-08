@@ -238,7 +238,7 @@ def test_fashion_feed_switches_strategy_with_evidence(web):
     card.get_by_role("button", name="Why this pick").click()
     expect(card.get_by_text(re.compile(r"Ranking score: -?\d"))).to_be_visible()
     # Every other strategy fills the feed too.
-    for strategy in ("Similar shoppers", "Purchase connections", "Visual style"):
+    for strategy in ("Bought together with your items", "Purchase connections", "Visual style"):
         web.page.get_by_role("radio", name=strategy).click()
         expect(results(web, strategy).get_by_test_id("product-card")).to_have_count(12)
     web.shot("20b-for-you-visual-style", full_page=True)
