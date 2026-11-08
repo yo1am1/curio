@@ -281,8 +281,8 @@ goodbooks-10k are downloaded from a pinned commit and checked by SHA-256; the H&
 the ones you download from Kaggle (or the Hugging Face mirror at a pinned revision, not
 checksum-checked), and product photos come from that pinned mirror.
 
-Tests: 2,118 offline Python tests (with the data prepared here, 2,115 pass and 3 skip that need
-a local Shopify taxonomy cache or the H&M articles as Parquet), 77 Vitest tests of the web app, and 85 end-to-end tests that run the
+Tests: 2,169 offline Python tests (with the data prepared here, 2,166 pass and 3 skip that need
+a local Shopify taxonomy cache or the H&M articles as Parquet), 79 Vitest tests of the web app, and 85 end-to-end tests that run the
 real API and the React app in Chromium on the real data with a scripted LLM (CI runs the 39
 that need no H&M data). An [agent evaluation](docs/agent-eval.md)
 measures a real model instead: 61 tasks over the three domains and Evening, which composes them, scored on tool choice,

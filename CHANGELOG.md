@@ -6,6 +6,18 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Breaking (security exceptions)
+
+Curio follows Semantic Versioning, but this minor release breaks the HTTP API in four ways,
+each to close a security or privacy problem (details under Removed and Security below):
+
+- `GET /chat/feedback` is removed (405): it returned other users' messages and answers.
+- `GET /users/{id}` no longer serves the shopper's `age`.
+- `/docs` (Swagger UI) is off by default (`API_DOCS=true` turns it on), and `/redoc` is gone.
+- New error responses: **400** for a `Host` outside `ALLOWED_HOSTS`, **409** for a
+  proposal answered twice or not issued for this session, **413** for an oversized body,
+  and **503** (with `Retry-After`) when the agent-turn cap is reached.
+
 ### Added
 
 - **[Extending Curio](docs/extending.md)**, contract version 1: what a catalog item needs,
@@ -52,7 +64,7 @@ All notable changes to Curio are recorded here. The format follows
 ### Changed
 
 - **Frozen real-model result: 59/61 tasks** (95 % CI 89–99 %) for a Claude model through the
-  file relay, against 4/61, 0/61 and 0/61 for the controls and 19/61 for the scripted
+  file relay (no pinned model ID; one run, k=1), against 4/61, 0/61 and 0/61 for the controls and 19/61 for the scripted
   baseline (`docs/evals/frozen-relay-1.md`). Both failures are scorer limits found by
   reading them; the number is not rescored. The README's earlier "42/42" (42 tasks of
   2.1.0, no model ID, a scorer changed after the run was seen) is withdrawn.
@@ -77,7 +89,10 @@ All notable changes to Curio are recorded here. The format follows
   their facts through references, so item names in them are bold.
 - **Release order:** the Release workflow builds, smoke-tests and pushes the image first,
   and tags the commit and publishes the GitHub release only once the image is on ghcr.io.
-  Re-runs stay idempotent; `latest` moves only to the highest released version.
+  Re-runs stay idempotent; `latest` moves only to the highest released version. An image
+  already on ghcr.io must carry this run's commit as its revision label, or the run fails
+  (so the tag never points at other code); `latest` is pushed in its own step, so a failed
+  push is retried; and a failed release listing fails the plan instead of moving `latest`.
 - The runtime image no longer contains `uv` (it stays in a build stage).
 - GitHub Actions are pinned by commit SHA; every workflow grants no default token
   permissions, each job declares its own and has a timeout, and checkouts do not keep the
@@ -90,6 +105,15 @@ All notable changes to Curio are recorded here. The format follows
 - Evening copy says the outfit is planned only when fashion is served.
 - Dependabot skips TypeScript major versions in `web/` until typescript-eslint supports
   TypeScript 7.
+- The README's agent screenshot and overview animation show the cite-mode badge ("12
+  facts from the catalog"); they showed a badge the UI no longer renders.
+- Documentation corrected after the re-audit: `ALLOWED_HOSTS` next to `CURIO_HOST=0.0.0.0`,
+  the 90-second deadline is checked before each model call, no pinned model ID and one run
+  next to 59/61, relevance not graded and injections direct only, the measured relay
+  latency, the image's three stages, cocktail tie-breaks, how the engine is consumed (a
+  clone, not PyPI, torch, the `curio` name collision on PyPI), and that the README
+  screenshots contain H&M product images, book covers and drink photos. SECURITY.md keeps
+  the advisory form with a fallback contact route.
 - Documentation claims were checked against code, data and command output: the recipe CSV
   is about 260 KB (not 400 KB), the H&M CSVs are not checksum-checked, the measured
   goodbooks-10k preparation times, the test counts and stale test paths were corrected;
@@ -97,6 +121,28 @@ All notable changes to Curio are recorded here. The format follows
 
 ### Fixed
 
+- Cite mode refuses malformed references instead of rendering or crashing on them: a value
+  reference with a digit typed next to it (`{rating:book:7}9` rendered "4.259",
+  `{pages:book:7},000` "366,000", both verified), a reference nested in braces
+  (`{drink:{drink:141}}` reached the client as `{drink:**Gin Lemon**}`), an ID that is not
+  plain ASCII digits or is over 19 digits (`{drink:²}` or a 5,000-digit ID was a 500), and
+  the same item twice in a total or difference (`{total:pages:7,7,7,7,7}` gave 1,830
+  pages). Each fails verification like any bad reference: one rewrite, then the fallback.
+- A shopper's budget or limit is no longer counted as a checked catalog price: "plan my
+  evening" answered with a question whose quick reply "Date night under €100" was reported
+  verified, "Checked 1 price against the catalogs". Such an answer is now `not_applicable`
+  (no badge).
+- A tool's `FileNotFoundError` or `PermissionError` inside a turn is a 500, not a 502
+  "LLM provider request failed": only connection, timeout and provider SDK errors are 502.
+- Web app: when the reply to an approval is lost, the drawer says the decision may already
+  have been applied; a 409 for a decision hides Approve and Decline and offers "Ask again"
+  instead of buttons that can only fail again.
+- Trace: "Found 1 unverified claim" (was "claims"). The backstop reads "EUR 19.99" (the
+  prefix form) as a price; it used to pass unchecked.
+- Fashion: popular-item reasons say "Popular as of 22 Sep 2020 (the data's last week)"
+  instead of "Popular in the last week" (the H&M data ends in 2020); the For you strategy
+  "Similar shoppers" is now "Bought together with your items"; the agent no longer calls
+  higher-priced alternatives "upgrades".
 - Grounding: the plausible false claims of the November 2026 audit (all 13 probes) are
   caught; a bare rating at the end of a bullet followed by a dashed bullet, and a name
   ending in a period, no longer escape binding.
@@ -148,7 +194,10 @@ All notable changes to Curio are recorded here. The format follows
   (default `localhost,127.0.0.1`) get **400**. Docker Compose passes `ALLOWED_HOSTS` through,
   and `scripts/quickstart.sh` adds a `CURIO_HOST` that names one address.
 - The chat renders no Markdown images: model text such as `![](https://host/?q=...)` can no
-  longer make the browser call another site. Links still render.
+  longer make the browser call another site. Links render only for `https:` addresses
+  (`javascript:`, `data:`, `http:` and relative links show as plain text).
+- With `API_DOCS` off, the web app served at `/docs` gets the app's Content-Security-Policy;
+  only the Swagger UI routes (with `API_DOCS=true`) get the policy that allows its CDN.
 - `/docs` (Swagger UI) and `/redoc` are **off by default (404)**: they loaded an unpinned
   `swagger-ui-dist@5` script from jsDelivr, without SRI, on the app's origin. `API_DOCS=true`
   serves `/docs` with swagger-ui-dist 5.33.3 pinned by SRI hash and no inline script;
