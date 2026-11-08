@@ -4,9 +4,11 @@ Every tool is a strict pydantic schema: unknown fields, empty queries and out-of
 are rejected before anything runs. The policy decides what happens to a valid call:
 
 - READ tools only look things up and run immediately.
-- ASK tools stop the turn and hand a question with quick replies back to the shopper.
+- ASK is for `AskShopper` only: it stops the turn and hands a question with quick replies
+  back to the shopper. (Any other tool marked ASK is handled as an APPROVE tool.)
 - APPROVE tools change shopper state (a shortlist, remembered preferences). They never run
-  on the model's say-so: the turn stops with a proposal the shopper approves, edits or rejects.
+  on the model's say-so: the turn stops with a proposal the shopper approves, edits or
+  rejects, unless the shopper listed the tool in `TurnContext.auto_approve`.
 """
 
 from enum import StrEnum

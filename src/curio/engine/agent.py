@@ -21,7 +21,8 @@ The server keeps no session state: shortlists, preferences and pending proposals
 the client. Proposals are HMAC-signed over their tool name, arguments and the client's session
 id, so a resumed decision can approve or narrow exactly what this agent proposed in that
 session, never forge, widen or move it to another domain or session. The signer's nonce store
-remembers answered proposals until they expire, so none is answered twice.
+remembers answered proposals until they expire, so none is answered twice by the processes
+that share that store (the default `InMemoryNonceStore` is one process's).
 """
 
 import logging
