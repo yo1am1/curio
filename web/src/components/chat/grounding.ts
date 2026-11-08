@@ -15,6 +15,11 @@ const KINDS: Record<string, Nouns> = {
   year: ["year", "years"],
   percent: ["percentage", "percentages"],
   id: ["ID", "IDs"],
+  colour: ["colour", "colours"],
+  ingredient: ["ingredient", "ingredients"],
+  recipe: ["recipe", "recipes"],
+  total: ["total", "totals"],
+  diff: ["difference", "differences"],
   claim: ["claim", "claims"],
   fact: ["fact", "facts"],
 };
@@ -31,10 +36,10 @@ function list(parts: string[]): string {
     : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }
 
-/** "3 prices and 2 names", from the report's counts by kind (or its total on older servers). */
-export function describeChecked(grounding: GroundingReport): string {
-  const counts = Object.entries(grounding.counts ?? {}).filter(([, n]) => n > 0);
-  if (counts.length === 0) return count(grounding.checked, FACTS);
+/** "3 prices and 2 names" for counts by kind; `total` when there are none (older servers). */
+export function describeCounts(byKind: Record<string, number> | undefined, total: number): string {
+  const counts = Object.entries(byKind ?? {}).filter(([, n]) => n > 0);
+  if (counts.length === 0) return count(total, FACTS);
   const order = Object.keys(KINDS);
   const rank = (kind: string) => (order.includes(kind) ? order.indexOf(kind) : order.length);
   counts.sort(([a], [b]) => rank(a) - rank(b));
@@ -44,4 +49,19 @@ export function describeChecked(grounding: GroundingReport): string {
   const rest = counts.slice(SHOWN_KINDS).reduce((sum, [, n]) => sum + n, 0);
   if (rest > 0) parts.push(count(rest, ["other fact", "other facts"]));
   return list(parts);
+}
+
+/** What the backstop checked among the values the model typed: "3 prices and 2 names". */
+export function describeChecked(grounding: GroundingReport): string {
+  return describeCounts(grounding.counts, grounding.checked);
+}
+
+/** How many facts the server rendered from fact references (0 on older servers). */
+export function renderedTotal(grounding: GroundingReport): number {
+  return Object.values(grounding.rendered ?? {}).reduce((sum, n) => sum + (n > 0 ? n : 0), 0);
+}
+
+/** "5 facts" or "1 fact". */
+export function facts(n: number): string {
+  return count(n, FACTS);
 }

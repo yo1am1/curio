@@ -11,7 +11,11 @@ export const DEFAULT_DOMAIN: Domain = "evening";
 export type Tone = "green" | "orange" | "red" | "violet" | "blue" | "gray" | "accent";
 export type GroundingStatus = "verified" | "repaired" | "fallback";
 export type Badge = { label: string; tone: Tone };
-/** A verified badge says what was checked ("Checked 3 prices and 2 names"), then against what. */
+/**
+ * A verified badge says what the server rendered from where ("5 facts from the catalog · 1
+ * checked"), or, without rendered facts, what was checked ("Checked 3 prices and 2 names
+ * against the catalog").
+ */
 export type CheckedBadge = { against: string; tone: Tone };
 
 export interface DomainCopy {
