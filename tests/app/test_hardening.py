@@ -524,3 +524,34 @@ def test_a_server_side_failure_is_500_not_blamed_on_the_llm_provider(cocktail_ca
     assert _from_provider(ConnectionError("gateway down"))
     assert _from_provider(httpx.ReadTimeout("slow"))
     assert not _from_provider(KeyError("drink_id")) and not _from_provider(ValueError("x"))
+
+
+class MissingFileAssistant:
+    """A turn whose tool hits a missing or unreadable file: an OSError, not the LLM's."""
+
+    def __init__(self, error: OSError) -> None:
+        self.error = error
+
+    def reply(self, message, history, context=None):
+        raise self.error
+
+    def stream(self, message, history, context=None, *, decision=None):
+        raise self.error
+        yield
+
+
+@pytest.mark.parametrize(
+    "error",
+    [FileNotFoundError("data/books.parquet"), PermissionError("data/ranker.json")],
+    ids=["missing-file", "permission"],
+)
+def test_a_file_error_inside_a_turn_is_500_not_502(cocktail_catalog, error) -> None:
+    from curio.app.api import _from_provider
+
+    app = _app(cocktail_catalog, MissingFileAssistant(error))
+    with TestClient(app) as client:
+        assert client.post("/chat", json=CHAT).status_code == 500
+        assert '"status": 500' in client.post("/chat/stream", json=CHAT).text
+    assert not _from_provider(error)
+    # Connection and timeout errors (OSErrors too) stay the provider's.
+    assert _from_provider(ConnectionResetError()) and _from_provider(TimeoutError())

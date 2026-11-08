@@ -891,8 +891,10 @@ _PROVIDER_MODULES = ("openai", "anthropic", "httpx", "httpcore", "langchain")
 
 
 def _from_provider(error: BaseException) -> bool:
-    """Whether `error` is the LLM provider's (or the network's) rather than the server's."""
-    if isinstance(error, OSError | TimeoutError):
+    """Whether `error` is the LLM provider's (or the network's) rather than the server's.
+    Only connection and timeout errors count among the built-in ones: a `FileNotFoundError`
+    or `PermissionError` (an `OSError` too) comes from a tool or recommender."""
+    if isinstance(error, ConnectionError | TimeoutError):
         return True
     return any(
         cls.__module__.split(".")[0].startswith(_PROVIDER_MODULES) for cls in type(error).__mro__
