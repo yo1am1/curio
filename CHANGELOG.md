@@ -22,7 +22,9 @@ All notable changes to Curio are recorded here. The format follows
   the `FactSheet` each domain supplies. A reference to anything else fails verification:
   one rewrite, then the fallback. Answers, rewrites, fallbacks, questions and quick replies
   are rendered on the server for `/chat` and `/chat/stream`; no reference reaches the
-  client. Prose claims ("cosy", "good for a cold") are not facts that can be rendered.
+  client. A rendered value is the cited item's catalog value; cite mode does not check that
+  the cited item is the one the sentence names. Prose claims ("cosy", "good for a cold") are
+  not facts that can be rendered.
 - `GroundingReport.counts` (checked facts by kind) and `GroundingReport.rendered` (rendered
   facts by kind), both optional. `verified` means at least one fact was rendered or
   checked. The badge says "5 facts from the catalog · 1 checked", or "Checked 3 prices and

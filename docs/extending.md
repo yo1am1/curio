@@ -227,8 +227,9 @@ is the price of a returned tea). `curio.engine.grounding` has the building block
 built-in domains use for finer checks: `Item` and `Binder` bind a number to the item named
 nearest to it, `FactCheck` checks prices, ratings, totals and differences, and there are
 checks for marked names, bylines, flags and unsupported safety claims. The backstop is
-best-effort: values written through references are correct by construction, typed values
-only as far as the check reaches.
+best-effort: a value written through a reference is the cited item's catalog value (cite
+mode does not check that the cited item is the one the sentence names), and typed values are
+checked only as far as the check reaches.
 
 ## 7. Running the agent
 

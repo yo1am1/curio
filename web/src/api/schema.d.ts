@@ -1466,7 +1466,8 @@ export interface components {
      *
      *     `rendered` counts the facts the server rendered from fact references in the text the
      *     client shows, by kind ("name", "price", "colour", "rating", "author", "year", "pages",
-     *     "alcohol", "recipe", "amount", "total", "diff"): correct by construction. `checked`
+     *     "alcohol", "recipe", "amount", "total", "diff"). Each is the cited item's catalog value;
+     *     cite mode does not check that the cited item is the one the sentence names. `checked`
      *     counts the values the model typed itself that the backstop check covered in the first
      *     draft, and `counts` splits them by kind ("price", "id", "rating", "title", "name",
      *     "author", "amount", "alcohol", "pages", "year", "claim", "fact"). Servers before cite

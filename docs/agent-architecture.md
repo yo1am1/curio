@@ -313,8 +313,10 @@ one worker.
 ## Grounding guardrail
 
 Grounding has two parts. **Cite mode** is the main one: the model does not type catalog
-facts, it refers to them, and the server renders the catalog's values, so a fact stated this
-way is correct by construction. **The backstop** is the free-text check below, which still
+facts, it refers to them, and the server renders the catalog's values, so the value is the
+cited item's catalog value; cite mode does not check that the cited item is the one the
+sentence names ("{book:3} is rated {rating:book:4}" renders book 4's rating next to book 3's
+name). **The backstop** is the free-text check below, which still
 reads every value the model types itself. Every catalog fact the agent states through a fact
 reference (prices, ratings, authors, years, pages, recipe amounts, alcohol labels, totals) is
 rendered by the server from the catalog. Values the model types itself are checked by a

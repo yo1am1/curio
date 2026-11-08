@@ -70,7 +70,8 @@ The second and third domains forced the engine to generalise:
   the server replaces it with the value of an item this turn's tools returned; a reference
   to anything else fails, gets one self-correction, then a deterministic fallback built from
   catalog facts. Questions, quick replies and fallbacks are rendered the same way, and no
-  reference reaches the client. Limitation: prose claims ("cosy", "good for a cold") are not
+  reference reaches the client. A rendered value is the cited item's catalog value; cite
+  mode does not check that the cited item is the one the sentence names. Limitation: prose claims ("cosy", "good for a cold") are not
   facts that can be rendered; the backstop catches some of them (allergen, health, stock and
   foreign-currency claims), and genres and descriptions are not checked
   ([details](docs/agent-architecture.md#grounding-guardrail)).

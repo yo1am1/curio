@@ -67,7 +67,7 @@ Controls are policies that do nothing useful (docs/agent-eval.md#controls). A ta
 
 ## Cite mode: references versus typed values
 
-Facts the server rendered from the model's fact references are correct by construction; values the model typed itself went to the best-effort backstop. The scorer's `checked_facts` counts both; this table itself is not scored.
+Facts the server rendered from the model's fact references carry the cited item's catalog value; cite mode does not check that the cited item is the one the sentence names. Values the model typed itself went to the best-effort backstop. The scorer's `checked_facts` counts both; this table itself is not scored.
 
 | | Replies | Facts |
 |---|---|---|
