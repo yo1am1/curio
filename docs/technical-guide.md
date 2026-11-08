@@ -653,7 +653,7 @@ fashion engine even though the demo never loads it), then seconds to start.
 - **`scripts/quickstart.sh`**: runs `uv sync --locked --extra anthropic`, writes
   `data/cocktails.parquet` if it is missing (and the book files unless `CURIO_BOOKS=0`),
   builds the web app with `npm ci && npm run build` when `web/dist` is missing or older than
-  its sources and npm (Node 22) is installed (`CURIO_WEB_BUILD=0` skips it; without npm a
+  its sources and npm (Node 22 or newer) is installed (`CURIO_WEB_BUILD=0` skips it; without npm a
   build made before is served, and with none the script says how to get one), starts the
   server, prints which domains and chat are available and the URL; Ctrl+C stops it.
   `ENABLED_DOMAINS` (default `cocktails,books`; a domain that is not prepared is skipped)
@@ -1084,7 +1084,7 @@ cocktail or book files into an error instead of skipped tests. The default `uv r
 run excludes these tests.
 
 A second CI job, `web`, runs `npm ci`, lint (ESLint and Prettier), the type check, the
-Vitest suite and the production build of `web/` on Node 22. A third, `e2e-demo`, prepares
+Vitest suite and the production build of `web/` on Node 26, the same as the Docker build. A third, `e2e-demo`, prepares
 the recipes and goodbooks-10k (its source files are cached per pinned commit with
 `actions/cache` and checked by SHA-256 on every use), runs the 15 golden pairing checks on
 that real data, builds the app, installs Chromium and runs `tests/e2e` with

@@ -233,7 +233,7 @@ Both prepare the cocktail recipes (a checksum-verified ~260 KB download) and goo
 (~150 MB, under a minute) on the first run. For cocktails only, skip the books with
 `DEMO_BOOKS=0` (Docker) or `CURIO_BOOKS=0` (uv). Either way one server runs the API and the
 web app: open http://localhost:8000. `scripts/quickstart.sh` builds the web app first when
-npm (Node 22) is installed. Both quick starts serve this computer only (Docker publishes
+npm (Node 22 or newer) is installed. Both quick starts serve this computer only (Docker publishes
 port 8000 on 127.0.0.1); `CURIO_HOST=0.0.0.0` opens them to your network, and
 [SECURITY.md](SECURITY.md) says what that exposes.
 

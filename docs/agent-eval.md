@@ -31,7 +31,11 @@ Manual review of the frozen run, recorded here and not rescored:
 - **Cite mode in practice.** 49 of 62 replies stated facts through references (533 facts
   rendered by the server). 29 replies also typed values themselves (189, mostly recipe
   ingredients and some prices), which the best-effort backstop checked; 2 drafts were
-  repaired, none fell back.
+  repaired, none fell back. Both repairs were backstop false alarms on correct drafts, as
+  the answering agent's notes and the transcripts show: "the Americano skips the gin" was
+  read as a wrong ingredient claim, and "closest to a Mojito feel" next to alcohol-free
+  drinks was read as calling the Mojito alcohol-free. The model rewrote both without the
+  phrase; no wrong fact reached an answer.
 
 ## How it works
 
