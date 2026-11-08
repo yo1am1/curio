@@ -874,7 +874,26 @@ def _chat_error(error: Exception) -> HTTPException:
         return HTTPException(
             status_code=429, detail="The assistant is busy. Please try again shortly."
         )
-    # Provider SDKs raise their own exception types (auth, rate limit, network). Log the
-    # details server-side only: upstream messages can contain URLs or request ids.
-    logger.error("Shopping assistant failed", exc_info=error)
-    return HTTPException(status_code=502, detail="LLM provider request failed; see server logs.")
+    if _from_provider(error):
+        # Provider SDKs raise their own exception types (auth, rate limit, network). Log the
+        # details server-side only: upstream messages can contain URLs or request ids.
+        logger.error("LLM provider request failed", exc_info=error)
+        return HTTPException(
+            status_code=502, detail="LLM provider request failed; see server logs."
+        )
+    # A bug or a failing service in the turn itself (a tool, a recommender): not the LLM's.
+    logger.error("Agent turn failed", exc_info=error)
+    return HTTPException(status_code=500, detail="The assistant failed; see server logs.")
+
+
+# Where LLM provider and HTTP client errors come from: their SDKs and LangChain's wrappers.
+_PROVIDER_MODULES = ("openai", "anthropic", "httpx", "httpcore", "langchain")
+
+
+def _from_provider(error: BaseException) -> bool:
+    """Whether `error` is the LLM provider's (or the network's) rather than the server's."""
+    if isinstance(error, OSError | TimeoutError):
+        return True
+    return any(
+        cls.__module__.split(".")[0].startswith(_PROVIDER_MODULES) for cls in type(error).__mro__
+    )

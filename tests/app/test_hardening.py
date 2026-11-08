@@ -498,3 +498,29 @@ def test_health_discloses_no_configuration(cocktail_catalog) -> None:
         body = client.get("/health").text
     for secret in ("secret-model-name", "10.0.0.5", "sk-not", "kkkk", "/home/", "/tmp/"):
         assert secret not in body
+
+
+class BuggyAssistant:
+    """A turn that fails inside the server (a tool or recommender bug), not at the LLM."""
+
+    def reply(self, message, history, context=None):
+        raise KeyError("drink_id")
+
+    def stream(self, message, history, context=None, *, decision=None):
+        raise KeyError("drink_id")
+        yield
+
+
+def test_a_server_side_failure_is_500_not_blamed_on_the_llm_provider(cocktail_catalog) -> None:
+    from curio.app.api import _from_provider
+
+    app = _app(cocktail_catalog, BuggyAssistant())
+    with TestClient(app) as client:
+        response = client.post("/chat", json=CHAT)
+        assert response.status_code == 500
+        assert response.json() == {"detail": "The assistant failed; see server logs."}
+        assert '"status": 500' in client.post("/chat/stream", json=CHAT).text
+    # Network and SDK errors are the provider's: 502, as before.
+    assert _from_provider(ConnectionError("gateway down"))
+    assert _from_provider(httpx.ReadTimeout("slow"))
+    assert not _from_provider(KeyError("drink_id")) and not _from_provider(ValueError("x"))

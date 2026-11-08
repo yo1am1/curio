@@ -697,8 +697,11 @@ seen: v3, above.
 - At most `MAX_CONCURRENT_TURNS` turns (default 8) run at once per API process. A turn over
   the cap is refused at once with HTTP 503 and `Retry-After: 5`, before any model call, so
   slow models cannot take every worker thread from search and `/health`.
-- Provider failures map to safe HTTP errors (429 retry, 502 otherwise). On the
-  streaming endpoint they arrive as an `error` event; provider details stay in server logs.
+- Failures map to safe HTTP errors: 409 for a forged, widened or already answered proposal,
+  429 when the provider rate-limits, 502 for other provider and network errors, and 500 for
+  a failure inside the turn itself (a tool or recommender bug), which is not blamed on the
+  LLM. On the streaming endpoint they arrive as an `error` event with that status; details
+  stay in server logs.
 
 ## Feedback
 
