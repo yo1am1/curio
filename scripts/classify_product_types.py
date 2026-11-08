@@ -203,7 +203,9 @@ def main(argv: Sequence[str] | None = None) -> None:
                 category_vectors = encoder.encode_texts([c.full_name for c in categories])
                 chat_model = build_chat_model(get_settings())
             descriptions = (
-                rows["prod_name"].fillna("") + ": " + rows["detail_desc"].fillna("")
+                rows["prod_name"].astype(object).fillna("")
+                + ": "
+                + rows["detail_desc"].astype(object).fillna("")
             ).drop_duplicates()
             # Spread the small sample across the catalog instead of its first variants.
             examples = descriptions.iloc[

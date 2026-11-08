@@ -53,6 +53,8 @@ torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-ra -m 'not integration and not e2e'"
+# A pandas deprecation is an error now, before pandas 4 makes it a crash.
+filterwarnings = ["error::pandas.errors.Pandas4Warning"]
 markers = [
     "integration: needs downloaded models or network",
     "e2e: browser end-to-end run over prepared data (uv run pytest -m e2e tests/e2e)",
