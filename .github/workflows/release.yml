@@ -13,7 +13,10 @@ name: Release
 # So a release never points at an image that does not exist: a failed build or smoke test
 # stops before the release is created. Every step is idempotent: an image already on ghcr.io
 # is not rebuilt, a published release is kept, and any later run (the next green push to main
-# or a manual dispatch) finishes whatever an earlier run left undone.
+# or a manual dispatch) finishes whatever an earlier run left undone. An image already on
+# ghcr.io must have been built from this run's commit (its revision label), or the run fails:
+# the release tag never points at a commit other than the image's. `latest` is pushed in its
+# own step, so a failed push is retried by the next run.
 on:
   workflow_run:
     workflows: [CI]
@@ -68,8 +71,13 @@ jobs:
             exit 1
           fi
           # `latest` moves only to the highest released version, never back to an older line.
-          highest=$( (gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts \
-            --json tagName --jq '.[].tagName' 2>/dev/null; echo "$tag") | sed 's/^v//' | sort -V | tail -1)
+          # A failed listing fails the run: assuming no releases would move `latest` back.
+          if ! releases=$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts \
+            --json tagName --jq '.[].tagName'); then
+            echo "::error::Could not list the published releases; not deciding on latest."
+            exit 1
+          fi
+          highest=$(printf '%s\n%s\n' "$releases" "$tag" | sed '/^$/d; s/^v//' | sort -V | tail -1)
           if [ "$highest" = "$version" ]; then latest=true; else latest=false; fi
           echo "latest=$latest" >> "$GITHUB_OUTPUT"
 
@@ -93,11 +101,19 @@ jobs:
         env:
           TOKEN: ${{ github.token }}
         run: echo "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-      - name: Skip if this version is already published
+      - name: Skip if this version is already published (from this commit)
         id: published
         run: |
           if docker manifest inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
-            echo "$IMAGE:$VERSION is already published"
+            # The image must come from this run's commit, or the release would tag another.
+            revision=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Image}}' \
+              | jq -r 'if has("config") then . else ([.[]][0]) end
+                       | .config.Labels["org.opencontainers.image.revision"] // ""')
+            if [ "$revision" != "$SHA" ]; then
+              echo "::error::$IMAGE:$VERSION was built from '${revision:-an unknown commit}', not $SHA. Bump the version, or release from that commit."
+              exit 1
+            fi
+            echo "$IMAGE:$VERSION is already published from $SHA"
             echo "done=true" >> "$GITHUB_OUTPUT"
           else
             echo "done=false" >> "$GITHUB_OUTPUT"
@@ -125,12 +141,12 @@ jobs:
         run: .github/scripts/smoke-image.sh "$IMAGE:$VERSION"
       - name: Push to ghcr.io
         if: steps.published.outputs.done == 'false'
-        run: |
-          docker push "$IMAGE:$VERSION"
-          if [ "$LATEST" = true ]; then
-            docker tag "$IMAGE:$VERSION" "$IMAGE:latest"
-            docker push "$IMAGE:latest"
-          fi
+        run: docker push "$IMAGE:$VERSION"
+      - name: Point latest at this version
+        # Runs whether or not the image was built in this run, so a failed push of `latest`
+        # is retried by the next run.
+        if: env.LATEST == 'true'
+        run: docker buildx imagetools create --tag "$IMAGE:latest" "$IMAGE:$VERSION"
 
   publish:
     needs: [plan, image]
