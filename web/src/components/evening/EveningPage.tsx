@@ -100,7 +100,7 @@ export function EveningPage() {
     <div className={styles.page}>
       <PageHeader
         title="Plan my evening"
-        intro="Tell Curio the occasion. It picks one theme and plans an outfit, a book and a drink paired with that book, and says why they go together."
+        intro="Tell Curio the occasion. It picks one theme and plans a book, a drink paired with that book and, when fashion is served, an outfit, and says why they go together."
       />
       {served?.enabled && served.hint ? (
         <p className={styles.hint} role="note">

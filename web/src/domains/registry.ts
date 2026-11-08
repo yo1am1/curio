@@ -196,12 +196,13 @@ export const DOMAINS: Record<Domain, DomainView> = {
     copy: {
       title: "Plan my evening.",
       intro:
-        "Tell Curio the occasion. It plans an outfit, a book and a drink paired with that book " +
-        "under one theme, explains why they go together and asks before saving anything.",
+        "Tell Curio the occasion. It plans a book, a drink paired with that book and, when " +
+        "fashion is served, an outfit under one theme, explains why they go together and asks " +
+        "before saving anything.",
       placeholder: "Describe the evening or ask for a change…",
       welcome:
-        "Tell me the occasion and I'll plan the outfit, the book and the drink. Try **rainy " +
-        "Sunday in** or **date night under €100**.",
+        "Tell me the occasion and I'll plan the book, the drink and, when fashion is served, " +
+        "the outfit. Try **rainy Sunday in** or **date night under €100**.",
       starters: ["Rainy Sunday in", "Date night under €100", "Book club, alcohol-free"],
       unavailable:
         "The evening assistant is currently unavailable. " +
