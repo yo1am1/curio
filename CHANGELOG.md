@@ -6,177 +6,117 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
-### Changed
-
-- Frozen real-model eval: 59/61 tasks (95 % CI 89–99 %) for a Claude model via the relay;
-  controls 4/61, 0/61, 0/61 (`docs/evals/frozen-relay-1.md`). The withdrawn "42/42" is
-  replaced in the README. Both failures are scorer limits found by manual review; not rescored.
-- Eval scorer 3.1.0: `checked_facts` also counts facts rendered from fact references, so a
-  model that cites facts is not penalised. Re-frozen before any model run (the reason and the
-  old fingerprint are in `evals/FROZEN.json`); controls and baseline rerun on the new freeze.
-- **Grounding: cite mode.** Every catalog fact the agent states through a fact reference
-  (prices, ratings, authors, years, pages, recipe amounts, alcohol labels, totals) is
-  rendered by the server from the catalog. Values the model types itself are checked by a
-  best-effort backstop (blind test: 80% of false facts caught, 25% of correct answers
-  flagged). The model writes `{product:ID}`, `{price:ID}`, `{colour:ID}`,
-  `{rating:book:ID}`, `{author:book:ID}`, `{year:book:ID}`, `{pages:book:ID}`,
-  `{alcohol:drink:ID}`, `{recipe:drink:ID}`, `{amount:drink:ID:Gin}`,
-  `{total:price:ID,ID}` or `{diff:rating:ID,ID}`; the engine (`curio.engine.facts`)
-  renders each from the items this turn's tools returned, through a `FactSheet` each domain
-  supplies (`facts.py`). A reference to anything else fails verification: one rewrite, then
-  the fallback. Answers, rewrites, fallbacks, AskShopper questions and quick replies are
-  rendered on the server, for `/chat` and `/chat/stream` alike; no reference reaches the
-  client. Every answer prompt asks for references and computed totals. Prose claims
-  ("cosy", "good for a cold") are not facts that can be rendered; the backstop catches some
-  of them. Why: rule tuning overfit (blind v1 0.846 / 0.171, v2 0.902 / 0.184, v3 0.800 /
-  0.250), and many false alarms were numbers bound to the wrong item of a sentence that
-  names several, which rendered facts cannot be.
-- The free-text grounding check is now the backstop: it runs on a copy of the answer with
-  the rendered values masked and never counts or flags rendered spans. Its rules are
-  unchanged.
-- The catalog-facts fallbacks state their facts through references, so item names in them
-  are now bold.
-
 ### Added
 
-- `GroundingReport.rendered`: the facts rendered from references, by kind (`name`, `price`,
-  `colour`, `rating`, `author`, `year`, `pages`, `alcohol`, `recipe`, `amount`, `total`,
-  `diff`), next to the backstop's `checked` and `counts`. Optional, so older clients and
-  servers keep working. The badge says "5 facts from the catalog · 1 checked", with each
-  part's kinds in its tooltip; a report without rendered facts keeps "Checked 3 prices and
-  2 names against the catalog".
-- **Held-out v3** (`tests/agents/grounding_heldout/v3.json`, 120 answers, 40 per domain),
-  scored once, blind, on grounding v2.2: 48 of 60 false answers caught (recall 0.800), 15 of
-  60 correct ones flagged (0.250). Its regression floor is that blind result; the check was
-  not tuned on it.
-- Eval reports have a "Cite mode" section: facts rendered from references against values
-  typed and checked by the backstop, by kind. Not scored; the frozen files are unchanged.
-- The scripted end-to-end model cites facts through references, and keeps raw values where
-  the backstop should run (its deliberate inventions, an outfit's budget, "drink #N").
+- **[Extending Curio](docs/extending.md)**, contract version 1: what a catalog item needs,
+  every `Toolkit`/`BaseToolkit` hook with its signature, tool policies, effects and
+  approvals, fact references, the grounding backstop, the files that register a domain in
+  the app, the tests a domain needs and what is not supported. `examples/hello_domain`
+  now loads its teas from `teas.csv` through a validating loader, cites names and prices
+  through fact references and checks typed prices; its tests run it end to end.
+- **Grounding: cite mode.** The model states catalog facts as fact references
+  (`{product:ID}`, `{price:ID}`, `{colour:ID}`, `{rating:book:ID}`, `{author:book:ID}`,
+  `{year:book:ID}`, `{pages:book:ID}`, `{alcohol:drink:ID}`, `{recipe:drink:ID}`,
+  `{amount:drink:ID:Gin}`, `{total:price:ID,ID}`, `{diff:rating:ID,ID}`), and the engine
+  (`curio.engine.facts`) renders each from the items this turn's tools returned, through
+  the `FactSheet` each domain supplies. A reference to anything else fails verification:
+  one rewrite, then the fallback. Answers, rewrites, fallbacks, questions and quick replies
+  are rendered on the server for `/chat` and `/chat/stream`; no reference reaches the
+  client. Prose claims ("cosy", "good for a cold") are not facts that can be rendered.
+- `GroundingReport.counts` (checked facts by kind) and `GroundingReport.rendered` (rendered
+  facts by kind), both optional. `verified` means at least one fact was rendered or
+  checked. The badge says "5 facts from the catalog · 1 checked", or "Checked 3 prices and
+  2 names against the catalog" when nothing was rendered.
+- Labelled grounding sets as regression floors: a corpus (`tests/agents/grounding_corpus/`,
+  114 of 116 false answers caught, 1 of 193 correct ones flagged) and three held-out sets
+  written blind (`tests/agents/grounding_heldout/`). Held-out v3 (120 answers), scored
+  once on the final rules: 48 of 60 false answers caught (recall 0.800), 15 of 60 correct
+  ones flagged (0.250); its floor is that result.
+- **Agent evaluation.** 16 factual-reliability tasks (61 tasks, 69 turns in all); three
+  control policies (`python -m evals.controls --policy always-ask | always-refuse |
+  first-tool-echo`); the scorer freeze (`evals/FROZEN.json`: scorer version and the SHA-256
+  of `evals/tasks.yaml`, `evals/scoring.py` and `evals/tasks.py`; `run_eval --frozen`
+  refuses anything else, and a rescore with changed files needs `--rescore-note`); 95 %
+  Wilson intervals; passes split into "right first time" and "after the engine repaired a
+  draft"; a cite-mode section (not scored).
+- CI: an `e2e-demo` job runs the browser suite on the cocktails and goodbooks-10k (39 of
+  the 85 tests; the 46 marked `fashion` need the H&M data and skip) and the 15 golden
+  pairing checks on that data. A "Docker image" workflow builds and smoke-tests the image
+  on pull requests that can change it. `scripts/check_links.py` and its test keep every
+  relative link and image in the README and docs resolving.
+- The image has a `HEALTHCHECK` (`python -m curio.app.healthcheck`, which sends a Host from
+  `ALLOWED_HOSTS`); the compose demo uses the same check.
 
-- **Agent evaluation: control policies.** `python -m evals.controls --policy always-ask |
-  always-refuse | first-tool-echo` answers relay requests with a policy that does nothing
-  useful: a generic question, a refusal, or one search with the raw message followed by a
-  list of names without facts. On the frozen task set they pass 4, 0 and 0 of 61 tasks (the
-  4 are the vague requests, where asking is right); the scripted baseline passes 19.
-  Reports in `docs/evals/controls-*.md`, key numbers in `docs/evals/controls.json`, which
-  every run's report shows next to its own.
-- **16 factual-reliability tasks** (a new `factual` category, 61 tasks in all): stock and
-  sizes, a discount, a material, free shipping, a price comparison, a total, a swapped
-  price, the Mojito and an alcohol-optional egg nog for children, a Bloody Mary and Project
-  Hail Mary (famous, not in the catalogs), an egg allergy, a rating comparison, a wrong
-  rating, a page total and a delivery promise. Each needs the right fact or the not-found
-  statement, and is scored with the engine's grounding outcome.
-- **The scorer freeze.** `evals/FROZEN.json` records the scorer version and the SHA-256 of
-  `evals/tasks.yaml`, `evals/scoring.py` and `evals/tasks.py`. `run_eval --frozen` refuses
-  to run or rescore unless they match; `--rescore` with changed files needs
-  `--rescore-note`, recorded in `run.json` and the report; `--resume` refuses to mix two
-  scorers. Every run records the fingerprint in `run.json`, `summary.json` and the report.
-- Eval reports give 95 % Wilson intervals for every rate, split passed tasks into "model
-  right first time" and "passed after the engine caught and repaired a draft", and report
-  the safety rate on replies that showed cards.
+### Changed
+
+- **Frozen real-model result: 59/61 tasks** (95 % CI 89–99 %) for a Claude model through the
+  file relay, against 4/61, 0/61 and 0/61 for the controls and 19/61 for the scripted
+  baseline (`docs/evals/frozen-relay-1.md`). Both failures are scorer limits found by
+  reading them; the number is not rescored. The README's earlier "42/42" (42 tasks of
+  2.1.0, no model ID, a scorer changed after the run was seen) is withdrawn.
+- Eval scorer 3.1.0: `checked_facts` also counts facts rendered from references. Re-frozen
+  before any model run (reason and old fingerprint in `evals/FROZEN.json`). Tasks that a
+  refusal, a question or a raw search could pass now need a useful answer (cards, a reason,
+  a correction, a named item, a checked fact or an alcohol label), and an argument check
+  fails when its tool was not called unless marked `optional`.
+- The free-text grounding check is the backstop for values the model types itself. It runs
+  on a copy of the answer with rendered values masked, and binds each fact to its item: a
+  price, rating, page count, year or recipe amount must match the item named nearest to it
+  in its sentence, a number bound to no item must be a total, budget or remainder the tools
+  stated, and a number the shopper typed counts only as their own budget or limit or where
+  the answer contradicts it. Totals, differences and multiples of the named items are
+  verified; names in bold, italic or quotes, bylines and co-authors, alcohol labels,
+  ingredients and colours must match; allergen, diet, health, age-safety, stock, delivery
+  and discount claims, book prices and non-euro amounts are reported. Repair messages name
+  the item a wrong fact belongs to. docs/agent-architecture.md lists what is and is not
+  checked.
+- Prompts ask for fact references and computed totals, and never to confirm a price or
+  rating the shopper states unless the catalog shows it. The catalog-facts fallbacks state
+  their facts through references, so item names in them are bold.
+- **Release order:** the Release workflow builds, smoke-tests and pushes the image first,
+  and tags the commit and publishes the GitHub release only once the image is on ghcr.io.
+  Re-runs stay idempotent; `latest` moves only to the highest released version.
+- The runtime image no longer contains `uv` (it stays in a build stage).
+- GitHub Actions are pinned by commit SHA; every workflow grants no default token
+  permissions, each job declares its own and has a timeout, and checkouts do not keep the
+  token.
+- `/chat` and `/chat/stream`: a failure inside a turn (a tool or recommender bug) is
+  **500** "The assistant failed; see server logs." instead of 502; provider and network
+  errors stay 502.
+- `GET /users/{id}`: `user` is `{"user_id": ...}` only; the shopper's **`age` is no longer
+  served**.
+- Evening copy says the outfit is planned only when fashion is served.
+- Dependabot skips TypeScript major versions in `web/` until typescript-eslint supports
+  TypeScript 7.
+- Documentation claims were checked against code, data and command output: the recipe CSV
+  is about 260 KB (not 400 KB), the H&M CSVs are not checksum-checked, the measured
+  goodbooks-10k preparation times, the test counts and stale test paths were corrected;
+  research notes carry a status label.
 
 ### Fixed
 
-- Tests: running `tests/evals` before `tests/app` leaked the runner's turn deadline,
-  signing key and domains into the environment, and two app tests failed. The runner test
-  restores the environment, and a guard fails any eval test that leaves those variables
-  changed.
-- **Grounding v2: the check now catches the plausible false claims the November 2026 audit
-  found** (all 13 of its probes had been labelled verified or not applicable). A price,
-  rating, page count, year or recipe amount must match the item it is attached to (the
-  nearest product, book or drink named or cited in its sentence), not any number in the
-  evidence; a number attached to no item must be a total, budget or remainder the tools
-  stated, or it is reported as unattributed. The whitelist of differences between two
-  evidence prices is gone. A number the shopper typed counts only as their own budget or
-  limit, or where the answer contradicts it, so "Yes, it's €4.99" for an €8.99 dress is
-  caught. Bold, italic or quoted names (and "<Title> by <Author>") that no tool returned,
-  wrong authors, wrong alcohol labels, allergen, diet, health and age-safety promises,
-  stock and delivery promises, percentages not in the description and non-euro amounts in
-  fashion and evening answers (as before, even the shopper's own "$150") are reported.
-- **Grounding v2.1: the misses and false alarms of the first blind held-out set.** On 80
-  answers written blind (`tests/agents/grounding_heldout/v1.json`) v2 caught 33 of 39 false
-  answers (recall 0.846) and flagged 7 of 41 correct ones (0.171). Fixed by category: a
-  total, difference or multiple of the named items' prices or page counts ("together that's
-  €74.98", "€5 cheaper", "4 pairs for €23.96", "2,786 pages in total") is verified rather
-  than reported as unattributed, and a wrong one is caught, while "€5 off" stays a discount
-  claim; "over €50" against the shopper's own €50 is their figure; allergen, skin-health
-  and age-suitability promises ("hypoallergenic", "suitable for kids aged 8 and up") are
-  reported in every domain; a book answer's prices, stock, formats and delivery are
-  reported; an ingredient said to be in a drink ("the Moscow Mule ... 8 oz ginger beer")
-  must be in its recipe; a colour word next to a product must fit its catalog colour
-  ("navy" for a grey sweater). Two binding bugs went too: a bare rating at the end of a
-  bullet was skipped when the next bullet began with a dash (so "Goblet of Fire – 4.46",
-  another book's rating, passed), and a name ending in a period ("Curvy Jegging HW.") ended
-  its sentence. After using it for development (no longer blind) v1 scores 39/39 and 0/41;
-  the corpus 64/66 (0.970) and 1/146 (0.007). A second blind set (v2) follows.
-- **Grounding v2.2: the second blind held-out set, false alarms first.** On 100 answers
-  written blind (`tests/agents/grounding_heldout/v2.json`) v2.1, which scored 1.0 / 0.0 on
-  v1, caught 46 of 51 false answers (recall 0.902) and flagged 9 of 49 correct ones
-  (0.184). Derived numbers are now judged permissively: a price or page count equal to the
-  sum of any two or three named items (or all), the difference of two, or a budget minus
-  one value or such a sum is accepted whatever its wording ("=", "bring you to", "by 68
-  pages", "€20 left"), unless framed as a discount or as one item's own value; a wrong
-  total is caught only when it matches no plausible combination. "Off White" is no longer
-  read as a discount, "adds up to" no longer as a limit, and "with €15 for two" or "a
-  budget of around €20" are the shopper's own figures. Drinks: "dairy-free going by the
-  ingredient list" or "contains no egg according to the recipe" pass when the recipe bears
-  them out (dairy, egg and nuts only); health benefits ("a good remedy for a sore throat",
-  "boosts immunity") are reported in every domain; "alcoholic" is wrong for an
-  alcohol-optional drink and "with or without alcohol" means optional; "Both are
-  non-alcoholic" covers the drinks just named; ingredients match plurals, compounds, a
-  recipe measure's words ("orange" for a soft drink measured as ", orange") and modifiers,
-  and "has no tequila" is checked. Books: co-authors ("by A and B", "together with B",
-  "co-written with B") and bylines after "was written by", "is by" or "It was written by"
-  are checked. After development use (no longer blind) v2 scores 51/51 and 0/49, v1 stays
-  39/39 and 0/41, and the corpus, with 97 new phrasings written as an overfitting check
-  (first measured at 46 of 50 caught and 4 of 47 flagged), 114/116 (0.983) and 1/193
-  (0.005). A third blind set (v3) is being written for the published figure.
+- Grounding: the plausible false claims of the November 2026 audit (all 13 probes) are
+  caught; a bare rating at the end of a bullet followed by a dashed bullet, and a name
+  ending in a period, no longer escape binding.
 - Clarifying questions and their quick replies are grounded like answers: an unverified
   question goes back to the model once, then becomes a general question without quick
   replies.
-- The catalog-facts fallback after a budget or an empty answer no longer reports
-  `verified` with nothing checked: it is checked like an answer (`verified` with its counts,
-  or `not_applicable`), and an empty answer adds an "Empty answer" step to the trace.
-
-### Changed
-
-- **The README no longer reports "42/42 with a Claude model".** That run used the 42 tasks
-  of 2.1.0, an agent session with no model ID, and a scorer changed after the run was seen;
-  two do-nothing policies passed 17 of the 45 tasks. docs/agent-eval.md says what it did and
-  did not show. A frozen rerun with a real model is pending.
-- Eval tasks that a refusal, a question or a raw search could pass now need a useful
-  answer: clear requests expect cards (`min_items`), refusals must give their reason, traps
-  must correct the shopper, catalog gaps must search and name the item, book answers must
-  state a checked fact (`checked_facts`), and evening answers must label a drink's alcohol
-  status. An argument check now fails when its tool was not called, unless marked
-  `optional`.
-- `GroundingReport` has a new `counts` field (checked facts by kind; existing fields are
-  unchanged), and `verified` means at least one fact was checked. The badge says what was
-  checked ("Checked 3 prices and 2 names against the catalog") instead of "Prices verified
-  against the catalog", and the trace's grounding step lists the same counts. Repair
-  messages name the item a wrong fact belongs to ("€29.99 does not match the price of
-  Summer Dress (€24.99)").
-- Prompts ask for each price, rating and amount next to the item it belongs to, and never
-  to confirm a price or rating the shopper states unless the catalog shows it.
-- A labelled grounding corpus (`tests/agents/grounding_corpus/`) gates the check in CI:
-  recall 63/66 on false answers, 1/146 false alarms on correct ones (real-model, scripted
-  and written answers). docs/agent-architecture.md lists what is and is not checked.
-
-- CI: a "Docker image" workflow builds and smoke-tests the image on pull requests that can
-  change it (Dockerfile, dependencies, base images), so those bumps are proven before merge.
-- Dependabot skips TypeScript major versions in `web/` until typescript-eslint supports
-  TypeScript 7.
-- `GET /users/{id}`: `user` is now `{"user_id": ...}` only; the shopper's **`age` is no
-  longer served**. No page used it, and these are real (pseudonymous) H&M shoppers. The
-  purchase history is unchanged. docs/data-and-licences.md says what the sample is.
+- The catalog-facts fallback after a budget or an empty answer is checked like an answer
+  (`verified` with its counts, or `not_applicable`) instead of reporting `verified` with
+  nothing checked; an empty answer adds an "Empty answer" step to the trace.
+- Tests: `tests/evals` no longer leaks the runner's turn deadline, signing key and domains
+  into the environment (two app tests failed after it); a guard fails any eval test that
+  leaves them changed. Random test order (pytest-randomly, four seeds) passes.
+- `scripts/classify_product_types.py` no longer triggers pandas' fillna deprecation; tests
+  turn `Pandas4Warning` into an error.
+- e2e: local requests bypass any HTTP proxy, servers take ports from `E2E_PORTS` when set
+  and never reuse one in a session, and a fixed 500 ms wait is gone.
 
 ### Removed
 
 - `GET /chat/feedback` (now 405). It returned other users' messages, answers and comments
-  to anyone. Nothing in the repository read it: the web app only posts ratings.
-  `POST /chat/feedback` is unchanged on the wire (204) but no longer keeps the texts in
-  memory; it logs the rating and tool names only.
+  to anyone; nothing in the repository read it. `POST /chat/feedback` is unchanged on the
+  wire (204) but keeps no texts; it logs the rating and tool names only.
 
 ### Security
 
