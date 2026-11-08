@@ -6,6 +6,8 @@ as a list of answers with their evidence IDs and labels:
     {"id": 1, "domain": "fashion", "user": "...", "evidence_ids": [...], "answer": "...",
      "label": "correct" | "false", "false_claims": "what is false (false answers only)"}
 
+`false_claims` may also be a list of what is false (v3 lists them).
+
 This adds the catalog rows the answers cite and the catalog vocabulary, as
 `grounding_corpus/build.py` does for the corpus. Run from the repository root with the
 prepared data in `data/`:
@@ -41,10 +43,17 @@ def layout(raw: list[dict[str, Any]], name: str) -> list[dict[str, Any]]:
                 "typed": answer["user"],
                 "answer": answer["answer"],
                 "evidence": evidence,
-                "note": answer.get("false_claims") or "correct",
+                "note": _note(answer.get("false_claims")),
             }
         )
     return cases
+
+
+def _note(false_claims: str | list[str] | None) -> str:
+    """What is false in a false answer (a sentence or a list of them), else "correct"."""
+    if isinstance(false_claims, list):
+        false_claims = "; ".join(false_claims)
+    return false_claims or "correct"
 
 
 def main(argv: list[str] | None = None) -> None:

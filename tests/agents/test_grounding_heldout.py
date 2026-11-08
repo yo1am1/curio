@@ -10,7 +10,13 @@ answers (recall 0.902) and flagged 9 of the 49 correct ones (false alarms 0.184)
 
 Both sets were then used for development (the fixes are general, by category, never by
 string), so neither is blind any more: the numbers below are regression floors, not
-estimates of how the check does on new answers. A third blind set (v3) measures that.
+estimates of how the check does on new answers.
+
+`grounding_heldout/v3.json` (120 answers: 60 false, 60 correct, 40 per domain) was the third,
+written fresh and scored once, blind, on v2.2 (tuned on v1 and v2, where it scored 1.0 / 0.0):
+it caught 48 of the 60 false answers (recall 0.800) and flagged 15 of the 60 correct ones
+(false alarms 0.250). That is the number to quote for the free-text check. v3 was not used to
+tune the check: its floor is its blind result, and the check's rules were left as they were.
 """
 
 from pathlib import Path
@@ -22,10 +28,14 @@ from tests.agents.test_grounding_corpus import check_case, measure
 HERE = Path(__file__).resolve().parent / "grounding_heldout"
 V1 = HERE / "v1.json"
 V2 = HERE / "v2.json"
-# After development use (no longer blind): every false answer caught, no correct one flagged.
+V3 = HERE / "v3.json"
+# v1 and v2 after development use (no longer blind): every false answer caught, no correct
+# one flagged.
 FLOORS = {
     V1: {"false": 39, "correct": 41, "min_recall": 1.0, "max_false_alarms": 0.0},
     V2: {"false": 51, "correct": 49, "min_recall": 1.0, "max_false_alarms": 0.0},
+    # Blind (never tuned on): 48 of 60 caught, 15 of 60 flagged.
+    V3: {"false": 60, "correct": 60, "min_recall": 0.80, "max_false_alarms": 0.25},
 }
 
 
