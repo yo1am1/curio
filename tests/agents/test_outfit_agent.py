@@ -63,8 +63,9 @@ def test_build_outfit_streams_a_step_per_slot_and_verifies_the_total(
     assert steps[6].summary == "Outfit ready: 4 pieces for €75.96 of a €80.00 budget."
     reply = events[-1].reply
     assert isinstance(events[-1], ReplyEvent)
-    assert reply.grounding.status == "verified" and reply.grounding.checked == 11
-    assert reply.grounding.counts == {"price": 7, "name": 4}
+    # The €80 budget is the shopper's own figure: allowed, not counted as a checked price.
+    assert reply.grounding.status == "verified" and reply.grounding.checked == 10
+    assert reply.grounding.counts == {"price": 6, "name": 4}
     assert [p.product_id for p in reply.products] == [1, 3, 5, 6]
     assert reply.outfit.total == 75.96 and reply.outfit.status == "complete"
     first = reply.outfit.slots[0]

@@ -14,7 +14,8 @@ tool supports. This module holds the domain-free parts:
   tools stated without an item (an outfit total, a budget, what is left) is allowed
   anywhere. Anything else is "unattributed". A number the shopper typed counts only as
   their own figure in a budget or limit ("under €30", "your €100 budget") or where the
-  answer contradicts it ("€8.99, not €4.99"): confirming a wrong figure is caught.
+  answer contradicts it ("€8.99, not €4.99"): confirming a wrong figure is caught. A budget
+  or limit is allowed but not counted in the report: it is not a catalog value.
   A number framed as a total, a difference or a multiple ("together that's €74.98", "€5
   cheaper", "4 pairs for €23.96", "2,786 pages in total") must equal that sum, difference
   or multiple of the values of the items its sentence (or, failing that, the answer) names.
@@ -768,13 +769,24 @@ class FactCheck:
     def __post_init__(self) -> None:
         self._typed = amounts_in(self.typed)
         self._paired: dict[int, Binding] = {}
+        self._own_figure = False
 
     def check(self, claims: Iterable[Claim], tally: Tally) -> None:
+        """Judge each claim and count it in `tally`, except a budget or limit (the shopper's
+        own figure, or one a question suggests): it is allowed, but it is not a catalog value
+        that was checked."""
         claims = list(claims)
         self._paired = self._pair_in_order(claims)
         for claim in claims:
+            self._own_figure = False
             ok, issue = self._judge(claim)
-            tally.add(claim.kind, ok, issue)
+            if not self._own_figure:
+                tally.add(claim.kind, ok, issue)
+
+    def _own(self) -> tuple[bool, str]:
+        """Accept a claim as a budget or limit, not as a checked catalog value."""
+        self._own_figure = True
+        return True, ""
 
     def _pair_in_order(self, claims: Sequence[Claim]) -> dict[int, Binding]:
         """Claims listed after the items they describe, in the same order: "the A and the B
@@ -826,26 +838,27 @@ class FactCheck:
         asking = text[sentence[0] : sentence[1]].rstrip(" *_\n").endswith("?")
         if framing.budget:
             if free or asking or self._was_typed(claim):
-                return True, ""
+                return self._own()
             return False, f"{shown} is not a budget or limit the shopper or the tools gave"
         if binding is not None and any(
             self._matches(claim, item, framing.mode) for item in binding.items
         ):
             return True, ""
-        if free:
-            return True, ""
         own = framing.mode in ("less", "more") and self._was_typed(claim)
+        if free:
+            # "Date night under €100" when the tools echo the shopper's €100: their limit.
+            return self._own() if own else (True, "")
         if own and self._own_comparison(claim, sentence):
-            return True, ""  # the shopper's own figure: "the last two are over €50"
+            return self._own()  # the shopper's own figure: "the last two are over €50"
         if self._derived(claim, framing.mode, sentence):
             return True, ""
         if self._combination(claim, framing.mode, sentence):
             return True, ""
         if framing.mode == "exact" and self._was_typed(claim) and self._own_money(claim, sentence):
-            return True, ""  # the shopper's own figure: "with €15 for two"
+            return self._own()  # the shopper's own figure: "with €15 for two"
         if binding is None and framing.mode in ("less", "more"):
             if asking or self._was_typed(claim):
-                return True, ""  # the shopper's own limit ("under €30"), or a suggestion
+                return self._own()  # the shopper's own limit ("under €30"), or a suggestion
             # "Here is everything under €30:" holds for every item the answer names (or,
             # when it names none, every item the tools returned).
             named = self.binder.items_between(0, len(text)) or self.binder.items

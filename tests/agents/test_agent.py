@@ -322,7 +322,7 @@ def test_turn_deadline_stops_before_another_model_call(chat_model_replying, sear
     ("text", "status"),
     [
         ("Run Shoe €59.99 vs Slim Jeans €29.99: €30 apart.", "verified"),
-        ("Under your €45 budget.", "verified"),
+        ("Under your €45 budget.", "not_applicable"),  # a budget is not a catalog value
         ("The Run Shoe is around €60.", "verified"),
         ("Around €60.", "fallback"),  # no product named: unattributed
         ("Only €12.50!", "fallback"),

@@ -59,7 +59,8 @@ def test_plan_evening_notes_a_dollar_budget_in_the_tool_result_and_the_plan(chat
     assert reply.evening.state.budget == 150
     assert reply.evening.notes[0] == DOLLAR_NOTE
     assert f"Note: {DOLLAR_NOTE}" in tool_results(seen)[0]
-    assert reply.grounding.status == "verified"
+    # The €150 is the shopper's budget, not a catalog price: nothing was checked.
+    assert reply.grounding.status == "not_applicable"
 
 
 def test_plan_evening_adds_no_note_for_a_euro_budget(chat_model_replying):

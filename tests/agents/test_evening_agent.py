@@ -164,6 +164,40 @@ def test_a_vague_request_gets_a_question(agent):
     assert reply.clarification.options == ["Date night", "Rainy Sunday in"]
 
 
+def test_a_budget_in_a_quick_reply_is_not_a_checked_price(agent):
+    # The re-audit: "plan my evening" got a question whose only euro amount is a suggested
+    # budget, and the badge said "Checked 1 price against the catalogs".
+    question = {
+        "question": "Happy to. What's the occasion?",
+        "options": ["Rainy Sunday in", "Date night under €100", "Book club, alcohol-free"],
+    }
+    reply = agent(action("AskShopper", question)).reply("plan my evening", [])
+    assert reply.status == "needs_input"
+    assert reply.clarification.options[1] == "Date night under €100"
+    assert reply.grounding.status == "not_applicable"
+    assert reply.grounding.counts == {} and reply.grounding.checked == 0
+
+
+def test_the_shoppers_budget_in_a_plan_is_not_counted_as_a_price(agent):
+    occasion = "Date night under €100"
+    plan = make_planner(fashion=False).plan(EveningRequest(occasion=occasion, budget=100))
+    book, drink = plan.book.book, plan.drink.cocktail
+    answer = (
+        f"Read **{book.title}** (book #{book.book_id}) by {book.author}, ★ "
+        f"{book.average_rating:.2f}, with a **{drink.name}** (drink #{drink.drink_id}). "
+        f"Why it works: {plan.why}"
+    )
+    assert "€100" in answer
+    assistant = agent(
+        action("PlanEvening", {"occasion": occasion, "budget": 100}), answer, fashion=False
+    )
+    reply = assistant.reply(occasion, [])
+    assert reply.grounding.status == "verified", reply.grounding
+    # The book and drink were checked; the €100 is the shopper's own budget.
+    assert "price" not in reply.grounding.counts
+    assert reply.grounding.counts["rating"] == 2  # in the answer and in "why"
+
+
 # --- Grounding --------------------------------------------------------------------------------
 
 

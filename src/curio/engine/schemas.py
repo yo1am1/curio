@@ -43,8 +43,9 @@ class GroundingReport(BaseModel):
     cite mode does not check that the cited item is the one the sentence names. `checked`
     counts the values the model typed itself that the backstop check covered in the first
     draft, and `counts` splits them by kind ("price", "id", "rating", "title", "name",
-    "author", "amount", "alcohol", "pages", "year", "claim", "fact"). Servers before cite
-    mode send no `rendered`.
+    "author", "amount", "alcohol", "pages", "year", "claim", "fact"). A budget or limit (the
+    shopper's own, or one a question suggests) is allowed but is not a catalog value, so it
+    is not counted. Servers before cite mode send no `rendered`.
     """
 
     status: Literal["verified", "repaired", "fallback", "not_applicable"]

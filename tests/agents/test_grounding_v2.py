@@ -52,7 +52,7 @@ def prices(text, items=(DRESS, JEANS), free=(), typed=""):
         ("The Summer Dress is under €20.", "fallback"),
         ("Both are under €35.", "verified"),  # holds for every item
         ("Both are under €25.", "fallback"),
-        ("Shall I look for something under €15?", "verified"),  # a question suggests a limit
+        ("Shall I look for something under €15?", "not_applicable"),  # suggests a limit
         ("The Summer Dress is €5 off.", "fallback"),
     ],
 )
@@ -64,7 +64,7 @@ def test_amounts_the_tools_stated_without_an_item_may_stand_anywhere():
     text = "With the Summer Dress (€24.99) the total is €54.98, leaving €5.02."
     assert prices(text, free=[54.98, 5.02, 60.0]).status == "verified"
     assert prices(text, free=[60.0]).status == "fallback"
-    assert prices("Your €60 budget covers it.", free=[60.0]).status == "verified"
+    assert prices("Your €60 budget covers it.", free=[60.0]).status == "not_applicable"
     assert prices("Your €70 budget covers it.", free=[60.0]).status == "fallback"
 
 
@@ -75,7 +75,7 @@ def test_amounts_the_tools_stated_without_an_item_may_stand_anywhere():
         ("The Summer Dress is €24.99, not €4.99.", "verified"),
         ("The listed price is €24.99, not €4.99.", "verified"),
         ("I can't confirm the €4.99 your friend saw: the Summer Dress is €24.99.", "verified"),
-        ("Under your €4.99 budget there is nothing, sorry.", "verified"),
+        ("Under your €4.99 budget there is nothing, sorry.", "not_applicable"),
         ("The Summer Dress isn't €24.99.", "fallback"),  # denies its real price
     ],
 )
@@ -276,7 +276,7 @@ def test_totals_differences_and_multiples_are_verified(text, status):
         ("The Summer Dress (€24.99) fits your €30 budget.", "verified"),
         ("The Summer Dress is €24.99; the Slim Jeans are over €25.", "verified"),
         ("The last one is over €25, so the Summer Dress wins.", "verified"),
-        ("Both are within €30.", "verified"),
+        ("Both are within €30.", "not_applicable"),
         ("You mentioned €25, but the Summer Dress is €24.99.", "verified"),
         ("Yes, the Summer Dress is under €20.", "fallback"),  # confirms a wrong figure
         ("The Slim Jeans are lovely. Yes, it's under €25.", "fallback"),
@@ -479,8 +479,8 @@ def test_derived_numbers_match_any_plausible_combination(text, status):
     [
         ("The Summer Dress wins: €24.99 against €29.99 for the Slim Jeans.", "verified"),
         ("The Summer Dress wins: €29.99 against €24.99 for the Slim Jeans.", "fallback"),
-        ("With €60 for two, the Summer Dress and the Slim Jeans both fit.", "verified"),
-        ("A budget of around €60 covers the Summer Dress and the Slim Jeans.", "verified"),
+        ("With €60 for two, the Summer Dress and the Slim Jeans both fit.", "not_applicable"),
+        ("A budget of around €60 covers the Summer Dress and the Slim Jeans.", "not_applicable"),
         ("Yes, the Summer Dress is €60.", "fallback"),  # the shopper's figure, confirmed
     ],
 )
