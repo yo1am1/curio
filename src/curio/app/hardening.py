@@ -221,7 +221,6 @@ DOCS_POLICY = _policy(
     form_action="'self'",
     frame_ancestors="'none'",
 )
-DOCS_PATHS = ("/docs", "/docs/init.js")
 BASE_HEADERS = {
     "x-content-type-options": "nosniff",
     "referrer-policy": "strict-origin-when-cross-origin",
@@ -231,7 +230,9 @@ BASE_HEADERS = {
 
 class SecurityHeaders:
     """ASGI middleware: CSP, nosniff, referrer policy and frame protection on every
-    response (a route's own value for a header wins)."""
+    response (a route's own value for a header wins). The policy is always the app's: the
+    Swagger UI routes, which exist only with API_DOCS on, set `DOCS_POLICY` themselves, so
+    the web app served at /docs when they are off never gets the wider policy."""
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -240,8 +241,7 @@ class SecurityHeaders:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        policy = DOCS_POLICY if scope["path"] in DOCS_PATHS else APP_POLICY
-        added = {**BASE_HEADERS, "content-security-policy": policy}
+        added = {**BASE_HEADERS, "content-security-policy": APP_POLICY}
 
         async def with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":

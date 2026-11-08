@@ -360,6 +360,29 @@ def test_the_docs_ui_is_off_by_default(cocktail_catalog) -> None:
         assert client.get("/openapi.json").status_code == 200  # the schema stays available
 
 
+def test_the_web_app_at_docs_gets_the_app_policy_when_the_docs_ui_is_off(
+    cocktail_catalog, tmp_path
+) -> None:
+    # With API_DOCS off, a browser opening /docs gets the web app (index.html), and with it
+    # the app's policy, not the Swagger one that allows scripts from its CDN.
+    from curio.app.hardening import APP_POLICY
+
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><title>Curio</title>")
+    cocktails = CocktailServices(cocktail_catalog, CocktailRecommender(cocktail_catalog))
+    app = create_app(serve(cocktails=cocktails), web_dist=dist, settings=settings())
+    with TestClient(app) as client:
+        for path in ("/docs", "/docs/init.js"):
+            page = client.get(path, headers={"accept": "text/html"})
+            assert page.status_code == 200 and "<title>Curio</title>" in page.text
+            policy = page.headers["content-security-policy"]
+            assert policy == APP_POLICY and "cdn.jsdelivr.net" not in policy
+        plain = client.get("/docs")
+        assert plain.status_code == 404
+        assert "cdn.jsdelivr.net" not in plain.headers["content-security-policy"]
+
+
 def test_the_opt_in_docs_ui_loads_pinned_assets_with_sri(cocktail_catalog) -> None:
     cocktails = CocktailServices(cocktail_catalog, CocktailRecommender(cocktail_catalog))
     app = create_app(serve(cocktails=cocktails), settings=settings(api_docs=True))
@@ -372,9 +395,11 @@ def test_the_opt_in_docs_ui_loads_pinned_assets_with_sri(cocktail_catalog) -> No
     assert "swagger-ui-dist@5/" not in page.text  # no floating major version
     assert "<script>" not in page.text  # nothing inline: the app's script-src has no hashes
     assert "SwaggerUIBundle(" in init.text
-    policy = page.headers["content-security-policy"]
-    assert "script-src 'self' https://cdn.jsdelivr.net" in policy
-    assert "frame-ancestors 'none'" in policy
+    for response in (page, init):
+        policy = response.headers["content-security-policy"]
+        assert "script-src 'self' https://cdn.jsdelivr.net" in policy
+        assert "frame-ancestors 'none'" in policy
+        assert response.headers["x-frame-options"] == "DENY"
 
 
 # --- Single-use, session-bound approvals over HTTP -------------------------------------------

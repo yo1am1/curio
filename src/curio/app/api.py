@@ -28,6 +28,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from curio.app.config import Settings, get_settings
 from curio.app.demo import DemoCustomer
 from curio.app.hardening import (
+    DOCS_POLICY,
     SWAGGER_INIT,
     BodySizeLimit,
     SecurityHeaders,
@@ -452,14 +453,17 @@ def create_app(
     )
 
     if settings.api_docs:
+        # Only these two routes get the Swagger policy (scripts from its CDN).
+        docs_csp = {"content-security-policy": DOCS_POLICY}
 
         @app.get("/docs", include_in_schema=False)
         def swagger_ui() -> HTMLResponse:
-            return HTMLResponse(swagger_page(app.title, app.openapi_url or "/openapi.json"))
+            page = swagger_page(app.title, app.openapi_url or "/openapi.json")
+            return HTMLResponse(page, headers=docs_csp)
 
         @app.get("/docs/init.js", include_in_schema=False)
         def swagger_init() -> Response:
-            return Response(SWAGGER_INIT, media_type="text/javascript")
+            return Response(SWAGGER_INIT, media_type="text/javascript", headers=docs_csp)
 
     @app.exception_handler(IndexNotBuiltError)
     async def index_not_built(_: Request, error: IndexNotBuiltError) -> JSONResponse:
