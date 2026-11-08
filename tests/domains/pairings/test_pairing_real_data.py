@@ -1,7 +1,8 @@
 """Golden checks of book → cocktail pairing on the real prepared data.
 
-Skipped when `data/books.parquet` or `data/cocktails.parquet` is not prepared (CI without the
-downloads); the E2E suite repeats the main checks through the running API.
+Skipped when `data/books.parquet` or `data/cocktails.parquet` is not prepared (CI's `checks`
+job); CI's `e2e-demo` job prepares both and runs these. The E2E suite repeats the main checks
+through the running API.
 """
 
 from pathlib import Path

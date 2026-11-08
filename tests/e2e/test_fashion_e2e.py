@@ -11,9 +11,12 @@ approval drawer are in `test_web_e2e.py`. Screenshots go to the artifacts folder
 
 import re
 
+import pytest
 from playwright.sync_api import expect
 
 from tests.e2e.conftest import results
+
+pytestmark = pytest.mark.fashion
 
 
 def open_trace(turn) -> None:

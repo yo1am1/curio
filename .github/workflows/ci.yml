@@ -5,15 +5,24 @@ on:
     branches: [main]
   pull_request:
 
-permissions:
-  contents: read
+# A newer push to the same pull request cancels the older run; runs on main always finish.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
 
 jobs:
   checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           version: "0.11.32"   # same uv as the Dockerfile's pinned image; uv.lock is written by it
           enable-cache: true
@@ -59,12 +68,17 @@ jobs:
 
   web:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
@@ -75,31 +89,67 @@ jobs:
       - run: npm test
       - run: npm run build
 
-  # The quick start in a browser: the API with only the recipes (prepared above in `checks`,
-  # here again: a pinned ~400 KB download) serves the built React app, and Chromium checks
-  # that it lands on the cocktail pages and shows fashion as unavailable with its hint. The
-  # rest of tests/e2e needs the H&M data, its image index and the books, so it runs locally.
-  e2e-quickstart:
+  # The browser suite on the demo's data: cocktails and books (no H&M download), the API
+  # serving the built React app, the scripted LLM over HTTP and Chromium. Every test in
+  # tests/e2e runs except those marked `fashion` (the H&M data and its image index are not
+  # downloadable here), which skip; E2E_REQUIRE_DATA=1 makes missing books or recipes an
+  # error rather than a green run of skipped tests. The goodbooks-10k source files (~150 MB,
+  # SHA-256-checked on every use) are cached per pinned commit.
+  e2e-demo:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
         with:
           version: "0.11.32"
           enable-cache: true
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: uv sync --locked --all-extras
+      - name: Pinned goodbooks-10k commit
+        id: books
+        run: echo "commit=$(sed -n 's/^SOURCE_COMMIT = "\(.*\)"/\1/p' scripts/prepare_books.py)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: books-cache
+        with:
+          path: .cache/goodbooks-10k
+          key: goodbooks-10k-${{ steps.books.outputs.commit }}
+      - name: Download the goodbooks-10k source files (checked against their SHA-256)
+        if: steps.books-cache.outputs.cache-hit != 'true'
+        run: |
+          uv run python - <<'PY'
+          from pathlib import Path
+
+          from scripts import prepare_books as books
+
+          root = Path(".cache/goodbooks-10k")
+          for file in (books.BOOKS_CSV, books.RATINGS_CSV, books.BOOK_TAGS_CSV, books.TAGS_CSV,
+                       books.DETAILS_ZIP):
+              target = root / file.path
+              target.parent.mkdir(parents=True, exist_ok=True)
+              books.fetch(books.DEFAULT_SOURCE, file, target)
+          PY
       - run: uv run python -m scripts.prepare_cocktails
+      # Checks every file's SHA-256 again, also from the cache.
+      - run: uv run python -m scripts.prepare_books --source .cache/goodbooks-10k
+      # The golden pairing checks on the real books and recipes (they skip in `checks`).
+      - run: uv run pytest -q tests/domains/pairings/test_pairing_real_data.py
       - run: npm ci && npm run build
         working-directory: web
       - run: uv run playwright install --with-deps chromium
-      - run: uv run pytest -m e2e tests/e2e/test_quickstart_e2e.py -q
-      - uses: actions/upload-artifact@v7
+      - run: uv run pytest -m e2e tests/e2e -q --durations=10
+        env:
+          E2E_REQUIRE_DATA: "1"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
-          name: e2e-quickstart
+          name: e2e-demo
           path: e2e-artifacts/

@@ -301,9 +301,11 @@ so one process (or one container) is the whole app
 
 ## How it's built and released
 
-CI runs lint, format, the offline tests, the web app's checks and build, and a quick-start
-boot checked in Chromium on every pull request and every push to `main`. When CI passes on `main` with a new version, a tag, a GitHub release
-and the container image are published automatically.
+On every pull request and every push to `main`, CI runs lint, format, the offline tests,
+the web app's checks and build, and the browser suite in Chromium on the cocktails and
+books (the tests that need the H&M data run locally). When CI passes on `main` with a new
+version, the container image is built, smoke-tested and pushed, and then the tag and the
+GitHub release are published.
 [How it was built](docs/how-it-was-built.md) · [Security policy](SECURITY.md).
 
 ## Data and licences

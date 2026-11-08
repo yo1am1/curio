@@ -11,14 +11,14 @@ reviewed every change before it landed.
   UI; each fix landed with a regression test.
 - **Test gates.** Every change has to pass lint, formatting and the offline suite. The
   suite includes the import-layering test in `tests/test_architecture.py`. A browser suite
-  runs the real API and the React app it serves in Chromium on the prepared data, with a scripted LLM, so chat
-  runs are reproducible.
+  runs the real API and the React app it serves in Chromium on the prepared data, with a
+  scripted LLM, so chat runs are reproducible; CI runs the part that needs no H&M data.
 - **Evidence over claims.** Recommender changes were measured on a chronological holdout
   and kept only when the evidence held. The records, including the ideas that did not hold,
   are in [research/fashion](research/fashion/recommendation-audit.md).
 - **Release automation.** CI runs on every pull request and on every push to `main`. When
-  CI passes on `main` with a new version, the Release workflow tags that commit. It also
-  publishes a GitHub release with the changelog notes and pushes the container image to
-  ghcr.io.
+  CI passes on `main` with a new version, the Release workflow builds, smoke-tests and pushes
+  the container image to ghcr.io, and only then tags that commit and publishes a GitHub
+  release with the changelog notes.
 
 The [changelog](../CHANGELOG.md) records what changed in each version.

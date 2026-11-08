@@ -58,6 +58,7 @@ filterwarnings = ["error::pandas.errors.Pandas4Warning"]
 markers = [
     "integration: needs downloaded models or network",
     "e2e: browser end-to-end run over prepared data (uv run pytest -m e2e tests/e2e)",
+    "fashion: an e2e test that needs the H&M data and its image index (skips without them)",
 ]
 
 [tool.ruff]

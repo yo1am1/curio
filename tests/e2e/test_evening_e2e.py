@@ -84,6 +84,7 @@ def paired_drinks(api, result: dict) -> set[int]:
 # --- API on the real data ---------------------------------------------------------------------
 
 
+@pytest.mark.fashion
 def test_real_plans_for_several_occasions(api, artifacts):
     excluded = set(EXCLUDED_SHELVES)
     table = []
@@ -163,6 +164,7 @@ def test_a_new_visit_opens_on_plan_my_evening_with_the_engine_brand(web):
     expect(web.page.get_by_role("heading", name="Plan my evening", level=1)).to_be_visible()
 
 
+@pytest.mark.fashion
 def test_swaps_on_the_real_data(api):
     first = plan(api, occasion="rainy Sunday in")
     state = first["state"]
@@ -203,6 +205,7 @@ def plan_now(web):
     return plan
 
 
+@pytest.mark.fashion
 def test_rainy_sunday_in_on_the_planner_page(web):
     plan_on_page(web, "Rainy Sunday in")
     plan = plan_now(web)
@@ -237,6 +240,7 @@ def test_book_club_alcohol_free_on_the_planner_page(web):
     web.shot("evening-03-book-club-alcohol-free", full_page=True)
 
 
+@pytest.mark.fashion
 def test_date_night_under_100_in_chat_with_a_swap_and_an_approved_save(web):
     web.open("/evening")
     web.page.get_by_role("navigation", name="Evening pages").get_by_role(

@@ -18,7 +18,7 @@ from tests.e2e.conftest import results
 
 @pytest.fixture
 def quickstart_api(quickstart_api_url: str):
-    with httpx.Client(base_url=quickstart_api_url, timeout=30) as client:
+    with httpx.Client(base_url=quickstart_api_url, timeout=30, trust_env=False) as client:
         yield client
 
 

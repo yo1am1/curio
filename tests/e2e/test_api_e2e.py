@@ -20,6 +20,7 @@ def stream(api: httpx.Client, body: dict) -> list[dict]:
         return [json.loads(line) for line in response.iter_lines() if line.strip()]
 
 
+@pytest.mark.fashion
 def test_health_reports_both_prepared_domains(api):
     health = api.get("/health").json()
     assert health["catalog_products"] > 10_000
@@ -30,6 +31,7 @@ def test_health_reports_both_prepared_domains(api):
     assert domains["fashion"]["chat_enabled"] and domains["cocktails"]["chat_enabled"]
 
 
+@pytest.mark.fashion
 def test_clip_text_search_understands_garments(api):
     hits = api.post("/search/text", json={"query": "black dress", "top_k": 10}).json()
     assert len(hits) == 10
@@ -38,6 +40,7 @@ def test_clip_text_search_understands_garments(api):
     assert sum(h["product"]["colour"] == "Black" for h in hits) >= 6
 
 
+@pytest.mark.fashion
 def test_image_search_finds_the_photographed_product(api):
     hit = api.post("/search/text", json={"query": "striped t-shirt", "top_k": 1}).json()[0]
     pid = hit["product"]["product_id"]
@@ -48,6 +51,7 @@ def test_image_search_finds_the_photographed_product(api):
     assert found[0]["score"] > 0.99
 
 
+@pytest.mark.fashion
 def test_corrupt_upload_is_rejected(api):
     response = api.post("/search/image", files={"file": ("q.jpg", b"not an image")})
     assert response.status_code == 400
@@ -56,6 +60,7 @@ def test_corrupt_upload_is_rejected(api):
     assert api.post("/search/image", files={"file": ("q.png", tiny.getvalue())}).is_success
 
 
+@pytest.mark.fashion
 @pytest.mark.parametrize("strategy", ["learned", "repeat", "collaborative", "content", "graph"])
 def test_every_strategy_recommends_with_evidence(api, strategy):
     if strategy == "learned" and not api.get("/health").json()["ranking_enabled"]:
@@ -70,6 +75,7 @@ def test_every_strategy_recommends_with_evidence(api, strategy):
         assert all(h["reasons"] for h in hits)
 
 
+@pytest.mark.fashion
 def test_fashion_turn_streams_steps_and_grounded_answer(api):
     events = stream(api, {"message": "Black trousers under €30"})
     steps = [e["step"]["name"] for e in events if e["type"] == "step"]
@@ -80,6 +86,7 @@ def test_fashion_turn_streams_steps_and_grounded_answer(api):
     assert reply["suggestions"]
 
 
+@pytest.mark.fashion
 def test_invented_price_is_repaired_before_the_shopper_sees_it(api):
     first = stream(api, {"message": "Black trousers under €30"})[-1]["reply"]
     history = [
@@ -101,6 +108,7 @@ def test_invented_price_is_repaired_before_the_shopper_sees_it(api):
     assert "Self-correction" in names
 
 
+@pytest.mark.fashion
 def test_approval_round_trip_and_tampering(api):
     first = stream(api, {"message": "White sneakers"})[-1]["reply"]
     ids = [p["product_id"] for p in first["products"][:5]]
@@ -125,6 +133,7 @@ def test_approval_round_trip_and_tampering(api):
     assert done["applied"][0]["product_ids"] == keep
 
 
+@pytest.mark.fashion
 def test_personal_picks_use_the_linked_history(api):
     customer = api.get("/demo/customers").json()[0]["user_id"]
     reply = api.post(
@@ -149,6 +158,7 @@ def test_cocktail_endpoints_on_the_real_catalog(api):
     assert similar and all(h["reasons"] for h in similar)
 
 
+@pytest.mark.fashion
 def test_cocktail_turn_and_cross_domain_replay(api):
     reply = api.post(
         "/chat",

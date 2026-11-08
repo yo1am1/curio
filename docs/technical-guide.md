@@ -1001,8 +1001,8 @@ the built app.
 
 ### End-to-end tests
 
-`tests/e2e` starts the real API (real catalog, CLIP index, recommenders and ranker), which
-serves the built React app (`web/dist`, built with `npm run build` first when it is missing
+`tests/e2e` starts the real API (real catalogs, recommenders and, with the H&M data, the
+CLIP index and ranker), which serves the built React app (`web/dist`, built with `npm run build` first when it is missing
 and `web/node_modules` exists; the browser tests skip otherwise), and drives it in Chromium.
 Each test file covers one area in the browser and through the API:
 
@@ -1064,21 +1064,31 @@ with only `cocktails.parquet`, no image index, no LLM and no `.env`, serving the
 It checks that `/health` and `/domains` report fashion as not prepared, that fashion
 endpoints answer 503, and that the app lands on the cocktail pages, shows fashion as
 unavailable with its hint, says how to enable chat and sends fashion deep links back to the
-landing. It opens no Qdrant index, so it runs beside the full-data API, and it needs only the
-recipes, so CI runs it (the `e2e-quickstart` job); the rest of the suite runs locally on the
-prepared data.
+landing. It opens no Qdrant index, so it runs beside the full-data API.
+
+The suite adapts to the data it finds. With the cocktails and the books prepared (no H&M
+download), the API serves cocktails, books and Plan my evening (without the outfit), and
+every test runs except the ones marked `@pytest.mark.fashion`, which skip with "Needs the H&M
+data and its image index": 39 of the 85 run that way. With the H&M sample, its photos and
+the Qdrant index as well, the API serves every domain and all 85 run.
 
 Prepare the data as in [Fashion data](#fashion-data) (`prepare_data`, `fetch_photos`, `build_index`,
 `fetch_query_photos`, `train_ranker`, `evaluate`, `prepare_cocktails`, `prepare_books`),
 stop any API that
 holds the embedded Qdrant index, then run `uv run pytest -m e2e tests/e2e`. Screenshots of
 each step go to `e2e-artifacts/` (override with `E2E_ARTIFACTS`); `E2E_DATA_DIR`,
-`E2E_QDRANT_PATH` and `E2E_CHROMIUM` point at other data or browsers. The default
-`uv run pytest` run excludes these tests.
+`E2E_QDRANT_PATH` and `E2E_CHROMIUM` point at other data or browsers, `E2E_PORTS` (for
+example `8100-8199`) limits the ports the servers use, and `E2E_REQUIRE_DATA=1` turns missing
+cocktail or book files into an error instead of skipped tests. The default `uv run pytest`
+run excludes these tests.
 
 A second CI job, `web`, runs `npm ci`, lint (ESLint and Prettier), the type check, the
-Vitest suite and the production build of `web/` on Node 22. A third, `e2e-quickstart`,
-builds the app, installs Chromium and runs `test_quickstart_e2e.py` on the recipes alone.
+Vitest suite and the production build of `web/` on Node 22. A third, `e2e-demo`, prepares
+the recipes and goodbooks-10k (its source files are cached per pinned commit with
+`actions/cache` and checked by SHA-256 on every use), runs the 15 golden pairing checks on
+that real data, builds the app, installs Chromium and runs `tests/e2e` with
+`E2E_REQUIRE_DATA=1`: the 39 tests that need no H&M data run, the 46 marked `fashion` skip.
+The fashion tests run locally on the prepared H&M data.
 
 CI (`.github/workflows/ci.yml`) runs `uv sync --locked`, Ruff, `scripts.prepare_cocktails`
 (so the probes on the real recipe catalog run instead of skipping), the offline test suite,
@@ -1086,18 +1096,18 @@ a startup check of the real API with only the recipes (the runner has no H&M dat
 must report cocktails served and fashion not, `/products/1` must be 503 and recipe search
 200) and `docker compose config` for every profile. It needs no secrets.
 
-The offline suite covers fashion-less serving in `tests/test_optional_domains.py` (real
+The offline suite covers fashion-less serving in `tests/app/test_optional_domains.py` (real
 `Settings` over a temporary data folder; CLIP and Qdrant fail the test if touched); the web
 app's own behaviour (the stream reader, step trace, approvals, cards, session, filters,
 pantry, Compare and the graph) is covered by its Vitest suites in `web/src`. Books
 have their own offline tests over a ten-book fixture (`tests/conftest.py`): the catalog,
 taxonomy and recommender in `tests/domains/books/`, `scripts.prepare_books` over a miniature
 goodbooks-10k checkout in `tests/test_prepare_books.py`, the agent and its grounding in
-`tests/agents/test_book_agent.py`, and loading and endpoints in `tests/test_books_api.py`.
-CI does not download goodbooks-10k. The outfit builder is
-covered by planner tests over a 13-product fixture (`tests/test_outfits.py`: plans, budget
+`tests/agents/test_book_agent.py`, and loading and endpoints in `tests/app/test_books_api.py`.
+Only CI's `e2e-demo` job downloads goodbooks-10k. The outfit builder is
+covered by planner tests over a 13-product fixture (`tests/domains/fashion/test_outfits.py`: plans, budget
 allocation, infeasible budgets, co-purchase and visual preference, swaps), agent tests with
-a scripted model (`tests/agents/test_outfit_agent.py`) and API tests in `tests/test_api.py`.
+a scripted model (`tests/agents/test_outfit_agent.py`) and API tests in `tests/app/test_api.py`.
 
 ### Releases
 
@@ -1105,11 +1115,16 @@ Releases are cut from `main` by changing the version, never by pushing tags by h
 `version` in `pyproject.toml` and `CITATION.cff`, run `uv lock`, and rename
 `## [Unreleased]` in the changelog to `## [X.Y.Z] - YYYY-MM-DD` (plus the compare links at
 the bottom). When CI passes on that `main` commit, the Release workflow
-(`.github/workflows/release.yml`) tags it `vX.Y.Z`, publishes a GitHub release whose notes are
-that changelog section, and pushes `ghcr.io/yo1am1/curio:X.Y.Z` and `:latest`. A version
-that already has a release is skipped, so re-runs are safe. Dependabot
-(`.github/dependabot.yml`) proposes grouped weekly updates for `uv.lock`, GitHub Actions and
-the Docker base image.
+(`.github/workflows/release.yml`) first checks that the changelog has that section, then
+builds the image, smoke-tests it (`.github/scripts/smoke-image.sh`: the container must turn
+healthy and serve `/health` and the app) and pushes `ghcr.io/yo1am1/curio:X.Y.Z` (and
+`:latest` when it is the highest released version). Only once the image is on ghcr.io does
+it tag the commit `vX.Y.Z` and publish the GitHub release whose notes are that changelog
+section, so a failed build leaves no release behind. An image or release that already exists
+is kept, so re-runs are safe and a later run finishes what an earlier one left undone.
+Actions are pinned by commit SHA, and Dependabot (`.github/dependabot.yml`) proposes grouped
+weekly updates for `uv.lock`, the web app and those GitHub Actions pins, and monthly ones for
+the Docker base images.
 
 ### Release scope and compatibility
 
