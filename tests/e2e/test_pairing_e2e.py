@@ -245,7 +245,8 @@ def test_reading_list_cocktail_card_and_chat_starter(web):
     turn = web.last_turn()
     expect(turn.get_by_test_id("pairing-drink")).to_have_count(3)
     expect(turn.get_by_test_id("grounding-badge")).to_have_text(
-        re.compile(r"^Checked \d+ titles?, .+ against the catalog$")
+        # Rendered drinks, and the raw "drink #N" IDs and profile titles the answer typed.
+        re.compile(r"^\d+ facts from the catalog · \d+ checked$")
     )
     first = drink_names(turn.get_by_test_id("pairing-drink"))
     assert web.chat_bodies[-1]["book_shortlist"]

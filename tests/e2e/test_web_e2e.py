@@ -106,9 +106,9 @@ def test_fashion_chat_streams_its_steps_and_is_verified(web):
     turn = web.page.get_by_test_id("assistant-turn").last
     expect(turn).to_be_visible(timeout=120_000)
     badge = turn.get_by_test_id("grounding-badge")
-    expect(badge).to_have_text(
-        re.compile(r"^Checked \d+ prices, \d+ names and \d+ colours against the catalog$")
-    )
+    expect(badge).to_have_text(re.compile(r"^\d+ facts from the catalog$"))
+    expect(turn).to_contain_text("€")
+    expect(turn).not_to_contain_text(re.compile(r"\{\w+:"))
     trace = turn.get_by_role("button", name=re.compile(r"How Curio worked · \d+ actions? · "))
     trace.click()
     for label in ("Plan", "Search catalog", "Grounding check"):
