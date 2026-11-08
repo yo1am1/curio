@@ -23,4 +23,24 @@ describe("Markdown", () => {
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", "noreferrer noopener");
   });
+
+  it("renders only https links: javascript:, data:, http: and relative ones are plain text", () => {
+    const { container } = render(
+      <Markdown>
+        {[
+          "[a](javascript:alert(1))",
+          "[b](data:text/html;base64,PHNjcmlwdD4=)",
+          "[c](http://attacker.example/?q=secret)",
+          "[d](/chat/feedback)",
+          "[e](//attacker.example/x)",
+          "[f](JAVASCRIPT:alert(1))",
+          "<https://ok.example/auto>",
+        ].join(" ")}
+      </Markdown>,
+    );
+    const links = screen.getAllByRole("link");
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(["https://ok.example/auto"]);
+    expect(container.innerHTML).not.toMatch(/javascript:|data:text|attacker\.example/i);
+    expect(container).toHaveTextContent("a b c d e f");
+  });
 });
