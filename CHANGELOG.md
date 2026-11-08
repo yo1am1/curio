@@ -8,6 +8,9 @@ All notable changes to Curio are recorded here. The format follows
 
 ### Changed
 
+- Frozen real-model eval: 59/61 tasks (95 % CI 89–99 %) for a Claude model via the relay;
+  controls 4/61, 0/61, 0/61 (`docs/evals/frozen-relay-1.md`). The withdrawn "42/42" is
+  replaced in the README. Both failures are scorer limits found by manual review; not rescored.
 - Eval scorer 3.1.0: `checked_facts` also counts facts rendered from fact references, so a
   model that cites facts is not penalised. Re-frozen before any model run (the reason and the
   old fingerprint are in `evals/FROZEN.json`); controls and baseline rerun on the new freeze.

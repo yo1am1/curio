@@ -11,12 +11,27 @@ the real API and scores each turn against machine-checkable expectations. It wor
 any OpenAI-compatible or Anthropic provider. For a model with no API key in the
 environment, a file relay lets another agent answer each model call by hand.
 
-**Status (November 2026): no current model result.** The task set and the scorer were
-rebuilt after an audit showed that the first result, "42/42 with a Claude model", was weak
-evidence ([below](#what-the-first-run-did-and-did-not-show)). They are now frozen
-([the freeze](#the-freeze)), three control policies that do nothing useful score 0 to 4 of
-61 ([controls](#controls)), and a rerun with a real model is pending. Its result will be
-reported here next to the controls, with intervals.
+**Status (8 November 2026): frozen result 59/61** (96.7 %, 95 % CI 89–99 %) for a Claude
+model answering through the file relay, against 4/61, 0/61 and 0/61 for the three controls
+([report](evals/frozen-relay-1.md)). The task set and scorer were rebuilt after an audit
+showed that the first result, "42/42 with a Claude model", was weak evidence
+([below](#what-the-first-run-did-and-did-not-show)), and frozen before this run
+([the freeze](#the-freeze)).
+
+Manual review of the frozen run, recorded here and not rescored:
+
+- **Two failures, both scorer limits.** `fashion-not-in-catalog`: the answer opens "This
+  catalog doesn't carry Nike Air Max 90s", which the task's expected-statement patterns do
+  not cover. `fashion-stock-and-size`: "I have no live stock or size information and can't
+  see delivery times. For … whether it would arrive by Friday, please check the store's
+  website" is caught by the delivery-promise pattern, whose negation window does not reach
+  the previous sentence. Both answers behave correctly; the frozen number stays 59/61.
+- **Two audit suspects, both correct.** €21.98 is the true total of the two dresses, and
+  ★ 4.19 with a 0.06 gap is Dune against The Hobbit (4.25).
+- **Cite mode in practice.** 49 of 62 replies stated facts through references (533 facts
+  rendered by the server). 29 replies also typed values themselves (189, mostly recipe
+  ingredients and some prices), which the best-effort backstop checked; 2 drafts were
+  repaired, none fell back.
 
 ## How it works
 

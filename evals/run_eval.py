@@ -621,8 +621,8 @@ def cite_mode(records: list[dict]) -> list[str]:
         "## Cite mode: references versus typed values",
         "",
         "Facts the server rendered from the model's fact references are correct by "
-        "construction; values the model typed itself went to the best-effort backstop. Not "
-        "scored: the frozen scorer reads only the backstop's `counts` (`checked_facts`).",
+        "construction; values the model typed itself went to the best-effort backstop. The "
+        "scorer's `checked_facts` counts both; this table itself is not scored.",
         "",
         "| | Replies | Facts |",
         "|---|---|---|",

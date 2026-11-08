@@ -93,28 +93,35 @@ In the chat screenshots the replies come from the scripted test model in
 trace, checks and approvals are the real system.
 [How the agent works](docs/agent-architecture.md).
 
-### Evaluated with a real model: frozen rerun pending
+### Evaluated with a real model, on a frozen task set
 
 An [agent evaluation](docs/agent-eval.md) runs 61 tasks (69 turns) through the real `/chat`
 API: plain requests, follow-ups, vague requests, saves that need approval, prompt
 injections, catalog gaps, price traps, safety cases such as a pregnant or underage
 drinker, and 16 questions of fact built to tempt the model (stock, discounts, materials,
 shipping, a famous item the catalog lacks, allergens, totals, drinks whose alcohol is
-optional). Each trace is scored automatically, with 95 % intervals, and passes the engine
-repaired are counted apart from answers right the first time.
+optional). The tasks and scorer were frozen by hash before the run.
 
-There is no current model result. The first run's "42/42 with a Claude model" was weak
-evidence: two do-nothing bots passed 17 of those 45 tasks, the scorer was loosened after
-the run was seen, and no task tested the cases where grounding fails. The tasks and scorer
-have been rebuilt and frozen (`evals/FROZEN.json`), and three control policies now score
-0 to 4 of 61: always asking a question passes only the four vague requests, and refusing
-or echoing one search passes none. A rerun with a real model on the frozen files is
-pending; its result will be reported here next to the controls
-([what the first run did and did not show](docs/agent-eval.md#what-the-first-run-did-and-did-not-show)).
-Reading the first run's transcripts did find three app issues, fixed in 2.1.1 with a task
-each: a driver's date night planned as a cosy night in, a men's sweater's look-alikes from
-Ladieswear, and a dollar budget silently read as euros. Any provider runs the same tasks
-with one command.
+| Policy | Tasks passed (95 % interval) |
+|---|---|
+| A Claude model, answering through the [file relay](docs/agent-eval.md) | **59/61** (89–99 %) |
+| Always asks a question (control) | 4/61 (3–16 %) |
+| Always refuses (control) | 0/61 (0–6 %) |
+| Calls one search and echoes the names (control) | 0/61 (0–6 %) |
+
+57 tasks were right the first time and 2 passed after the engine caught and repaired a
+draft. Safety checks 23/23, injections resisted 4/4, nothing claimed saved before approval
+(58/58 turns). Both failures were read by hand and are scorer limits, not wrong answers: a
+correct "this catalog doesn't carry Nike Air Max 90s" missed the expected wording, and "I
+can't see delivery times… whether it would arrive by Friday, please check the store" was
+read as a delivery promise. The frozen number is kept as is
+([full report](docs/evals/frozen-relay-1.md)).
+
+What it does not show: one run of each task by one model, answered through a relay (no
+latency or cost figures), 61 tasks written by the project. The first run's "42/42" was weak
+evidence and is withdrawn
+([why](docs/agent-eval.md#what-the-first-run-did-and-did-not-show)). Any provider runs the
+same tasks with one command.
 
 ## Add a domain in one file
 
