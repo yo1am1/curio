@@ -65,7 +65,8 @@ def test_stream_emits_plan_search_and_verification_before_the_reply(
     assert names == ["Understand request", "SearchCatalog", "Draft answer", "Grounding check"]
     reply = events[-1].reply
     assert reply.status == "complete"
-    assert reply.grounding.status == "verified" and reply.grounding.checked == 1
+    assert reply.grounding.status == "verified" and reply.grounding.checked == 2
+    assert reply.grounding.counts == {"price": 1, "name": 1}
     assert [s.name for s in reply.steps] == names
     assert reply.suggestions[0] == "What goes with the Summer Dress?"
 
@@ -291,7 +292,7 @@ def test_unverified_price_is_repaired_once(chat_model_replying, search, catalog)
     reply = build(model, search, catalog).reply("jeans", [])
     assert reply.text == "The Slim Jeans cost €29.99."
     assert reply.grounding.status == "repaired"
-    assert reply.grounding.issues == ["€19.99 does not match any catalog price in the evidence"]
+    assert reply.grounding.issues == ["€19.99 does not match the price of Slim Jeans (€29.99)"]
 
 
 def test_unrepairable_answer_falls_back_to_catalog_facts(chat_model_replying, search, catalog):
@@ -299,7 +300,7 @@ def test_unrepairable_answer_falls_back_to_catalog_facts(chat_model_replying, se
     model = chat_model_replying({"query": "jeans"}, "Only €5 today!", "Still €5, product #123456.")
     reply = build(model, search, catalog).reply("jeans", [])
     assert reply.grounding.status == "fallback"
-    assert "Slim Jeans · Blue · €29.99" in reply.text
+    assert "**Slim Jeans** · Blue · €29.99" in reply.text
 
 
 def test_turn_deadline_stops_before_another_model_call(chat_model_replying, search, catalog):
@@ -321,8 +322,9 @@ def test_turn_deadline_stops_before_another_model_call(chat_model_replying, sear
     ("text", "status"),
     [
         ("Run Shoe €59.99 vs Slim Jeans €29.99: €30 apart.", "verified"),
-        ("Under your €45 budget.", "verified"),
-        ("Around €60.", "verified"),
+        ("Under your €45 budget.", "not_applicable"),  # a budget is not a catalog value
+        ("The Run Shoe is around €60.", "verified"),
+        ("Around €60.", "fallback"),  # no product named: unattributed
         ("Only €12.50!", "fallback"),
         ("See [id 77].", "fallback"),
         ("No prices here.", "not_applicable"),
@@ -370,3 +372,23 @@ def test_a_turn_deadline_must_be_positive(chat_model_replying, search, catalog, 
     model = chat_model_replying({"query": "jeans"})
     with pytest.raises(ValueError, match="positive"):
         ShoppingAssistant(model, search, catalog, turn_deadline_seconds=seconds)
+
+
+def test_an_empty_answer_falls_back_to_checked_catalog_facts(chat_model_replying, search, catalog):
+    search.results = [ScoredProduct(1, 0.9)]
+    model = chat_model_replying({"query": "jeans"}, "")
+    reply = build(model, search, catalog).reply("jeans", [])
+    assert reply.steps[-1].name == "Empty answer" and reply.steps[-1].status == "blocked"
+    assert "**Slim Jeans** · Blue · €29.99" in reply.text
+    # The fallback states its facts through references, so its report says what it rendered;
+    # nothing was typed for the backstop to check.
+    assert reply.grounding.status == "verified"
+    assert reply.grounding.rendered == {"name": 1, "colour": 1, "price": 1}
+    assert reply.grounding.counts == {} and reply.grounding.checked == 0
+
+
+def test_a_fallback_with_nothing_checkable_is_not_applicable(chat_model_replying, search, catalog):
+    model = chat_model_replying({"query": "jeans"}, "")
+    reply = build(model, search, catalog).reply("jeans", [])
+    assert reply.text.startswith("I couldn't confirm matching pieces")
+    assert reply.grounding.status == "not_applicable" and reply.grounding.checked == 0

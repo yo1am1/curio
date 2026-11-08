@@ -666,7 +666,7 @@ export interface paths {
     /**
      * Chat
      * @description One agent turn in the requested domain. Send `decision` instead of a message to
-     *     answer a pending proposal.
+     *     answer a pending proposal. 503 with `Retry-After` while every turn slot is taken.
      */
     post: operations["chat_chat_post"];
     delete?: never;
@@ -702,10 +702,13 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Chat Feedback Summary */
-    get: operations["chat_feedback_summary_chat_feedback_get"];
+    get?: never;
     put?: never;
-    /** Chat Feedback */
+    /**
+     * Chat Feedback
+     * @description Record a rating in the server log: the rating and tool names only. The message,
+     *     answer and comment are not kept, and nothing serves feedback back over HTTP.
+     */
     post: operations["chat_feedback_chat_feedback_post"];
     delete?: never;
     options?: never;
@@ -997,6 +1000,8 @@ export interface components {
         | "RememberReadingTastes"
         | "SaveEvening"
       )[];
+      /** Session Id */
+      session_id?: string | null;
       preferences?: components["schemas"]["ShopperPreferences"];
       /** Shopper Id */
       shopper_id?: number | null;
@@ -1405,15 +1410,6 @@ export interface components {
       product_ids?: number[];
       preferences?: components["schemas"]["ShopperPreferences"] | null;
     };
-    /** FeedbackSummary */
-    FeedbackSummary: {
-      /** Up */
-      up: number;
-      /** Down */
-      down: number;
-      /** Recent Down */
-      recent_down: components["schemas"]["ChatFeedback"][];
-    };
     /** FlavourProfile */
     FlavourProfile: {
       /** Source */
@@ -1462,7 +1458,21 @@ export interface components {
     };
     /**
      * GroundingReport
-     * @description Result of checking the final answer's claims against tool evidence.
+     * @description Result of checking an answer's claims against tool evidence.
+     *
+     *     `verified`: at least one fact was rendered or checked and nothing failed.
+     *     `not_applicable`: nothing was rendered or checkable. `repaired`: the first draft failed
+     *     and the rewrite passed. `fallback`: the answer was replaced by catalog facts.
+     *
+     *     `rendered` counts the facts the server rendered from fact references in the text the
+     *     client shows, by kind ("name", "price", "colour", "rating", "author", "year", "pages",
+     *     "alcohol", "recipe", "amount", "total", "diff"). Each is the cited item's catalog value;
+     *     cite mode does not check that the cited item is the one the sentence names. `checked`
+     *     counts the values the model typed itself that the backstop check covered in the first
+     *     draft, and `counts` splits them by kind ("price", "id", "rating", "title", "name",
+     *     "author", "amount", "alcohol", "pages", "year", "claim", "fact"). A budget or limit (the
+     *     shopper's own, or one a question suggests) is allowed but is not a catalog value, so it
+     *     is not counted. Servers before cite mode send no `rendered`.
      */
     GroundingReport: {
       /**
@@ -1477,6 +1487,14 @@ export interface components {
       checked: number;
       /** Issues */
       issues?: string[];
+      /** Counts */
+      counts?: {
+        [key: string]: number;
+      };
+      /** Rendered */
+      rendered?: {
+        [key: string]: number;
+      };
     };
     /** HTTPValidationError */
     HTTPValidationError: {
@@ -2046,6 +2064,15 @@ export interface components {
       wants_products: boolean;
     };
     /**
+     * Shopper
+     * @description A shopper as the API shows one: the anonymous id only. The H&M data also has an
+     *     age, which no page needs, so it is not served.
+     */
+    Shopper: {
+      /** User Id */
+      user_id: number;
+    };
+    /**
      * ShopperPreferences
      * @description Approved, session-scoped preferences the client sends back with each message.
      */
@@ -2128,16 +2155,13 @@ export interface components {
        */
       books: number;
     };
-    /** User */
-    User: {
-      /** User Id */
-      user_id: number;
-      /** Age */
-      age: number | null;
-    };
-    /** UserProfile */
+    /**
+     * UserProfile
+     * @description A sampled H&M shopper's purchases (pseudonymous, re-keyed ids; see
+     *     docs/data-and-licences.md).
+     */
     UserProfile: {
-      user: components["schemas"]["User"];
+      user: components["schemas"]["Shopper"];
       /** Purchases */
       purchases: components["schemas"]["PurchasedProduct"][];
     };
@@ -3216,6 +3240,13 @@ export interface operations {
           "application/json": components["schemas"]["HTTPValidationError"];
         };
       };
+      /** @description Every agent-turn slot is taken; see Retry-After. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
     };
   };
   chat_stream_chat_stream_post: {
@@ -3249,25 +3280,12 @@ export interface operations {
           "application/json": components["schemas"]["HTTPValidationError"];
         };
       };
-    };
-  };
-  chat_feedback_summary_chat_feedback_get: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Successful Response */
-      200: {
+      /** @description Every agent-turn slot is taken; see Retry-After. */
+      503: {
         headers: {
           [name: string]: unknown;
         };
-        content: {
-          "application/json": components["schemas"]["FeedbackSummary"];
-        };
+        content?: never;
       };
     };
   };

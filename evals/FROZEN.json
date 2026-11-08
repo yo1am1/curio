@@ -1,0 +1,24 @@
+{
+  "scorer_version": "3.1.0",
+  "files": {
+    "evals/tasks.yaml": "58c5cda676a879cc060cc9bbdc08d65bdc7f9d5100e2a9a634549a5b56115f8c",
+    "evals/scoring.py": "60bc9f355b2e91269bac677b7ad05259e2a2e2fc8d499e80f00568eb8280377d",
+    "evals/tasks.py": "8d30c9f1a58bc4b1e8c897deb3ec59bed95f2da615497b29d2b9395fe2c24398"
+  },
+  "tasks": 61,
+  "turns": 69,
+  "frozen_on": "2026-11-08",
+  "note": "Frozen before the rerun with a real model. Changing any of these files after that run has been seen needs a recorded rescore note (run_eval --rescore --rescore-note) and a new freeze; docs/agent-eval.md#the-freeze.",
+  "history": [
+    {
+      "scorer_version": "3.0.0",
+      "frozen_on": "2026-11-07",
+      "files": {
+        "evals/tasks.yaml": "58c5cda676a879cc060cc9bbdc08d65bdc7f9d5100e2a9a634549a5b56115f8c",
+        "evals/scoring.py": "73c457b7f64876683119a5c04860983593fc40205f5b8b91c74ddcaaf6af69c0",
+        "evals/tasks.py": "f0510a7187b9c7bf774e855c5f4928fbcf14410464949d906cf608bb5e67f512"
+      },
+      "superseded_because": "Cite mode (server-rendered fact references) landed before any real-model run on this freeze; checked_facts now also counts rendered facts. No model results had been seen."
+    }
+  ]
+}

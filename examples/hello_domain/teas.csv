@@ -1,0 +1,13 @@
+tea_id,name,kind,notes,price_eur
+1,Sencha,green,"grassy, fresh, steamed",7.50
+2,Dragon Well,green,"toasty, chestnut, smooth",9.90
+3,Silver Needle,white,"delicate, honey, floral",14.00
+4,Lapsang Souchong,black,"smoky, pine, campfire",8.50
+5,Assam,black,"malty, strong, breakfast",5.90
+6,Darjeeling,black,"muscatel, light, floral",11.20
+7,Earl Grey,black,"bergamot, citrus",6.40
+8,Tieguanyin,oolong,"orchid, creamy, floral",12.50
+9,Da Hong Pao,oolong,"roasted, mineral, smoky",16.80
+10,Shou Pu-erh,dark,"earthy, deep, aged",10.30
+11,Rooibos,herbal,"caffeine-free, sweet, vanilla",4.90
+12,Chamomile,herbal,"caffeine-free, apple, calming",4.50

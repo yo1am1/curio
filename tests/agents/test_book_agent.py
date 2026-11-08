@@ -82,7 +82,8 @@ def test_like_search_streams_steps_and_a_verified_answer(agent):
     reply = events[-1].reply
     assert (reply.domain, reply.products, reply.cocktails) == ("books", [], [])
     assert ids(reply) == [3, 4]
-    assert reply.grounding.status == "verified" and reply.grounding.checked == 4
+    assert reply.grounding.status == "verified" and reply.grounding.checked == 5
+    assert reply.grounding.counts == {"id": 1, "title": 2, "rating": 1, "author": 1}
     assert reply.suggestions == [
         "Readers of The Way of Kings also liked…",
         "More by Brandon Sanderson",
@@ -292,7 +293,7 @@ def test_an_invented_rating_is_rewritten_once(agent):
     )
     reply = assistant.reply("Best magic book?", [])
     assert reply.grounding.status == "repaired"
-    assert reply.grounding.issues == ["a rating of 4.99 does not match any book in the evidence"]
+    assert reply.grounding.issues == ["4.99 does not match the rating of The Final Empire (4.43)"]
 
 
 def test_an_unverified_title_falls_back_to_catalog_facts(agent):
@@ -303,7 +304,9 @@ def test_an_unverified_title_falls_back_to_catalog_facts(agent):
     )
     reply = assistant.reply("Magic", [])
     assert reply.grounding.status == "fallback"
-    assert reply.text.startswith("Here are the books I could confirm:\n- The Name of the Wind by")
+    assert reply.text.startswith(
+        "Here are the books I could confirm:\n- **The Name of the Wind** by"
+    )
 
 
 def test_history_and_reading_list_books_are_evidence(agent):

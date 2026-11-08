@@ -35,6 +35,7 @@ def construction(monkeypatch, tmp_path, sample_catalog):
         clip_model_name="fake",
         llm_configured=False,
         agent_turn_deadline_seconds=90.0,
+        web_concurrency=1,
         images_dir=tmp_path / "images",
         query_photos_dir=tmp_path / "query_photos",
         evaluation_path=tmp_path / "evaluation.json",

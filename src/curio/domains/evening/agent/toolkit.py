@@ -17,9 +17,12 @@ from typing import Any
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel, ValidationError
 
+from curio.domains.books.agent.facts import book_facts
+from curio.domains.books.agent.prompts import book_reference_line
 from curio.domains.books.catalog import BookCatalog
 from curio.domains.books.models import Book
 from curio.domains.books.taxonomy import MOODS
+from curio.domains.cocktails.agent.facts import drink_facts
 from curio.domains.cocktails.agent.prompts import alcohol_label
 from curio.domains.cocktails.catalog import CocktailCatalog
 from curio.domains.cocktails.models import Cocktail
@@ -40,11 +43,12 @@ from curio.domains.evening.agent.tools import (
 )
 from curio.domains.evening.models import EveningAudience, EveningPlan, EveningRequest, EveningTastes
 from curio.domains.evening.planner import EveningError, EveningPlanner
+from curio.domains.fashion.agent.facts import product_facts
 from curio.domains.fashion.catalog import ProductCatalog
 from curio.domains.fashion.currency import foreign_note
 from curio.domains.fashion.models import Product
 from curio.domains.fashion.outfits import SECTION_AUDIENCE, SLOT_LABELS
-from curio.engine.grounding import amounts_in
+from curio.engine.facts import FactSheet
 from curio.engine.schemas import AgentStep, GroundingReport
 from curio.engine.toolkit import BaseToolkit, ToolError, Turn
 
@@ -99,6 +103,7 @@ class EveningToolkit(BaseToolkit[EveningItem]):
             ingredients=cocktails.ingredients(),
             glass_names={c.glass for c in cocktails},
             ordinary=ordinary_names(drink_names, (f"{b.title} {b.description}" for b in books)),
+            product_words=_product_words(products),
         )
 
     def key(self, item: EveningItem) -> int:
@@ -263,6 +268,8 @@ class EveningToolkit(BaseToolkit[EveningItem]):
             text.append(plan.book.reason)
         # The plan's own words may be repeated: "a dark and stormy night" is not the drink.
         text += [plan.occasion, plan.theme.feeling, plan.why, *plan.notes]
+        if plan.change:
+            text.append(plan.change)  # "An alcohol-free drink: Figgy Thyme → Masala Chai"
 
     def apply(
         self, action: BaseModel, *, dry_run: bool = False
@@ -341,9 +348,17 @@ class EveningToolkit(BaseToolkit[EveningItem]):
             products=evidence["products"],
             books=evidence["books"],
             drinks=list(turn.extras.get(PLAN_DRINKS, {}).values()),
-            amounts=[*amounts, *amounts_in(turn.message)],
+            amounts=amounts,
             typed=turn.message,
             cited=turn.extras.get(PLAN_TEXT, []),
+        )
+
+    def facts(self, turn: Turn[EveningItem]) -> FactSheet:
+        """The same evidence as `check`: products and books, and the plans' drinks."""
+        evidence = _split(turn.evidence.values())
+        drinks = turn.extras.get(PLAN_DRINKS, {}).values()
+        return product_facts(evidence["products"]).merged(
+            book_facts(evidence["books"]), drink_facts(drinks)
         )
 
     def fallback(
@@ -366,7 +381,7 @@ class EveningToolkit(BaseToolkit[EveningItem]):
             pieces = [s for s in outfit.slots if s.product is not None]
             lines += [f"- {s.label}: {_item_line(s.product)}" for s in pieces if s.product]
             budget = f" of €{outfit.budget:.2f}" if outfit.budget is not None else ""
-            lines.append(f"- Outfit total: €{outfit.total:.2f}{budget}")
+            lines.append(f"- Outfit total: {_total([s.product for s in pieces])}{budget}")
         if plan.book is not None:
             lines.append(f"- Book: {_item_line(plan.book.book)}")
         if plan.drink is not None:
@@ -487,11 +502,21 @@ def _split(items) -> dict[str, list]:
 
 
 def _item_line(item: EveningItem) -> str:
+    """One item as fact references, which the engine renders from the catalogs."""
     if isinstance(item, Book):
-        return f"{item.title} by {item.author} · ★ {item.average_rating:.2f}"
+        return book_reference_line(item)
     if isinstance(item, Cocktail):
-        return f"{item.name} · {alcohol_label(item)}"
-    return f"{item.display_name} · {item.colour} · €{item.price:.2f}"
+        return f"{{drink:{item.drink_id}}} · {{alcohol:drink:{item.drink_id}}}"
+    ref = item.product_id
+    return f"{{product:{ref}}} · {{colour:{ref}}} · {{price:{ref}}}"
+
+
+def _total(products: Sequence[Product | None]) -> str:
+    """The outfit's total as a fact reference: its pieces' prices added up by the engine."""
+    ids = [str(p.product_id) for p in products if p is not None]
+    if len(ids) == 1:
+        return f"{{price:{ids[0]}}}"
+    return f"{{total:price:{','.join(ids)}}}" if ids else "€0.00"
 
 
 def _plan_line(plan: EveningPlan) -> str:
@@ -557,3 +582,15 @@ def _and(items: Sequence[str]) -> str:
     if len(items) <= 1:
         return "".join(items)
     return ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def _product_words(products: ProductCatalog | None) -> list[str]:
+    """Product types, groups, sections and colours, and their words: never product names."""
+    if products is None:
+        return []
+    values = [
+        value
+        for field in ("product_type", "product_group", "section", "colour")
+        for value in products.distinct(field)
+    ]
+    return [*values, *(word for value in values for word in value.split())]

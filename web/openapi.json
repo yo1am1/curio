@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Curio Recommendation API",
-    "version": "2.1.1"
+    "version": "3.0.0"
   },
   "paths": {
     "/health": {
@@ -1388,7 +1388,7 @@
     "/chat": {
       "post": {
         "summary": "Chat",
-        "description": "One agent turn in the requested domain. Send `decision` instead of a message to\nanswer a pending proposal.",
+        "description": "One agent turn in the requested domain. Send `decision` instead of a message to\nanswer a pending proposal. 503 with `Retry-After` while every turn slot is taken.",
         "operationId": "chat_chat_post",
         "requestBody": {
           "content": {
@@ -1410,6 +1410,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Every agent-turn slot is taken; see Retry-After."
           },
           "422": {
             "description": "Validation Error",
@@ -1448,6 +1451,9 @@
               }
             }
           },
+          "503": {
+            "description": "Every agent-turn slot is taken; see Retry-After."
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -1462,24 +1468,9 @@
       }
     },
     "/chat/feedback": {
-      "get": {
-        "summary": "Chat Feedback Summary",
-        "operationId": "chat_feedback_summary_chat_feedback_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FeedbackSummary"
-                }
-              }
-            }
-          }
-        }
-      },
       "post": {
         "summary": "Chat Feedback",
+        "description": "Record a rating in the server log: the rating and tool names only. The message,\nanswer and comment are not kept, and nothing serves feedback back over HTTP.",
         "operationId": "chat_feedback_chat_feedback_post",
         "requestBody": {
           "content": {
@@ -2332,6 +2323,20 @@
             "type": "array",
             "maxItems": 7,
             "title": "Auto Approve"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 16,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
           },
           "preferences": {
             "$ref": "#/components/schemas/ShopperPreferences"
@@ -3527,32 +3532,6 @@
         "title": "FashionEffect",
         "description": "An approved shortlist addition or remembered shopping preferences."
       },
-      "FeedbackSummary": {
-        "properties": {
-          "up": {
-            "type": "integer",
-            "title": "Up"
-          },
-          "down": {
-            "type": "integer",
-            "title": "Down"
-          },
-          "recent_down": {
-            "items": {
-              "$ref": "#/components/schemas/ChatFeedback"
-            },
-            "type": "array",
-            "title": "Recent Down"
-          }
-        },
-        "type": "object",
-        "required": [
-          "up",
-          "down",
-          "recent_down"
-        ],
-        "title": "FeedbackSummary"
-      },
       "FlavourProfile": {
         "properties": {
           "source": {
@@ -3698,6 +3677,20 @@
             },
             "type": "array",
             "title": "Issues"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "rendered": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Rendered"
           }
         },
         "type": "object",
@@ -3705,7 +3698,7 @@
           "status"
         ],
         "title": "GroundingReport",
-        "description": "Result of checking the final answer's claims against tool evidence."
+        "description": "Result of checking an answer's claims against tool evidence.\n\n`verified`: at least one fact was rendered or checked and nothing failed.\n`not_applicable`: nothing was rendered or checkable. `repaired`: the first draft failed\nand the rewrite passed. `fallback`: the answer was replaced by catalog facts.\n\n`rendered` counts the facts the server rendered from fact references in the text the\nclient shows, by kind (\"name\", \"price\", \"colour\", \"rating\", \"author\", \"year\", \"pages\",\n\"alcohol\", \"recipe\", \"amount\", \"total\", \"diff\"). Each is the cited item's catalog value;\ncite mode does not check that the cited item is the one the sentence names. `checked`\ncounts the values the model typed itself that the backstop check covered in the first\ndraft, and `counts` splits them by kind (\"price\", \"id\", \"rating\", \"title\", \"name\",\n\"author\", \"amount\", \"alcohol\", \"pages\", \"year\", \"claim\", \"fact\"). A budget or limit (the\nshopper's own, or one a question suggests) is allowed but is not a catalog value, so it\nis not counted. Servers before cite mode send no `rendered`."
       },
       "HTTPValidationError": {
         "properties": {
@@ -5139,6 +5132,20 @@
         "title": "SearchIntent",
         "description": "A product search request: a visual description plus metadata constraints."
       },
+      "Shopper": {
+        "properties": {
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "Shopper",
+        "description": "A shopper as the API shows one: the anonymous id only. The H&M data also has an\nage, which no page needs, so it is not served."
+      },
       "ShopperPreferences": {
         "properties": {
           "sections": {
@@ -5344,35 +5351,10 @@
         "title": "ThemeWeight",
         "description": "One flavour theme of a profile: what the books say and what it pours."
       },
-      "User": {
-        "properties": {
-          "user_id": {
-            "type": "integer",
-            "title": "User Id"
-          },
-          "age": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Age"
-          }
-        },
-        "type": "object",
-        "required": [
-          "user_id",
-          "age"
-        ],
-        "title": "User"
-      },
       "UserProfile": {
         "properties": {
           "user": {
-            "$ref": "#/components/schemas/User"
+            "$ref": "#/components/schemas/Shopper"
           },
           "purchases": {
             "items": {
@@ -5387,7 +5369,8 @@
           "user",
           "purchases"
         ],
-        "title": "UserProfile"
+        "title": "UserProfile",
+        "description": "A sampled H&M shopper's purchases (pseudonymous, re-keyed ids; see\ndocs/data-and-licences.md)."
       },
       "ValidationError": {
         "properties": {

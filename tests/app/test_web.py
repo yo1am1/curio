@@ -132,3 +132,9 @@ def test_committed_openapi_matches_the_api() -> None:
     saved["info"].pop("version")
     current["info"].pop("version")
     assert saved == current
+
+
+def test_the_production_build_ships_no_source_maps() -> None:
+    config = (Path(__file__).resolve().parents[2] / "web" / "vite.config.ts").read_text()
+    assert "sourcemap: false," in config
+    assert "sourcemap: true" not in config

@@ -476,6 +476,7 @@ def build_services(settings: Settings) -> Services:
     kit = None
     if settings.llm_configured:
         key = settings.agent_signing_key
+        _check_workers(settings)
         kit = AgentKit(
             chat_model=build_chat_model(settings),
             signer=ActionSigner(key.get_secret_value().encode() if key else None),
@@ -501,6 +502,26 @@ def build_services(settings: Settings) -> Services:
             "`uv run python -m scripts.prepare_cocktails` for the quickest start."
         )
     return Services(domains=loaded, llm_configured=kit is not None)
+
+
+def _check_workers(settings: Settings) -> None:
+    """Several workers need one signing key, and each keeps its own record of answered
+    proposals: refuse the first mistake, warn about the second."""
+    workers = settings.web_concurrency
+    if workers <= 1:
+        return
+    if settings.agent_signing_key is None:
+        raise RuntimeError(
+            f"WEB_CONCURRENCY={workers} runs several API workers, but AGENT_SIGNING_KEY is not "
+            "set: each worker would sign with its own random key and refuse the others' "
+            "proposals. Set AGENT_SIGNING_KEY to at least 32 random bytes."
+        )
+    logger.warning(
+        "WEB_CONCURRENCY=%d: each API worker remembers answered approval proposals in its own "
+        "memory, so a proposal could be answered once per worker until it expires (30 "
+        "minutes). Run one worker, or give ActionSigner a shared NonceStore (SECURITY.md).",
+        workers,
+    )
 
 
 def link_domains(domains: MutableMapping[str, DomainRuntime]) -> None:

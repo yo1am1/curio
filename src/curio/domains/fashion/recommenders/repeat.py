@@ -1,4 +1,4 @@
-"""Strong H&M baseline: unique recent purchases, followed by last-week best-sellers."""
+"""Strong H&M baseline: unique recent purchases, followed by the data's last-week best-sellers."""
 
 from curio.domains.fashion.catalog import CustomerData
 from curio.domains.fashion.models import ScoredProduct
@@ -35,4 +35,4 @@ class RepeatPurchaseRecommender:
         )
         if last is not None:
             return [f"Buy again: last purchased on {last.purchase_date.isoformat()}."]
-        return ["Popular in the last week; fills the list after recent purchases."]
+        return [f"{self._popular.label()}; fills the list after recent purchases."]

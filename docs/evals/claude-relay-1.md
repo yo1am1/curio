@@ -1,3 +1,9 @@
+> **Historical report, kept as it was.** 42 tasks of 2.1.0, commit `51bda24`, answered by a
+> Claude agent session through the relay (no pinned model ID), scored with a scorer that
+> was changed after this run was seen (40/42 before, 42/42 after). Two do-nothing policies
+> passed 17 of the 45 tasks of 2.1.1 (these 42 and three more). None of these numbers carry over to the current, frozen
+> task set and scorer: see [what the first run did and did not show](../agent-eval.md#what-the-first-run-did-and-did-not-show).
+
 # Agent evaluation: claude-relay-1
 
 - Mode: relay; provider `openai`, model `Claude (relay)`, temperature 0.2

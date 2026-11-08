@@ -21,6 +21,7 @@ from tests.e2e.conftest import DATA_DIR, results
 BOOKS_READY = (DATA_DIR / "books.parquet").exists() and (DATA_DIR / "cocktails.parquet").exists()
 
 
+@pytest.mark.fashion
 @pytest.mark.skipif(not BOOKS_READY, reason="Books or cocktails not prepared")
 def test_a_visit_lands_on_plan_my_evening(web):
     web.open("/")
@@ -56,6 +57,7 @@ def test_a_visit_lands_on_plan_my_evening(web):
         expect(web.page.get_by_role("heading", name=heading, level=1)).to_be_visible()
 
 
+@pytest.mark.fashion
 @pytest.mark.skipif(not BOOKS_READY, reason="Books or cocktails not prepared")
 def test_plan_an_evening_swap_the_book_and_save_it(web):
     web.open("/evening")
@@ -95,6 +97,7 @@ def test_plan_an_evening_swap_the_book_and_save_it(web):
     assert len(session["readingList"]) == 1 and len(session["cocktailShortlist"]) == 1
 
 
+@pytest.mark.fashion
 def test_fashion_chat_streams_its_steps_and_is_verified(web):
     web.open("/ask/fashion")
     expect(web.page.get_by_role("heading", name="Find your next favorite.")).to_be_visible()
@@ -106,7 +109,9 @@ def test_fashion_chat_streams_its_steps_and_is_verified(web):
     turn = web.page.get_by_test_id("assistant-turn").last
     expect(turn).to_be_visible(timeout=120_000)
     badge = turn.get_by_test_id("grounding-badge")
-    expect(badge).to_have_text("Prices verified against the catalog")
+    expect(badge).to_have_text(re.compile(r"^\d+ facts from the catalog$"))
+    expect(turn).to_contain_text("€")
+    expect(turn).not_to_contain_text(re.compile(r"\{\w+:"))
     trace = turn.get_by_role("button", name=re.compile(r"How Curio worked · \d+ actions? · "))
     trace.click()
     for label in ("Plan", "Search catalog", "Grounding check"):
@@ -123,6 +128,7 @@ def test_fashion_chat_streams_its_steps_and_is_verified(web):
     assert "domain" not in web.chat_bodies[0]
 
 
+@pytest.mark.fashion
 def test_fashion_approval_narrowed_before_approving(web):
     web.open("/ask/fashion")
     web.send("Red dress")
@@ -211,6 +217,7 @@ def test_phone_layouts_do_not_scroll_sideways(web_phone):
 # --- Browse pages ------------------------------------------------------------------------
 
 
+@pytest.mark.fashion
 def test_fashion_feed_switches_strategy_with_evidence(web):
     with web.page.expect_response(re.compile(r"/users/\d+/recommendations\?strategy=")) as first:
         web.open("/fashion")
@@ -231,7 +238,7 @@ def test_fashion_feed_switches_strategy_with_evidence(web):
     card.get_by_role("button", name="Why this pick").click()
     expect(card.get_by_text(re.compile(r"Ranking score: -?\d"))).to_be_visible()
     # Every other strategy fills the feed too.
-    for strategy in ("Similar shoppers", "Purchase connections", "Visual style"):
+    for strategy in ("Bought together with your items", "Purchase connections", "Visual style"):
         web.page.get_by_role("radio", name=strategy).click()
         expect(results(web, strategy).get_by_test_id("product-card")).to_have_count(12)
     web.shot("20b-for-you-visual-style", full_page=True)
@@ -245,6 +252,7 @@ def test_fashion_feed_switches_strategy_with_evidence(web):
     web.shot("21-model-quality", full_page=True)
 
 
+@pytest.mark.fashion
 def test_describe_a_piece(web):
     web.open("/fashion/discover")
     with web.page.expect_request(lambda r: r.url.endswith("/search/text")) as request:
@@ -262,6 +270,7 @@ def test_describe_a_piece(web):
     web.shot("22-discover-text", full_page=True)
 
 
+@pytest.mark.fashion
 def test_search_with_an_example_photo(web):
     web.open("/fashion/discover")
     web.page.get_by_role("radio", name="Photo").click()
@@ -278,6 +287,7 @@ def test_search_with_an_example_photo(web):
     web.shot("23-discover-photo", full_page=True)
 
 
+@pytest.mark.fashion
 def test_connections_graph_opens_a_product(web):
     web.open("/fashion/connections")
     nodes = web.page.get_by_test_id("graph-node")
@@ -286,8 +296,7 @@ def test_connections_graph_opens_a_product(web):
     neighbor = web.page.locator('[data-testid="graph-node"][data-kind="product"]:not([data-focus])')
     expect(neighbor.first).to_be_visible()
     neighbor.first.hover()
-    web.page.wait_for_timeout(500)
-    web.shot("24-connections")
+    web.shot("24-connections")  # waits for the hover's transition to settle
     label = neighbor.first.get_attribute("aria-label") or ""
     name = label.split(" (")[0]
     with web.page.expect_response(re.compile(r"/products/\d+$")) as opened:
@@ -392,6 +401,7 @@ def test_book_pages_and_the_reading_list_cocktail(web):
     web.shot("29-moods", full_page=True)
 
 
+@pytest.mark.fashion
 @pytest.mark.skipif(not BOOKS_READY, reason="Books or cocktails not prepared")
 def test_compare_saved_pieces_and_drinks(web):
     web.open("/fashion")

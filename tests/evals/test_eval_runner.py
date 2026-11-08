@@ -223,6 +223,64 @@ def test_a_whole_run_through_the_relay(tmp_path, isolated_process_state, monkeyp
     assert "| Task success | " in report
     assert "not representative" in report
     assert queue.pending() == []
+    assert summary["run"]["scorer"]["files"]["tasks.yaml"]  # outside the repo: the name
+    assert summary["run"]["frozen"] is False
+    assert "- Scorer: scorer " in report
     # Rescoring the saved traces needs no API and gives the same verdicts.
     assert main([*common, "--rescore"]) == 0
     assert json.loads((run / "summary.json").read_text())["tasks"] == summary["tasks"]
+    # A changed task file or scorer needs a recorded note before verdicts change.
+    tasks.write_text(TASKS_YAML + "# a later edit\n")
+    assert main([*common, "--rescore"]) == 2
+    assert main([*common, "--resume"]) == 2  # would mix verdicts of two scorers
+    assert main([*common, "--rescore", "--rescore-note", "typo in a task"]) == 0
+    rescored = json.loads((run / "run.json").read_text())
+    assert [e["changed"] for e in rescored["rescores"]] == [True]  # the same-scorer one isn't
+    assert rescored["rescores"][-1]["note"] == "typo in a task"
+    assert "typo in a task" in (run / "report.md").read_text()
+    # This task file is not the frozen one.
+    assert main([*common, "--rescore", "--frozen"]) == 2
+
+
+def test_a_relay_token_is_sent_as_the_api_key(monkeypatch, isolated_process_state):
+    # configure_environment writes the deadline, timeout, signing key, domains and proxy
+    # variables; `isolated_process_state` restores the whole environment afterwards, so none
+    # of them leaks into later tests (monkeypatch.delenv of an unset name records nothing).
+    from evals.run_eval import configure_environment, parse_args
+
+    for name in ("RELAY_TOKEN", "LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL", "LLM_PROVIDER"):
+        monkeypatch.delenv(name, raising=False)
+    args = parse_args(["--relay-url", "http://127.0.0.1:8791/v1"])
+    configure_environment(args, {"cocktails"})
+    assert os.environ["LLM_API_KEY"] == "relay-not-a-secret"
+    monkeypatch.setenv("RELAY_TOKEN", "s3cret")
+    configure_environment(args, {"cocktails"})
+    assert os.environ["LLM_API_KEY"] == "s3cret"
+
+
+def test_the_report_counts_rendered_facts_apart_from_typed_ones():
+    from evals.run_eval import cite_mode, fact_counts
+
+    def record(*groundings):
+        return {"turns": [{"reply": {"grounding": g}} for g in groundings]}
+
+    records = [
+        record(
+            {"status": "verified", "rendered": {"name": 2, "price": 2}, "counts": {}},
+            {"status": "verified", "checked": 1, "counts": {"price": 1}},  # an older server
+        ),
+        record({"status": "repaired", "rendered": {"total": 1}, "counts": {"rating": 1}}),
+        {"turns": [{"reply": {"text": "no report"}}, {"reply": None}]},
+    ]
+    facts = fact_counts(records)
+    assert facts == {
+        "replies": 3,
+        "replies_with_rendered_facts": 2,
+        "replies_with_typed_checked_values": 2,
+        "rendered": {"name": 2, "price": 2, "total": 1},
+        "typed_checked": {"price": 1, "rating": 1},
+    }
+    lines = cite_mode(records)
+    assert "| Rendered from references | 2/3 | 5 (name 2, price 2, total 1) |" in lines
+    assert "| Typed, checked by the backstop | 2/3 | 2 (price 1, rating 1) |" in lines
+    assert cite_mode([]) == []

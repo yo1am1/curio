@@ -19,6 +19,8 @@ OCCASIONS = [
     ({"occasion": "winter weekend", "budget": 90, "audience": "women"}, None),
 ]
 
+pytestmark = pytest.mark.fashion
+
 
 @pytest.fixture(scope="module")
 def api(api_url: str):

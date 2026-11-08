@@ -14,7 +14,7 @@ from curio.domains.books.agent.schemas import BookChatTurn, BookContext
 from curio.domains.books.agent.tools import PairCocktail
 from curio.domains.books.catalog import BookCatalog
 from curio.domains.books.models import Book
-from curio.domains.cocktails.agent.prompts import alcohol_label
+from curio.domains.cocktails.agent.facts import drink_facts
 from curio.domains.cocktails.agent.schemas import CocktailChatTurn, CocktailContext
 from curio.domains.cocktails.catalog import CocktailCatalog
 from curio.domains.cocktails.models import Cocktail
@@ -22,6 +22,7 @@ from curio.domains.pairings.agent.grounding import PairedDrinkCheck
 from curio.domains.pairings.agent.prompts import render_pairing
 from curio.domains.pairings.models import BookPairing, PairingRequest
 from curio.domains.pairings.pairer import BookCocktailPairer, PairingError
+from curio.engine.facts import FactSheet
 from curio.engine.schemas import AgentStep, GroundingReport
 from curio.engine.toolkit import ToolError, Turn
 
@@ -52,6 +53,7 @@ class CocktailPairing:
         self._pairer = pairer
         self._cocktails = cocktails
         self._books = books
+        self._drink_names = {c.name.casefold() for c in cocktails}
         self._drinks = PairedDrinkCheck(
             (c.name for c in cocktails),
             cocktails.ingredients(),
@@ -128,14 +130,26 @@ class CocktailPairing:
         drinks = list(turn.extras.get(PAIRED_DRINKS, {}).values())
         book_names = [b.title for b in books] + [b.series for b in books if b.series]
         book_names += [author for b in books for author in b.authors]
-        return self._drinks.check(text, drinks, typed=turn.message, also_allowed=book_names)
+        return self._drinks.check(
+            text,
+            drinks,
+            typed=turn.message,
+            also_allowed=book_names,
+            quoted=turn.extras.get(PAIRED_TEXT, []),
+        )
+
+    def facts(self, turn: Turn[Book]) -> FactSheet:
+        return drink_facts(turn.extras.get(PAIRED_DRINKS, {}).values())
+
+    def is_drink_name(self, name: str) -> bool:
+        return name.casefold() in self._drink_names
 
     def fallback(self, extras: Mapping[str, Any]) -> list[str]:
         pairing: BookPairing | None = extras.get(PAIRING)
         drinks = [p.cocktail for p in pairing.pairings] if pairing else []
         if not pairing or not drinks:
             return []
-        lines = [f"- {c.name} · {alcohol_label(c)}" for c in drinks]
+        lines = [f"- {{drink:{c.drink_id}}} · {{alcohol:drink:{c.drink_id}}}" for c in drinks]
         return [f"{pairing.profile.summary}. To pair:\n" + "\n".join(lines), pairing.note]
 
     def reply_fields(self, turn: Turn[Book]) -> dict[str, Any]:

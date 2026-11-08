@@ -12,14 +12,21 @@ deterministic rules keyed on the shopper's words, which makes every flow reprodu
 - fashion "outfit" requests with an occasion call BuildOutfit (without one, AskShopper asks
   for the occasion first); "swap"/"cheaper" plus a slot of the current outfit call
   SwapOutfitItem, and "save ... outfit" proposes SaveToShortlist with every outfit piece;
+- answers state catalog facts through fact references ("{product:ID} · {colour:ID} ·
+  {price:ID}", "{book:ID} by {author:book:ID} · ★ {rating:book:ID}", "{drink:ID}
+  ({alcohol:drink:ID})", "{total:price:ID,ID}"), which the server renders from the catalog,
+  as the answer prompts ask; a few values are typed raw on purpose so the backstop check runs
+  too: an outfit's budget and what is left, the pairing answers' "drink #N", and the
+  inventions below;
 - the phrases "best deal" (fashion) and "highest rated" (books) first get an answer with an
-  invented price or rating, so the grounding check and self-correction can be seen end to end;
+  invented price or rating, typed raw, so the backstop check and self-correction can be seen
+  end to end;
 - book requests to drink, pour or pair ("What should I drink with Dune?", "Pair a cocktail
   with my reading list") call PairCocktail with the title, the reading list or the book on
   screen; "another pairing" repeats the last subject without the drinks shown, and
-  "alcohol-free" asks for alcohol-free drinks. Answers cite the drinks as "**Name** (drink
-  #N)" with the tool's first reason; "surprise me" invents a drink the pairing did not return,
-  twice, so the grounding fallback can be seen end to end;
+  "alcohol-free" asks for alcohol-free drinks. Answers cite the drinks as "{drink:N} (drink
+  #N, {alcohol:drink:N})" with the tool's first reason; "surprise me" invents a drink the
+  pairing did not return, typed raw, twice, so the grounding fallback can be seen end to end;
 - the evening host plans an evening with PlanEvening (the occasion, budget, audience and
   alcohol-free as written), asks for the occasion when the request names none ("plan my
   evening"), swaps a part of the current plan with SwapEveningPart ("another book", "another
@@ -49,12 +56,13 @@ OCCASION_WORDS = re.compile(
 OUTFIT_SLOTS = ("top", "bottom", "dress", "outerwear", "shoes", "bag", "accessory")
 # "- Dress: [id 1] River Wrap Dress | Dress | Ladieswear | Light Red | €29.99 | ... | evidence: …"
 OUTFIT_PIECE = re.compile(
-    r"^- (\w+): \[id \d+\] ([^|\n]+) \| [^|\n]+ \| [^|\n]+ \| ([^|\n]+) \| €([\d.]+)"
+    r"^- (\w+): \[id (\d+)\] [^|\n]+ \| [^|\n]+ \| [^|\n]+ \| [^|\n]+ \| €[\d.]+"
     r"(?:.*\| evidence: (.+))?$",
     re.MULTILINE,
 )
 OUTFIT_GAP = re.compile(r"^- (\w+): not filled\. (.+)$", re.MULTILINE)
-OUTFIT_TOTAL = re.compile(r"total (€[\d.]+(?: of a €[\d.]+ budget)?(?: \(€[\d.]+ left\))?)")
+# The budget and what is left are the tool's figures, typed raw (the backstop checks them).
+OUTFIT_BUDGET = re.compile(r"total €[\d.]+((?: of a €[\d.]+ budget)?(?: \(€[\d.]+ left\))?)")
 CURRENT_OUTFIT = re.compile(r"current outfit [^:]*: [^:]*: (.+?)\. (?:shortlist|the shortlist)")
 # "1. drink #269 Old Fashioned | contains alcohol | Cocktail | ... | why: reason; reason"
 PAIRED_LINE = re.compile(r"^\d+\. drink #(\d+) ([^|\n]+) \| ([^|\n]+) \|.*\| why: ([^;\n]+)", re.M)
@@ -64,14 +72,10 @@ INVENTED_DRINK = "**Negroni** (drink #257)"
 # The evening tool result (`render_plan`) and the session's current plan.
 EVENING_THEME = re.compile(r"^Evening plan for “[^”]*” · theme (\w+)", re.M)
 EVENING_CHANGE = re.compile(r"^Change: (.+)$", re.M)
-EVENING_PIECE = re.compile(
-    r"^- (\w+): product #(\d+) ([^|\n]+) \| [^|\n]+ \| [^|\n]+ \| €([\d.]+)", re.M
-)
-EVENING_TOTAL = re.compile(r"^Outfit: total (€[\d.]+(?: of a €[\d.]+ budget)?)", re.M)
-EVENING_BOOK = re.compile(r"^Book: book #(\d+) ([^|\n]+) \| ([^|\n]+) \| ★ ([\d.]+)", re.M)
-EVENING_DRINK = re.compile(
-    r"^Drink: drink #(\d+) ([^|\n]+) \| ([^|\n]+) \| ingredients: .*? \| why: ([^;\n]+)", re.M
-)
+EVENING_PIECE = re.compile(r"^- (\w+): product #(\d+) ", re.M)
+EVENING_BUDGET = re.compile(r"^Outfit: total €[\d.]+((?: of a €[\d.]+ budget)?)", re.M)
+EVENING_BOOK = re.compile(r"^Book: book #(\d+) ", re.M)
+EVENING_DRINK = re.compile(r"^Drink: drink #(\d+) .*? \| why: ([^;\n]+)", re.M)
 EVENING_MISSING = re.compile(r"^Missing (\w+): (.+)$", re.M)
 EVENING_WHY = re.compile(r"^Why it works: (.+)$", re.M)
 EVENING_SESSION = re.compile(r"current evening plan \([^)]*\): (.+?)\.(?: |$)", re.S)
@@ -82,6 +86,11 @@ def _text(content) -> str:
     if isinstance(content, list):
         return " ".join(part.get("text", "") for part in content if isinstance(part, dict))
     return content or ""
+
+
+def _total(ids: list[str]) -> str:
+    """The total of the pieces' prices as a fact reference the server computes."""
+    return f"{{total:price:{','.join(ids)}}}" if len(ids) > 1 else f"{{price:{ids[0]}}}"
 
 
 def _tool_call(name: str, args: dict) -> dict:
@@ -254,13 +263,14 @@ class Script:
         """An answer built only from the BuildOutfit / SwapOutfitItem result."""
         intro = result.split("\n", 1)[0] if not result.startswith("Outfit for") else ""
         lines = [intro or "Here's the outfit I put together:"]
-        for slot, name, colour, price, reason in OUTFIT_PIECE.findall(result):
-            line = f"- **{slot}**: {name.strip()} · {colour.strip()} · €{float(price):.2f}"
+        pieces = OUTFIT_PIECE.findall(result)
+        for slot, pid, reason in pieces:
+            line = f"- **{slot}**: {{product:{pid}}} · {{colour:{pid}}} · {{price:{pid}}}"
             lines.append(line + (f" (_{reason.strip()}_)" if reason else ""))
         for slot, issue in OUTFIT_GAP.findall(result):
             lines.append(f"- **{slot}**: not filled. {issue.strip()}")
-        if total := OUTFIT_TOTAL.search(result):
-            lines.append(f"\nTotal: {total.group(1)}.")
+        if pieces and (budget := OUTFIT_BUDGET.search(result)):
+            lines.append(f"\nTotal: {_total([pid for _, pid, _ in pieces])}{budget.group(1)}.")
         return "\n".join(lines)
 
     @staticmethod
@@ -279,8 +289,8 @@ class Script:
         if intro == "tool":
             intro = "Here's what I found:"
         lines = [intro]
-        for _, name, colour, price in rows[:4]:
-            lines.append(f"- **{name.strip()}** · {colour.strip()} · €{float(price):.2f}")
+        for pid, _name, _colour, _price in rows[:4]:
+            lines.append(f"- {{product:{pid}}} · {{colour:{pid}}} · {{price:{pid}}}")
         return "\n".join(lines)
 
     # --- Cocktails ----------------------------------------------------------------------------
@@ -294,7 +304,7 @@ class Script:
             if not drinks:
                 return {"content": "Nothing matched. Try fewer or different ingredients."}
             lines = ["Here are drinks from the recipe catalog:"]
-            lines += [f"- **{name.strip()}** ({label.strip()})" for _, name, label in drinks[:4]]
+            lines += [f"- {{drink:{i}}} ({{alcohol:drink:{i}}})" for i, _, _ in drinks[:4]]
             return {"content": "\n".join(lines)}
         if low.startswith("verification failed"):
             return {"content": "Here are the drinks I could verify from the catalog."}
@@ -346,8 +356,8 @@ class Script:
                 return {"content": _text(last["content"])[:200] or "Nothing matched."}
             lines = ["Here are books from the catalog:"]
             lines += [
-                f"- **{title.strip()}** by {author.strip()} · ★ {rating}"
-                for _, title, author, rating in books[:4]
+                f"- {{book:{i}}} by {{author:book:{i}}} · ★ {{rating:book:{i}}}"
+                for i, _, _, _ in books[:4]
             ]
             return {"content": "\n".join(lines)}
         if low.startswith("verification failed"):
@@ -465,9 +475,10 @@ class Script:
             return f"Forget the list: pour a {INVENTED_DRINK} tonight."
         summary = result.split("\n", 1)[0].removeprefix("Pairing: ").rstrip(".")
         lines = [f"{summary}. Here's what to pour:"]
-        for drink_id, name, label, reason in drinks[:3]:
+        for drink_id, _name, _label, reason in drinks[:3]:
             lines.append(
-                f"- **{name.strip()}** (drink #{drink_id}, {label.strip()}): {reason.strip()}"
+                f"- {{drink:{drink_id}}} (drink #{drink_id}, {{alcohol:drink:{drink_id}}}): "
+                f"{reason.strip()}"
             )
         if "contains alcohol" in result:
             lines.append("\nPlease drink responsibly.")
@@ -551,23 +562,21 @@ class Script:
         pieces = EVENING_PIECE.findall(result)
         if pieces:
             lines.append("\n**Outfit**")
-            for slot, product_id, name, price in pieces:
-                lines.append(
-                    f"- {slot}: {name.strip()} (product #{product_id}) · €{float(price):.2f}"
-                )
-            if total := EVENING_TOTAL.search(result):
-                lines.append(f"- Total: {total.group(1)}")
+            for slot, pid in pieces:
+                lines.append(f"- {slot}: {{product:{pid}}} (product #{pid}) · {{price:{pid}}}")
+            if budget := EVENING_BUDGET.search(result):
+                lines.append(f"- Total: {_total([pid for _, pid in pieces])}{budget.group(1)}")
         if book := EVENING_BOOK.search(result):
-            book_id, title, authors, rating = book.groups()
+            ref = f"book:{book.group(1)}"
             lines.append(
-                f"\n**Book**: **{title.strip()}** (book #{book_id}) by "
-                f"{authors.split(',')[0].strip()} · ★ {rating}"
+                f"\n**Book**: {{{ref}}} (book #{book.group(1)}) by {{author:{ref}}} · "
+                f"★ {{rating:{ref}}}"
             )
         if drink := EVENING_DRINK.search(result):
-            drink_id, name, label, reason = drink.groups()
+            drink_id, reason = drink.groups()
             lines.append(
-                f"\n**Drink**: **{name.strip()}** (drink #{drink_id}, {label.strip()}): "
-                f"{reason.strip()}"
+                f"\n**Drink**: {{drink:{drink_id}}} (drink #{drink_id}, "
+                f"{{alcohol:drink:{drink_id}}}): {reason.strip()}"
             )
         for part, reason in EVENING_MISSING.findall(result):
             lines.append(f"\nNo {part} yet: {reason.strip()}")

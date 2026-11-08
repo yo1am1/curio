@@ -1,8 +1,12 @@
 # Multi-domain contract (fashion, cocktails, books, evening)
 
+> **Status: design record.** The interfaces the built-in domains were written against
+> (1.0 to 3.0), kept as their reference and updated when they change. To add a domain of your
+> own, follow [Extending Curio](extending.md), the versioned contract.
+
 Shared interfaces for the cocktail domain (v1.0), the book domain and the fashion outfit
-builder (1.1.0). Every teammate codes against this file; change it only together with
-every consumer. The [books](#books), [fashion outfits](#fashion-outfits),
+builder (1.1.0). The built-in domains are coded against this file; change it only
+together with every consumer. The [books](#books), [fashion outfits](#fashion-outfits),
 [book → cocktail pairing](#book--cocktail-pairing) and [Plan my evening](#plan-my-evening)
 sections follow the cocktail sections.
 

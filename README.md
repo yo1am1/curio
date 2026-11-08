@@ -12,14 +12,14 @@ anything.**
 ![FastAPI · React](https://img.shields.io/badge/FastAPI-React-009688)
 
 [Why three domains](#why-three-domains) · [The engine](#the-engine) ·
-[Add a domain](#add-a-domain-in-one-file) · [Plan my evening](#plan-my-evening) ·
+[Add a domain](#add-a-domain) · [Plan my evening](#plan-my-evening) ·
 [The domains](#the-domains) · [Quick start](#quick-start) ·
 [Data and licences](#data-and-licences) · [Changelog](CHANGELOG.md)
 
 </div>
 
-Curio is one agent engine and three recommendation domains built on it: fashion, cocktails
-and books. Each domain stresses a different recommendation problem. The engine is the same
+Curio is one agent engine and three recommendation domains built on it (fashion, cocktails
+and books), plus Evening, which composes them. Each domain stresses a different recommendation problem. The engine is the same
 for all three. The domains also compose: "Plan my evening" turns one sentence into an outfit,
 a book and a drink paired with that book.
 
@@ -56,12 +56,27 @@ The second and third domains forced the engine to generalise:
 - **Plan → act → verify.** `AgentEngine` runs every turn. A domain plugs in a `Toolkit`: its
   tools, their policies, a grounding check and a fallback.
 - **Policy-gated tools.** A tool is READ (runs), ASK (pauses with a question) or APPROVE
-  (only proposes). Proposals are HMAC-signed and bound to the tool, arguments, domain and
-  time. You can approve or narrow one. You cannot widen or replay it.
-- **Grounding.** Every price, ID, rating, title and drink name in an answer is checked
-  against what the tools returned. A failed check gets one self-correction, then a
-  deterministic fallback built from catalog facts.
-- **Budgets and streaming.** A turn allows five tool calls and 90 seconds. Every step
+  (only proposes). Proposals are HMAC-signed and bound to the tool, arguments, domain,
+  the client's session and time, and each can be answered once (the record of answered
+  proposals is per process unless you plug in a shared store). You can approve or narrow
+  one. You cannot widen it, move it to another domain or session, or answer it twice.
+  Auto-approval is the shopper's own setting, held by their client: the signature stops the
+  model from approving itself, not the client from opting in.
+- **Grounding: cite mode.** Every catalog fact the agent states through a fact reference
+  (prices, ratings, authors, years, pages, recipe amounts, alcohol labels, totals) is
+  rendered by the server from the catalog. Values the model types itself are checked by a
+  best-effort backstop (blind test: 80% of false facts caught, 25% of correct answers
+  flagged). The model writes `{price:843614008}` or `{total:price:843614008,906741002}`, and
+  the server replaces it with the value of an item this turn's tools returned; a reference
+  to anything else fails, gets one self-correction, then a deterministic fallback built from
+  catalog facts. Questions, quick replies and fallbacks are rendered the same way, and no
+  reference reaches the client. A rendered value is the cited item's catalog value; cite
+  mode does not check that the cited item is the one the sentence names. Limitation: prose claims ("cosy", "good for a cold") are not
+  facts that can be rendered; the backstop catches some of them (allergen, health, stock and
+  foreign-currency claims), and genres and descriptions are not checked
+  ([details](docs/agent-architecture.md#grounding-guardrail)).
+- **Budgets and streaming.** A turn allows five tool calls, and its 90-second deadline is
+  checked before each model call (a call already running is not cut short). Every step
   streams to the web app as NDJSON, so you see what the agent did.
 - **Stateless server.** The client holds the shortlist, memory and outfit. Client-held text
   is display-only and never counts as evidence.
@@ -81,33 +96,57 @@ In the chat screenshots the replies come from the scripted test model in
 trace, checks and approvals are the real system.
 [How the agent works](docs/agent-architecture.md).
 
-### Evaluated with a real model
+### Evaluated with a real model, on a frozen task set
 
-An [agent evaluation](docs/agent-eval.md) runs 45 tasks (53 turns) through the real `/chat`
+An [agent evaluation](docs/agent-eval.md) runs 61 tasks (69 turns) through the real `/chat`
 API: plain requests, follow-ups, vague requests, saves that need approval, prompt
-injections, catalog gaps, price traps and safety cases such as a pregnant or underage
-drinker. Each trace is scored automatically. The first run, on the 42 tasks of 2.1.0:
+injections, catalog gaps, price traps, safety cases such as a pregnant or underage
+drinker, and 16 questions of fact built to tempt the model (stock, discounts, materials,
+shipping, a famous item the catalog lacks, allergens, totals, drinks whose alcohol is
+optional). The tasks and scorer were frozen by hash before the run.
 
-| | Claude, as the chat model | Scripted baseline |
-|---|---|---|
-| Tasks passed | **42/42** | 29/42 |
-| Grounding verified on the first pass | 100 % | 97 % |
-| Nothing claimed saved before approval | 39/39 turns | 40/40 turns |
-| Safety checks · injections resisted | 15/15 · 4/4 | 12/15 · 4/4 |
+| Policy | Tasks passed (95 % interval) |
+|---|---|
+| A Claude model (no pinned model ID; one run, k=1), answering through the [file relay](docs/agent-eval.md) | **59/61** (89–99 %) |
+| Always asks a question (control) | 4/61 (3–16 %) |
+| Always refuses (control) | 0/61 (0–6 %) |
+| Calls one search and echoes the names (control) | 0/61 (0–6 %) |
 
-The model answered through a file relay, so latency is not measured, and 42 tasks are a
-small set: the [results and limits](docs/agent-eval.md#results) say how the score was
-reached. Reading its transcripts found three app issues, fixed in 2.1.1 with a task each:
-a driver's date night planned as a cosy night in, a men's sweater's look-alikes from
-Ladieswear, and a dollar budget silently read as euros. Any provider runs the same tasks
-with one command.
+57 tasks were right the first time and 2 passed after the engine caught and repaired a
+draft. Safety checks 23/23, injections resisted 4/4, nothing claimed saved before approval
+(58/58 turns). Both failures were read by hand and are scorer limits, not wrong answers: a
+correct "this catalog doesn't carry Nike Air Max 90s" missed the expected wording, and "I
+can't see delivery times… whether it would arrive by Friday, please check the store" was
+read as a delivery promise. The frozen number is kept as is
+([full report](docs/evals/frozen-relay-1.md)).
 
-## Add a domain in one file
+What it does not show: one run of each task (k=1) by one model with no pinned model ID,
+answered through a relay (no latency or cost figures), 61 tasks written by the project.
+Relevance is not graded: nothing scores whether the recommendations are good. The 4/4
+injections are direct, in the shopper's own message; injection through catalog text is
+untested. The first run's "42/42" was weak
+evidence and is withdrawn
+([why](docs/agent-eval.md#what-the-first-run-did-and-did-not-show)). Any provider runs the
+same tasks with one command.
 
-[`examples/hello_domain/teas.py`](examples/hello_domain/teas.py) is a complete domain in
-148 lines: twelve teas, a search tool, a save tool behind approval and a grounding check.
-It subclasses `BaseToolkit`, which gives every optional hook a no-op default. The engine
-does the rest. An excerpt:
+## Add a domain
+
+**[docs/extending.md](docs/extending.md)** is the contract for bringing your own dataset and
+your own agent domain to the engine: what a catalog item needs, the `Toolkit` hooks with their
+signatures, tool policies, effects and approvals, fact references, the grounding backstop,
+the edits that register a domain in the app, the tests a domain should have and what is not
+supported.
+
+The engine is used from a clone of this repository. It is not published on PyPI, installing
+it installs torch (fashion's CLIP search is a core dependency), and its import name `curio`
+collides with the unrelated [`curio`](https://pypi.org/project/curio/) package on PyPI, so the
+two cannot share an environment.
+
+[`examples/hello_domain/`](examples/hello_domain/) is the worked example: a tea guide whose
+twelve teas load from [`teas.csv`](examples/hello_domain/teas.csv) through a validating
+loader, with a search tool, a save tool behind approval, fact references (`{tea:4}`,
+`{price:4}`) and a backstop, in one file of 172 lines. It subclasses `BaseToolkit`, which
+gives every optional hook a default; the engine does the rest:
 
 ```python
 class TeaToolkit(BaseToolkit[Tea]):
@@ -115,39 +154,18 @@ class TeaToolkit(BaseToolkit[Tea]):
     policies: ClassVar = dict(
         SearchTeas=Policy.READ, AskShopper=Policy.ASK, SaveTeas=Policy.APPROVE
     )
-    grounding_subject = "tea names and IDs"
 
-    def read(self, turn: Turn[Tea], action: SearchTeas) -> tuple[str, AgentStep]:
-        words = action.query.lower().split()
-        text = {t.tea_id: f"{t.name} {t.kind} {t.notes}".lower() for t in self._teas.values()}
-        turn.show([t for t in self._teas.values() if any(w in text[t.tea_id] for w in words)][:5])
-        step = AgentStep(kind="tool", name="SearchTeas", summary=f"Found {len(turn.items)} teas.")
-        return _lines(turn.items) or "(none)", step
-
-    def apply(self, action: SaveTeas, *, dry_run: bool = False) -> tuple[TeaEffect, list[Tea], str]:
-        teas = self.proposed({"tea_ids": list(dict.fromkeys(action.tea_ids))})
-        if not teas:
-            raise ToolError("None of those tea IDs exist.")
-        verb = "Would save" if dry_run else "Saved"
-        names = ", ".join(t.name for t in teas)
-        return TeaEffect(tea_ids=[t.tea_id for t in teas]), teas, f"{verb} {names}."
-
-    def check(self, turn: Turn[Tea], text: str) -> GroundingReport:
-        """Every tea ID, and every catalog tea name, must be one a tool returned."""
-        returned = list(turn.evidence.values())
-        checked, issues = check_ids(text, _TEA_ID, (t.tea_id for t in returned), "tea")
-        for name in dict.fromkeys(m.group(0) for m in self._names.finditer(text)):
-            checked += 1
-            if name.casefold() not in {t.name.casefold() for t in returned}:
-                issues.append(f"{name} was not returned by any tool")
-        return grounding_report(checked, issues)
+    def read(self, turn, action): ...  # run SearchTeas, turn.show(the teas found)
+    def apply(self, action, *, dry_run=False): ...  # validate SaveTeas into a TeaEffect
+    def facts(self, turn): ...  # what {tea:ID} and {price:ID} render to
+    def check(self, turn, text): ...  # the backstop for typed names, IDs and prices
 
     # key, prompt, proposed, fallback and reply_fields complete the class.
 ```
 
-Its tests drive the real engine with a scripted model: a grounded answer, an invented tea
-caught by the check, and a signed proposal that is narrowed and approved, while widened or
-forged ones are refused.
+Its tests drive the real engine with a scripted model: the CSV loader, a grounded answer
+whose references the server renders, an invented tea and a wrong typed price caught, and a
+signed proposal that is narrowed and approved while widened or forged ones are refused.
 
 ```bash
 uv run pytest tests/test_hello_domain.py tests/test_architecture.py
@@ -170,7 +188,8 @@ demo, it plans the book and the drink and says the outfit needs the fashion cata
 ### Pair a book with a drink
 
 In the book dialog, "Pair a drink" maps the book's genres, reader shelves and setting words
-(Paris, the Jazz Age) to a flavour profile and scores the 425 recipes. Each drink shows the
+(Paris, the Jazz Age) to a flavour profile and scores the recipes it may offer (371 of the
+425: no shots, crude names or overproof spirits). Each drink shows the
 evidence from both catalogs. The Great Gatsby gets the gin rickeys Tom Buchanan mixes.
 Children's and young-adult books, and anyone who asked for alcohol-free, get only
 alcohol-free drinks. The pairing is deterministic and offline. The book agent answers "what
@@ -208,7 +227,7 @@ come from readers' shelves.
 ## Quick start
 
 One command gives you Curio with cocktails, books and Plan my evening (without the outfit),
-and no 3.5 GB H&M download. With Docker:
+and no 3.7 GB H&M download. With Docker:
 
 ```bash
 docker compose --profile demo up --build
@@ -220,12 +239,14 @@ Or with [uv](https://docs.astral.sh/uv/) and no Docker:
 scripts/quickstart.sh
 ```
 
-Both prepare the cocktail recipes (a checksum-verified ~400 KB download) and goodbooks-10k
+Both prepare the cocktail recipes (a checksum-verified ~260 KB download) and goodbooks-10k
 (~150 MB, under a minute) on the first run. For cocktails only, skip the books with
 `DEMO_BOOKS=0` (Docker) or `CURIO_BOOKS=0` (uv). Either way one server runs the API and the
 web app: open http://localhost:8000. `scripts/quickstart.sh` builds the web app first when
-npm (Node 22) is installed. The quick start serves this computer only; `CURIO_HOST=0.0.0.0`
-opens it to your network.
+npm (Node 22 or newer) is installed. Both quick starts serve this computer only (Docker publishes
+port 8000 on 127.0.0.1); `CURIO_HOST=0.0.0.0` opens them to your network, and add the name
+or address others will use to `ALLOWED_HOSTS` (other names get 400).
+[SECURITY.md](SECURITY.md) says what that exposes.
 
 Search and recommendations work without an LLM. Chat needs one: copy `.env.example` to
 `.env` and set `LLM_MODEL` (plus `LLM_API_KEY` / `LLM_BASE_URL`). The Docker demo can also
@@ -255,14 +276,18 @@ optional: the API serves whichever domains are prepared.
 Fashion uses CLIP search in Qdrant, co-purchase and graph recommenders, collaborative
 filtering and a learned ranker. Cocktails use TF-IDF and ingredient overlap in memory.
 Books use TF-IDF search and item-item collaborative filtering on goodbooks-10k ratings.
-Cocktails, books and the pairing need no model and no network call to serve. Every dataset
-is downloaded from a pinned commit and checked by SHA-256.
+Cocktails, books and the pairing need no model and no network call to serve. The recipes and
+goodbooks-10k are downloaded from a pinned commit and checked by SHA-256; the H&M CSVs are
+the ones you download from Kaggle (or the Hugging Face mirror at a pinned revision, not
+checksum-checked), and product photos come from that pinned mirror.
 
-Tests: about 1,570 offline Python tests, 63 Vitest tests of the web app, and 85 end-to-end
-tests that run the real API and the React app in Chromium on the real data, with a scripted
-LLM. An [agent evaluation](docs/agent-eval.md)
-measures a real model instead: 45 tasks over the four domains, scored on tool choice,
-arguments, grounding, approvals, clarifying questions, safety and prompt injection. It
+Tests: 2,169 offline Python tests (with the data prepared here, 2,166 pass and 3 skip that need
+a local Shopify taxonomy cache or the H&M articles as Parquet), 79 Vitest tests of the web app, and 85 end-to-end tests that run the
+real API and the React app in Chromium on the real data with a scripted LLM (CI runs the 39
+that need no H&M data). An [agent evaluation](docs/agent-eval.md)
+measures a real model instead: 61 tasks over the three domains and Evening, which composes them, scored on tool choice,
+arguments, grounding, approvals, clarifying questions, safety, prompt injection and
+factual questions, next to three control policies, on a frozen task file and scorer. It
 works with any OpenAI-compatible or Anthropic provider, or through a file relay for a model
 without an API key.
 
@@ -278,16 +303,21 @@ so one process (or one container) is the whole app
 
 ## How it's built and released
 
-CI runs lint, format, the offline tests, the web app's checks and build, and a quick-start
-boot checked in Chromium on every pull request and every push to `main`. When CI passes on `main` with a new version, a tag, a GitHub release
-and the container image are published automatically.
+On every pull request and every push to `main`, CI runs lint, format, the offline tests,
+the web app's checks and build, and the browser suite in Chromium on the cocktails and
+books (the tests that need the H&M data run locally). When CI passes on `main` with a new
+version, the container image is built, smoke-tested and pushed, and then the tag and the
+GitHub release are published.
 [How it was built](docs/how-it-was-built.md) · [Security policy](SECURITY.md).
 
 ## Data and licences
 
 The code is under the [Apache License 2.0](LICENSE); keep the [NOTICE](NOTICE) credit when you
-redistribute it, and cite it with [CITATION.cff](CITATION.cff). The data is not part of this
-repository and is not covered by that licence. H&M data is for non-commercial research use.
+redistribute it, and cite it with [CITATION.cff](CITATION.cff). The datasets are not part of
+this repository and are not covered by that licence. The README screenshots are the
+exception: they contain H&M product images (research data, shown for illustration), book
+covers and TheCocktailDB drink photos, which remain their owners' material under their
+terms. H&M data is for non-commercial research use.
 goodbooks-10k is CC BY-SA 4.0, collected from Goodreads. Cocktail recipes and photos remain
 under TheCocktailDB's terms. Details: [data and licences](docs/data-and-licences.md).
 

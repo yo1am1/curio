@@ -43,6 +43,9 @@ class FixedPopularity:
         ranking = [ScoredProduct(pid, 1.0) for pid in (99, 50, 51)]
         return [s for s in ranking if s.product_id not in exclude_ids][:top_k]
 
+    def label(self) -> str:
+        return "Popular as of 22 Sep 2020 (the data's last week)"
+
 
 @pytest.fixture
 def recommender(make_customers, make_catalog) -> CollaborativeRecommender:
@@ -91,7 +94,8 @@ def test_reasons_name_the_purchases_that_point_to_a_product(recommender) -> None
     assert recommender.reasons(2, 12) == [
         "2 shoppers who bought product 10 (black) also bought this."
     ]
-    assert recommender.reasons(1, 99)[0].startswith("Popular in the last week")
+    assert recommender.reasons(1, 99)[0].startswith("Popular as of ")
+    assert "last week" not in recommender.reasons(1, 99)[0].split("(")[0]
 
 
 def test_unknown_user_raises(recommender) -> None:

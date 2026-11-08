@@ -4,11 +4,23 @@ The code is under the [Apache License 2.0](../LICENSE). If you redistribute Curi
 based on it, keep the [NOTICE](../NOTICE) file's credit ("Based on Curio by Yehor Trepalin",
 with a link to this repository) in your documentation or credits, as section 4(d) of the
 licence requires. To cite the project, use [CITATION.cff](../CITATION.cff). Versions up to
-1.0.0 were released under MIT. The data is not part of this repository and is not covered
-by that licence:
+1.0.0 were released under MIT. The datasets are not part of this repository and are not
+covered by that licence. The README screenshots in `docs/screenshots/` are the one exception:
+they contain H&M product images (research data, shown for illustration: `curio-agent.webp`,
+`curio-approval.webp`, `curio-connections.webp`, `curio-discover-photo.webp`,
+`curio-evening.webp` and the overview animation `curio-overview.webp`), book covers and
+TheCocktailDB drink photos. That material remains its owners' under the terms below and is
+not licensed by this repository.
 
 - **H&M data**: the [H&M Personalized Fashion Recommendations](https://www.kaggle.com/competitions/h-and-m-personalized-fashion-recommendations)
   dataset, licensed by H&M for non-commercial research use. You download it yourself.
+  Its customers are real H&M shoppers under pseudonymous ids; `prepare_data` re-keys a
+  sample of them (5,000 by default) to small integers. The fashion API serves that sample's
+  ids (`/users`) and, per shopper, the purchased products with their dates
+  (`/users/{id}`), because the For you, Connections and Evaluation pages are built on them.
+  It does not serve the age the dataset records. Purchase dates and baskets of real people
+  are still personal data in many jurisdictions: keep an instance with fashion data on
+  your own computer (the default), not on a public address.
 - **Book data**: [goodbooks-10k](https://github.com/zygmuntz/goodbooks-10k) by Zygmunt
   Zając, published under the [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)
   licence. `prepare_books` downloads it from a pinned commit and checks each file's

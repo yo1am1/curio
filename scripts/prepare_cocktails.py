@@ -58,7 +58,7 @@ REQUIRED_FIELDS = (
     "ingredients",
     "ingredientMeasures",
 )
-# The real file is ~400 KB; anything far larger is not the recipe CSV.
+# The real file is ~260 KB (258,555 bytes); anything far larger is not the recipe CSV.
 MAX_SOURCE_BYTES = 20 * 1024 * 1024
 MAX_LITERAL_CHARS = 10_000
 

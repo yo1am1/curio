@@ -164,6 +164,40 @@ def test_a_vague_request_gets_a_question(agent):
     assert reply.clarification.options == ["Date night", "Rainy Sunday in"]
 
 
+def test_a_budget_in_a_quick_reply_is_not_a_checked_price(agent):
+    # The re-audit: "plan my evening" got a question whose only euro amount is a suggested
+    # budget, and the badge said "Checked 1 price against the catalogs".
+    question = {
+        "question": "Happy to. What's the occasion?",
+        "options": ["Rainy Sunday in", "Date night under €100", "Book club, alcohol-free"],
+    }
+    reply = agent(action("AskShopper", question)).reply("plan my evening", [])
+    assert reply.status == "needs_input"
+    assert reply.clarification.options[1] == "Date night under €100"
+    assert reply.grounding.status == "not_applicable"
+    assert reply.grounding.counts == {} and reply.grounding.checked == 0
+
+
+def test_the_shoppers_budget_in_a_plan_is_not_counted_as_a_price(agent):
+    occasion = "Date night under €100"
+    plan = make_planner(fashion=False).plan(EveningRequest(occasion=occasion, budget=100))
+    book, drink = plan.book.book, plan.drink.cocktail
+    answer = (
+        f"Read **{book.title}** (book #{book.book_id}) by {book.author}, ★ "
+        f"{book.average_rating:.2f}, with a **{drink.name}** (drink #{drink.drink_id}). "
+        f"Why it works: {plan.why}"
+    )
+    assert "€100" in answer
+    assistant = agent(
+        action("PlanEvening", {"occasion": occasion, "budget": 100}), answer, fashion=False
+    )
+    reply = assistant.reply(occasion, [])
+    assert reply.grounding.status == "verified", reply.grounding
+    # The book and drink were checked; the €100 is the shopper's own budget.
+    assert "price" not in reply.grounding.counts
+    assert reply.grounding.counts["rating"] == 2  # in the answer and in "why"
+
+
 # --- Grounding --------------------------------------------------------------------------------
 
 
@@ -178,15 +212,17 @@ def test_an_invented_price_rating_and_drink_fall_back_to_the_plan(agent):
     reply = assistant.reply("Plan a rainy Sunday in", [])
     assert reply.grounding.status == "fallback"
     issues = reply.grounding.issues
-    assert "€9.99 does not match any catalog price in the evidence" in issues
-    assert "a rating of 4.9 does not match any book in the evidence" in issues
+    assert "€9.99 does not match the price of Chunky Knit Sweater (€24.99)" in issues
+    assert "4.9 does not match the rating of The Name of the Wind (4.55)" in issues
     assert "drink 2 was not returned by PairCocktail" in issues
     assert "Manhattan was not returned by PairCocktail" in issues
     assert [s.name for s in reply.steps[-2:]] == ["Grounding check", "Self-correction"]
     plan = cosy_plan()
-    assert reply.text.startswith("A cosy evening, from the catalogs:\n- Top: Chunky Knit Sweater")
-    assert "- Book: The Name of the Wind by Patrick Rothfuss · ★ 4.55" in reply.text
-    assert "- Drink: Honey Bee · contains alcohol" in reply.text
+    assert reply.text.startswith(
+        "A cosy evening, from the catalogs:\n- Top: **Chunky Knit Sweater**"
+    )
+    assert "- Book: **The Name of the Wind** by Patrick Rothfuss · ★ 4.55" in reply.text
+    assert "- Drink: **Honey Bee** · contains alcohol" in reply.text
     assert f"Why it works: {plan.why}" in reply.text
     assert reply.evening is not None  # the plan's cards still show
 

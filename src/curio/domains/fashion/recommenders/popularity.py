@@ -1,7 +1,7 @@
 """Non-personalised ranking: the fallback when there is no history to learn from."""
 
 from collections.abc import Collection
-from datetime import timedelta
+from datetime import date, timedelta
 from itertools import islice
 
 import pandas as pd
@@ -23,14 +23,22 @@ class PopularityRecommender:
 
     def __init__(self, purchases: pd.DataFrame) -> None:
         """`purchases` needs product_id and purchase_date columns."""
+        self.as_of: date | None = None
         if purchases.empty:
             self._ranking: list[ScoredProduct] = []
             return
         dates = pd.to_datetime(purchases["purchase_date"])
+        self.as_of = dates.max().date()
         window_start = dates.max() - timedelta(days=POPULARITY_WINDOW_DAYS)
         counts = purchases.loc[dates > window_start, "product_id"].value_counts()
         scored = [ScoredProduct(int(pid), float(count)) for pid, count in counts.items()]
         self._ranking = sorted(scored, key=lambda s: (-s.score, s.product_id))
+
+    def label(self) -> str:
+        """How a popular pick is explained: the data ends in 2020, so not "last week"."""
+        if self.as_of is None:
+            return "Popular in the data's last week"
+        return f"Popular as of {self.as_of.day} {self.as_of:%b %Y} (the data's last week)"
 
     def top(self, top_k: int, exclude_ids: Collection[int] = ()) -> list[ScoredProduct]:
         """The most popular products, skipping `exclude_ids` (e.g. what the user already bought)."""

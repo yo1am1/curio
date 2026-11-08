@@ -20,7 +20,7 @@ export const STRATEGIES: readonly StrategyInfo[] = [
   },
   {
     id: "collaborative",
-    label: "Similar shoppers",
+    label: "Bought together with your items",
     description: "New pieces bought by shoppers with items like yours.",
   },
   {

@@ -71,6 +71,7 @@ export function ChatPage({ domain }: { domain: Domain }) {
   const proposal = openProposal(chat);
   const busy = !!chat.running;
   const decisionError = proposal !== null ? chat.entries[proposal]?.decisionError : undefined;
+  const decisionStale = proposal !== null && !!chat.entries[proposal]?.decisionStale;
 
   // A hand-off ("Ask Curio about it" in a dialog) arrives as router state: send it once.
   const handoff = (location.state as { ask?: string } | null)?.ask;
@@ -184,8 +185,12 @@ export function ChatPage({ domain }: { domain: Domain }) {
                             action={action}
                             busy={busy}
                             error={decisionError}
+                            stale={decisionStale}
                             onDecide={(approved, edits) => {
                               actions.decide(index, approved, edits);
+                            }}
+                            onAskAgain={() => {
+                              actions.send(userQuestion(index));
                             }}
                           />
                         );

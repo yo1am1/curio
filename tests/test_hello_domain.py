@@ -1,10 +1,20 @@
-"""examples/hello_domain on the real AgentEngine, driven by a scripted chat model."""
+"""examples/hello_domain on the real AgentEngine, driven by a scripted chat model: its CSV
+loader, a grounded answer with fact references, an approval round trip and a caught
+hallucination (the contract in docs/extending.md)."""
 
 import pytest
 from langchain_core.messages import AIMessage
 
 from curio.engine import ActionDecision, ActionSigner, ChatTurn, InvalidActionError
-from examples.hello_domain.teas import TeaContext, TeaEffect, TeaReply, tea_agent
+from examples.hello_domain.teas import (
+    TEAS_CSV,
+    Tea,
+    TeaContext,
+    TeaEffect,
+    TeaReply,
+    load_teas,
+    tea_agent,
+)
 from tests.agents.conftest import FakeToolCallingChatModel
 
 
@@ -23,12 +33,45 @@ def steps(reply: TeaReply) -> list[tuple[str, str]]:
     return [(step.name, step.status) for step in reply.steps]
 
 
-def test_a_grounded_answer_cites_the_teas_the_tool_returned():
-    agent = tea_agent(model(("SearchTeas", {"query": "smoky"}), "Try **Lapsang Souchong** [id 4]."))
+def test_the_catalog_loads_from_the_csv_and_validates_each_row(tmp_path):
+    teas = load_teas()
+    assert len(teas) == 12 and teas[3] == Tea(
+        tea_id=4,
+        name="Lapsang Souchong",
+        kind="black",
+        notes="smoky, pine, campfire",
+        price_eur=8.5,
+    )
+    assert TEAS_CSV.name == "teas.csv"
+    with pytest.raises(FileNotFoundError):
+        load_teas(tmp_path / "missing.csv")
+    repeated = tmp_path / "repeated.csv"
+    repeated.write_text("tea_id,name,kind,notes,price_eur\n1,A,green,x,1\n1,B,green,y,2\n")
+    with pytest.raises(ValueError, match="unique"):
+        load_teas(repeated)
+    bad = tmp_path / "bad.csv"
+    bad.write_text("tea_id,name,kind,notes,price_eur\n0,A,green,x,1\n")
+    with pytest.raises(ValueError):
+        load_teas(bad)
+    own = tmp_path / "own.csv"
+    own.write_text("tea_id,name,kind,notes,price_eur\n7,Yerba Mate,herbal,grassy,3.2\n")
+    agent = tea_agent(model(("SearchTeas", {"query": "mate"}), "{tea:7}"), teas=load_teas(own))
+    assert agent.reply("Mate?", []).text == "**Yerba Mate**"
+
+
+def test_a_grounded_answer_cites_facts_through_references():
+    answer = "Try {tea:4} [id 4] at {price:4}; with {tea:9} the two cost {total:price:4,9}."
+    agent = tea_agent(model(("SearchTeas", {"query": "smoky"}), answer))
     reply = agent.reply("Something smoky?", [])
     assert isinstance(reply, TeaReply) and reply.status == "complete"
     assert [t.name for t in reply.teas] == ["Lapsang Souchong", "Da Hong Pao"]
-    assert reply.grounding.status == "verified" and reply.grounding.checked == 2
+    # The server rendered every reference from the catalog; none reaches the client.
+    assert reply.text == (
+        "Try **Lapsang Souchong** [id 4] at €8.50; with **Da Hong Pao** the two cost €25.30."
+    )
+    assert reply.grounding.status == "verified"
+    assert reply.grounding.rendered == {"name": 2, "price": 1, "total": 1}
+    assert reply.grounding.checked == 1  # the typed "[id 4]", checked by the backstop
     assert steps(reply) == [
         ("Understand request", "ok"),
         ("SearchTeas", "ok"),
@@ -78,7 +121,25 @@ def test_an_answer_naming_a_tea_no_tool_returned_falls_back_to_catalog_facts():
     ]
     assert steps(reply)[-2:] == [("Grounding check", "error"), ("Self-correction", "blocked")]
     assert "Silver Needle" not in reply.text
-    assert reply.text.startswith("Teas I could confirm:\n- [id 4] Lapsang Souchong")
+    assert reply.text.splitlines() == [
+        "Teas I could confirm:",
+        "- **Lapsang Souchong** [id 4]: €8.50",
+        "- **Da Hong Pao** [id 9]: €16.80",
+    ]
+
+
+def test_a_typed_wrong_price_or_a_reference_to_an_unreturned_tea_is_caught():
+    wrong = "Try **Lapsang Souchong** [id 4], only €4.50."
+    agent = tea_agent(model(("SearchTeas", {"query": "smoky"}), wrong, "{tea:4} costs {price:4}."))
+    reply = agent.reply("Something smoky?", [])
+    assert reply.grounding.status == "repaired"
+    assert reply.text == "**Lapsang Souchong** costs €8.50."
+    unreturned = "Try {tea:3} at {price:3}."
+    agent = tea_agent(model(("SearchTeas", {"query": "smoky"}), unreturned, unreturned))
+    reply = agent.reply("Something smoky?", [])
+    assert reply.grounding.status == "fallback"
+    assert "tea 3 was not returned by any tool this turn" in reply.grounding.issues[0]
+    assert "Silver Needle" not in reply.text and "{" not in reply.text
 
 
 def test_a_toolkit_may_vet_a_proposal_before_it_is_signed(monkeypatch):

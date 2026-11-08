@@ -90,7 +90,14 @@ def test_pairs_a_book_by_title_with_verified_drinks(agent):
     )
     reply = events[-1].reply
     assert reply.grounding.status == "verified"
-    assert reply.grounding.checked == 3  # the book title, the drink name and its number
+    # the book title, the drink name, its number, its alcohol label and two ingredients
+    assert reply.grounding.counts == {
+        "title": 1,
+        "id": 1,
+        "name": 1,
+        "alcohol": 1,
+        "ingredient": 2,
+    }
     assert drinks(reply) == ["Manhattan", "Sazerac", "Martini"]
     assert reply.pairing is not None and reply.pairing.profile.source == "The Big Sleep"
     assert reply.books == []  # pairing shows drinks, not book cards
@@ -222,8 +229,8 @@ def test_an_invented_drink_is_flagged_and_falls_back_to_the_paired_drinks(agent)
     assert [s.name for s in reply.steps][-2:] == ["Grounding check", "Self-correction"]
     assert reply.text == (
         "The Big Sleep leans Mystery and noir and Classics. To pair:\n"
-        "- Manhattan · contains alcohol\n- Sazerac · contains alcohol\n"
-        "- Martini · contains alcohol\n\n"
+        "- **Manhattan** · contains alcohol\n- **Sazerac** · contains alcohol\n"
+        "- **Martini** · contains alcohol\n\n"
         "Please drink responsibly. Ingredient filters only cover listed recipe ingredients; "
         "they are not an allergen guarantee."
     )
@@ -238,7 +245,9 @@ def test_an_invented_amount_is_rewritten_once(agent):
     )
     reply = assistant.reply("Pair The Big Sleep", [])
     assert reply.grounding.status == "repaired"
-    assert reply.grounding.issues == ["3 oz does not match any amount in the paired recipes"]
+    assert reply.grounding.issues == [
+        "3 oz does not match the recipe amount of Manhattan (2 oz, 1 oz, 1 dash)"
+    ]
 
 
 def test_drinks_from_an_earlier_turn_are_not_evidence(agent):

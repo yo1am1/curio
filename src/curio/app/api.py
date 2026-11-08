@@ -6,7 +6,6 @@ Run with: uv run uvicorn curio.app.api:create_app --factory
 import io
 import json
 import logging
-from collections import Counter, deque
 from collections.abc import AsyncIterator, Iterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import date
@@ -15,12 +14,28 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    Response,
+    StreamingResponse,
+)
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from curio.app.config import get_settings
+from curio.app.config import Settings, get_settings
 from curio.app.demo import DemoCustomer
+from curio.app.hardening import (
+    DOCS_POLICY,
+    SWAGGER_INIT,
+    BodySizeLimit,
+    SecurityHeaders,
+    SlotStreamingResponse,
+    TurnSlots,
+    swagger_page,
+)
 from curio.app.schemas import AssistantReply, ChatRequest, Domain, TurnContext
 from curio.app.services import (
     BOOKS,
@@ -56,7 +71,7 @@ from curio.domains.cocktails.models import (
 )
 from curio.domains.evening.models import EveningPlan, EveningRequest, EveningSwap
 from curio.domains.evening.planner import EveningError
-from curio.domains.fashion.models import Product, ProductFilter, ScoredProduct, User
+from curio.domains.fashion.models import Product, ProductFilter, ScoredProduct
 from curio.domains.fashion.outfits import (
     MAX_SLOTS,
     Audience,
@@ -77,9 +92,14 @@ logger = logging.getLogger(__name__)
 
 MAX_TOP_K = 50
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+# The multipart envelope around the image: boundaries, part headers, the file name.
+MULTIPART_OVERHEAD_BYTES = 64 * 1024
+UPLOAD_TOO_LARGE = "Image must be at most 10 MB."
+# Formats Pillow may decode from an upload (the UI offers PNG and JPEG); others never reach
+# a decoder, which keeps TIFF, PSD and the rest of Pillow's parsers out of reach.
+UPLOAD_FORMATS = ("PNG", "JPEG")
 # Bounds decode memory: a small compressed file can still expand to gigabytes of pixels.
 MAX_IMAGE_PIXELS = 25_000_000
-MAX_FEEDBACK_RECORDS = 500
 CHAT_DISABLED = "Chat is disabled: set LLM_MODEL (and LLM_API_KEY / LLM_BASE_URL) in .env."
 
 TopK = Annotated[int, Query(ge=1, le=MAX_TOP_K)]
@@ -198,8 +218,18 @@ class PurchasedProduct(BaseModel):
     product: Product
 
 
+class Shopper(BaseModel):
+    """A shopper as the API shows one: the anonymous id only. The H&M data also has an
+    age, which no page needs, so it is not served."""
+
+    user_id: int
+
+
 class UserProfile(BaseModel):
-    user: User
+    """A sampled H&M shopper's purchases (pseudonymous, re-keyed ids; see
+    docs/data-and-licences.md)."""
+
+    user: Shopper
     purchases: list[PurchasedProduct]
 
 
@@ -212,12 +242,6 @@ class ChatFeedback(BaseModel):
     product_ids: list[int] = Field(default_factory=list, max_length=5)
     tools: list[str] = Field(default_factory=list, max_length=12)
     comment: str = Field(default="", max_length=500)
-
-
-class FeedbackSummary(BaseModel):
-    up: int
-    down: int
-    recent_down: list[ChatFeedback]
 
 
 class OutfitQuery(BaseModel):
@@ -361,9 +385,9 @@ def _to_hits(fashion: FashionServices, scored: Sequence[ScoredProduct]) -> list[
 
 def _read_image(upload: UploadFile) -> Image.Image:
     if upload.size is None or upload.size > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="Image must be at most 10 MB.")
+        raise HTTPException(status_code=413, detail=UPLOAD_TOO_LARGE)
     try:
-        image = Image.open(io.BytesIO(upload.file.read()))
+        image = Image.open(io.BytesIO(upload.file.read()), formats=UPLOAD_FORMATS)
         if image.width * image.height > MAX_IMAGE_PIXELS:
             raise HTTPException(status_code=413, detail="Image resolution is too large.")
         image.load()  # Image.open is lazy; decode now so corrupt files fail here.
@@ -372,12 +396,20 @@ def _read_image(upload: UploadFile) -> Image.Image:
     return image
 
 
-def create_app(services: Services | None = None, *, web_dist: Path | None = None) -> FastAPI:
+def create_app(
+    services: Services | None = None,
+    *,
+    web_dist: Path | None = None,
+    settings: Settings | None = None,
+) -> FastAPI:
     """Build the app. Tests pass ready-made `services`; production builds them at startup.
 
     `web_dist` is the built React app to serve beside the API (`curio.app.web`). Production
     (no `services`) takes it from the settings (`WEB_DIST`, on unless `SERVE_WEB=false`).
+    `settings` default to the environment's; the HTTP limits always come from them.
     """
+    if settings is None:
+        settings = get_settings()
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
@@ -388,7 +420,7 @@ def create_app(services: Services | None = None, *, web_dist: Path | None = None
             app.state.services = services
             yield
             return
-        built = app.state.services = build_services(get_settings())
+        built = app.state.services = build_services(settings)
         try:
             if built.fashion is not None:
                 # Choosing the examples runs the recommenders for many customers (~10 s on the
@@ -402,7 +434,36 @@ def create_app(services: Services | None = None, *, web_dist: Path | None = None
         title="Curio Recommendation API",
         version=version("curio-recommendations"),
         lifespan=lifespan,
+        docs_url=None,  # see API_DOCS below
+        redoc_url=None,
     )
+
+    app.add_middleware(
+        BodySizeLimit,
+        default=(
+            settings.max_body_bytes,
+            f"Request body is too large: the limit is {settings.max_body_bytes:,} bytes.",
+        ),
+        limits={"/search/image": (MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES, UPLOAD_TOO_LARGE)},
+    )
+    app.add_middleware(SecurityHeaders)
+    # Outermost: a request under a foreign Host name is refused before anything else runs.
+    app.add_middleware(
+        TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts), www_redirect=False
+    )
+
+    if settings.api_docs:
+        # Only these two routes get the Swagger policy (scripts from its CDN).
+        docs_csp = {"content-security-policy": DOCS_POLICY}
+
+        @app.get("/docs", include_in_schema=False)
+        def swagger_ui() -> HTMLResponse:
+            page = swagger_page(app.title, app.openapi_url or "/openapi.json")
+            return HTMLResponse(page, headers=docs_csp)
+
+        @app.get("/docs/init.js", include_in_schema=False)
+        def swagger_init() -> Response:
+            return Response(SWAGGER_INIT, media_type="text/javascript", headers=docs_csp)
 
     @app.exception_handler(IndexNotBuiltError)
     async def index_not_built(_: Request, error: IndexNotBuiltError) -> JSONResponse:
@@ -686,7 +747,7 @@ def create_app(services: Services | None = None, *, web_dist: Path | None = None
             for p in fashion.customers.purchases_for(user_id)
             if (product := fashion.catalog.get(p.product_id)) is not None
         ]
-        return UserProfile(user=user, purchases=purchases)
+        return UserProfile(user=Shopper(user_id=user.user_id), purchases=purchases)
 
     @app.get("/users/{user_id}/recommendations")
     def recommend(
@@ -741,30 +802,37 @@ def create_app(services: Services | None = None, *, web_dist: Path | None = None
             raise HTTPException(status_code=503, detail=CHAT_DISABLED)
         return runtime.assistant
 
-    @app.post("/chat")
+    turns = TurnSlots(settings.max_concurrent_turns)
+    busy_response = {503: {"description": "Every agent-turn slot is taken; see Retry-After."}}
+
+    @app.post("/chat", responses=busy_response)
     def chat(request: ChatRequest, services: ServicesDep) -> AssistantReply:
         """One agent turn in the requested domain. Send `decision` instead of a message to
-        answer a pending proposal."""
+        answer a pending proposal. 503 with `Retry-After` while every turn slot is taken."""
         assistant = assistant_for(services, request.domain)
         context = TurnContext.model_validate(request.model_dump(include=_CONTEXT_FIELDS))
+        slot = turns.acquire()
         try:
             if request.decision is not None:
                 return assistant.resume(request.decision, request.history, context)
             return assistant.reply(request.message, request.history, context)
         except Exception as error:
             raise _chat_error(error) from error
+        finally:
+            slot.release()
 
-    @app.post("/chat/stream")
+    @app.post("/chat/stream", responses=busy_response)
     def chat_stream(request: ChatRequest, services: ServicesDep) -> StreamingResponse:
         """The same turn as /chat, as NDJSON: one `step` event per agent step, then `reply`."""
         assistant = assistant_for(services, request.domain)
         context = TurnContext.model_validate(request.model_dump(include=_CONTEXT_FIELDS))
-        events = assistant.stream(
-            request.message, request.history, context, decision=request.decision
-        )
+        slot = turns.acquire()
 
         def lines() -> Iterator[str]:
             try:
+                events = assistant.stream(
+                    request.message, request.history, context, decision=request.decision
+                )
                 for event in events:
                     yield event.model_dump_json() + "\n"
             except Exception as error:
@@ -775,24 +843,16 @@ def create_app(services: Services | None = None, *, web_dist: Path | None = None
                     )
                     + "\n"
                 )
+            finally:
+                slot.release()
 
-        return StreamingResponse(lines(), media_type="application/x-ndjson")
-
-    feedback: deque[ChatFeedback] = deque(maxlen=MAX_FEEDBACK_RECORDS)
+        return SlotStreamingResponse(lines(), slot, media_type="application/x-ndjson")
 
     @app.post("/chat/feedback", status_code=204)
     def chat_feedback(rating: ChatFeedback) -> None:
-        feedback.append(rating)
+        """Record a rating in the server log: the rating and tool names only. The message,
+        answer and comment are not kept, and nothing serves feedback back over HTTP."""
         logger.info("chat feedback %s tools=%s", rating.rating, ",".join(rating.tools))
-
-    @app.get("/chat/feedback")
-    def chat_feedback_summary() -> FeedbackSummary:
-        counts = Counter(item.rating for item in feedback)
-        return FeedbackSummary(
-            up=counts["up"],
-            down=counts["down"],
-            recent_down=[item for item in feedback if item.rating == "down"][-10:],
-        )
 
     if web_dist is None and services is None:
         settings = get_settings()
@@ -818,7 +878,28 @@ def _chat_error(error: Exception) -> HTTPException:
         return HTTPException(
             status_code=429, detail="The assistant is busy. Please try again shortly."
         )
-    # Provider SDKs raise their own exception types (auth, rate limit, network). Log the
-    # details server-side only: upstream messages can contain URLs or request ids.
-    logger.error("Shopping assistant failed", exc_info=error)
-    return HTTPException(status_code=502, detail="LLM provider request failed; see server logs.")
+    if _from_provider(error):
+        # Provider SDKs raise their own exception types (auth, rate limit, network). Log the
+        # details server-side only: upstream messages can contain URLs or request ids.
+        logger.error("LLM provider request failed", exc_info=error)
+        return HTTPException(
+            status_code=502, detail="LLM provider request failed; see server logs."
+        )
+    # A bug or a failing service in the turn itself (a tool, a recommender): not the LLM's.
+    logger.error("Agent turn failed", exc_info=error)
+    return HTTPException(status_code=500, detail="The assistant failed; see server logs.")
+
+
+# Where LLM provider and HTTP client errors come from: their SDKs and LangChain's wrappers.
+_PROVIDER_MODULES = ("openai", "anthropic", "httpx", "httpcore", "langchain")
+
+
+def _from_provider(error: BaseException) -> bool:
+    """Whether `error` is the LLM provider's (or the network's) rather than the server's.
+    Only connection and timeout errors count among the built-in ones: a `FileNotFoundError`
+    or `PermissionError` (an `OSError` too) comes from a tool or recommender."""
+    if isinstance(error, ConnectionError | TimeoutError):
+        return True
+    return any(
+        cls.__module__.split(".")[0].startswith(_PROVIDER_MODULES) for cls in type(error).__mro__
+    )

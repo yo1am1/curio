@@ -10,15 +10,11 @@ from PIL import Image
 
 from curio.app.api import create_app
 from curio.app.schemas import AssistantReply
-from curio.app.services import FashionServices, Services
+from curio.app.services import Services
 from curio.domains.fashion.agent.intent import SearchIntent
-from curio.domains.fashion.catalog import CustomerData, ProductCatalog
-from curio.domains.fashion.recommenders.collaborative import CollaborativeRecommender
-from curio.domains.fashion.recommenders.content_based import ContentBasedRecommender
+from curio.domains.fashion.catalog import ProductCatalog
 from curio.domains.fashion.recommenders.graph import GraphRecommender
 from curio.domains.fashion.recommenders.popularity import PopularityRecommender
-from curio.domains.fashion.recommenders.repeat import RepeatPurchaseRecommender
-from curio.domains.fashion.search import ProductSearch
 from tests.conftest import serve, with_cocktails, with_fashion
 
 
@@ -32,40 +28,6 @@ class EchoAssistant:
 class BrokenAssistant:
     def reply(self, message, history, context=None) -> AssistantReply:
         raise ConnectionError("gateway down")
-
-
-@pytest.fixture
-def services(sample_catalog, vector_store, fake_encoder, tmp_path) -> Services:
-    users = pd.DataFrame({"user_id": [1, 2], "age": [34, 27]})
-    purchases = pd.DataFrame(
-        [(1, 1, date(2020, 9, 2)), (2, 1, date(2020, 9, 3)), (2, 3, date(2020, 9, 4))],
-        columns=["user_id", "product_id", "purchase_date"],
-    )
-    Image.new("RGB", (4, 6), "red").save(tmp_path / "3.jpg")
-    customers = CustomerData(users, purchases)
-    popularity = PopularityRecommender(customers.purchases)
-    content_based = ContentBasedRecommender(customers, sample_catalog, vector_store, popularity)
-    # The sampled customers double as the whole crowd in this tiny fixture.
-    crowd = purchases.rename(columns={"user_id": "shopper_id"})
-    collaborative = CollaborativeRecommender(customers, sample_catalog, crowd, popularity)
-    fashion = FashionServices(
-        catalog=sample_catalog,
-        customers=customers,
-        store=vector_store,
-        search=ProductSearch(fake_encoder, vector_store),
-        content_based=content_based,
-        collaborative=collaborative,
-        graph=GraphRecommender(
-            customers,
-            sample_catalog,
-            popularity,
-            pd.DataFrame([(1, 3, 2, 1.5)], columns=["product_id", "other_id", "count", "lift"]),
-        ),
-        repeat=RepeatPurchaseRecommender(customers, popularity),
-        images_dir=tmp_path,
-        assistant=None,
-    )
-    return serve(fashion)
 
 
 @pytest.fixture
@@ -408,6 +370,28 @@ def test_chat_stream_sends_steps_then_reply(services):
     assert events[-1]["reply"]["text"] == "Hello!"
 
 
+def test_chat_and_stream_render_fact_references(services):
+    from curio.engine.facts import REFERENCE
+
+    product = next(iter(services.fashion.catalog))
+    pid = product.product_id
+    answer = {"content": f"Saved for later: {{product:{pid}}} at {{price:{pid}}}."}
+    request = {"message": "what did I save?", "shortlist": [pid]}
+    expected = f"Saved for later: **{product.display_name}** at €{product.price:.2f}."
+    agent = _agent_services(services, _intent(wants_products=False), answer)
+    with TestClient(create_app(agent)) as client:
+        reply = client.post("/chat", json=request).json()
+    assert reply["text"] == expected
+    assert reply["grounding"]["rendered"] == {"name": 1, "price": 1}
+    agent = _agent_services(services, _intent(wants_products=False), answer)
+    with TestClient(create_app(agent)) as client:
+        response = client.post("/chat/stream", json=request)
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert events[-1]["type"] == "reply" and events[-1]["reply"]["text"] == expected
+    # No raw reference anywhere in the stream: not in steps, not in the reply.
+    assert not any(match.group(2) for match in REFERENCE.finditer(response.text))
+
+
 def test_chat_stream_reports_provider_errors_as_safe_events(services):
     with TestClient(
         create_app(with_fashion(services, assistant=BrokenStreamAssistant()))
@@ -544,13 +528,22 @@ def test_chat_accepts_the_client_held_outfit(services) -> None:
             assert swap.status_code == 422
 
 
-def test_chat_feedback_is_recorded_and_summarized(client):
-    rating = {"rating": "down", "message": "jeans", "answer": "Try these.", "tools": ["Search"]}
-    assert client.post("/chat/feedback", json=rating).status_code == 204
-    assert client.post("/chat/feedback", json={**rating, "rating": "up"}).status_code == 204
-    summary = client.get("/chat/feedback").json()
-    assert (summary["up"], summary["down"]) == (1, 1)
-    assert summary["recent_down"][0]["message"] == "jeans"
+def test_chat_feedback_is_logged_without_text_and_never_served_back(client, caplog):
+    rating = {
+        "rating": "down",
+        "message": "I am pregnant and my address is 1 Main St",
+        "answer": "Try these.",
+        "tools": ["Search"],
+        "comment": "private note",
+    }
+    with caplog.at_level("DEBUG", logger="curio.app.api"):
+        assert client.post("/chat/feedback", json=rating).status_code == 204
+        assert client.post("/chat/feedback", json={**rating, "rating": "up"}).status_code == 204
+    assert "chat feedback down tools=Search" in caplog.text
+    for private in ("pregnant", "Main St", "Try these", "private note"):
+        assert private not in caplog.text
+    # The world-readable summary of other users' messages is gone.
+    assert client.get("/chat/feedback").status_code == 405
 
 
 # --- Cocktail domain ---------------------------------------------------------------------

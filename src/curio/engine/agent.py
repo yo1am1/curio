@@ -7,15 +7,22 @@ One turn runs as a generator of observable events:
 2. Act: a bounded tool loop. Read tools run immediately; AskShopper pauses for a quick reply;
    approval tools pause for the shopper's decision (human in the loop) unless the shopper
    opted into auto-approval for that tool.
-3. Verify: the domain's grounding check compares the final answer with tool evidence. One
-   self-repair attempt is allowed before a deterministic, grounded fallback.
+3. Verify: the answer's fact references are rendered from the turn's evidence (cite mode,
+   `curio.engine.facts`), and the domain's grounding check (the backstop) compares the
+   values the model typed itself with tool evidence. A reference that cannot be rendered or
+   a typed value that does not match fails verification: one self-repair attempt is allowed
+   before a deterministic, grounded fallback. No reference reaches the client: every text
+   the engine sends (answers, questions, quick replies, fallbacks) is rendered first.
 
 Everything domain-specific (tools, prompts, evidence, grounding, suggestions) lives behind the
 `Toolkit` protocol; budgets, the trace, approvals and resume are shared by every domain.
 
-The server is stateless: shortlists, preferences and pending proposals live on the client.
-Proposals are HMAC-signed over their tool name and arguments, so a resumed decision can approve
-or narrow exactly what this agent proposed, never forge, widen or replay it in another domain.
+The server keeps no session state: shortlists, preferences and pending proposals live on
+the client. Proposals are HMAC-signed over their tool name, arguments and the client's session
+id, so a resumed decision can approve or narrow exactly what this agent proposed in that
+session, never forge, widen or move it to another domain or session. The signer's nonce store
+remembers answered proposals until they expire, so none is answered twice by the processes
+that share that store (the default `InMemoryNonceStore` is one process's).
 """
 
 import logging
@@ -28,6 +35,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMe
 from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel, ValidationError
 
+from curio.engine.facts import Rendered, checked_report, describe_report, render
 from curio.engine.schemas import (
     ActionDecision,
     AgentEvent,
@@ -53,6 +61,13 @@ logger = logging.getLogger(__name__)
 # Each ChatTurn is one message; older turns rarely matter and only cost tokens.
 MAX_HISTORY_TURNS = 10
 MAX_TOOL_CALLS = 5
+# A question whose facts fail grounding twice becomes this one, without quick replies.
+FALLBACK_QUESTION = "Could you tell me a little more about what you're looking for?"
+QUESTION_REPAIR = (
+    "Not asked: the question states facts no tool returned ({issues}). Ask again without "
+    "them (refer to items, prices and details from the tool results only through fact "
+    "references), or answer instead."
+)
 # Default wall-clock budget for one turn; checked before every model call. An app may set
 # another per engine (`turn_deadline_seconds`), e.g. for a slow model behind a relay.
 TURN_DEADLINE_SECONDS = 90.0
@@ -140,7 +155,7 @@ class AgentEngine[T]:
         context: TurnContext,
     ) -> Iterator[AgentEvent]:
         started = self._clock()
-        action = self._signer.verify(decision.action)
+        action = self._signer.verify(decision.action, context.session_id)
         schema = self._approval_schema(action)
         # The proposing turn's signed filters, so a follow-up search keeps them.
         intent = action.intent or self._schemas.intent(query=action.request)
@@ -149,6 +164,9 @@ class AgentEngine[T]:
         if decision.approved:
             args = narrow_args(decision)
             effect, items, outcome = self._apply_decision(schema, args)
+            # Single use: from here the decision counts, even if it is sent again. An edit
+            # refused above leaves the proposal open, so the shopper can answer it again.
+            self._signer.claim(action)
             self._applied(turn, effect)
             if items:
                 turn.show(items)
@@ -157,6 +175,7 @@ class AgentEngine[T]:
             )
             note = f"The shopper approved your proposal. {outcome} Confirm briefly."
         else:
+            self._signer.claim(action)
             turn.show(self._toolkit.proposed(action.args))
             step = AgentStep(
                 kind="approval",
@@ -169,9 +188,19 @@ class AgentEngine[T]:
                 "The shopper declined your proposal; nothing was changed. Acknowledge briefly "
                 "and offer one alternative. Do not propose the same change again."
             )
-        yield self._record(turn, step, started)
-        messages = self._toolkit.prompt(turn, f"[Decision on your proposal] {note}", history)
-        yield from self._loop(turn, messages)
+        replied = False
+        try:
+            yield self._record(turn, step, started)
+            messages = self._toolkit.prompt(turn, f"[Decision on your proposal] {note}", history)
+            for event in self._loop(turn, messages):
+                replied = replied or isinstance(event, ReplyEvent)
+                yield event
+        except BaseException:
+            # The reply (and with it the effect) never reached the client: the model failed
+            # or the client went away. Let the shopper answer the proposal again.
+            if not replied:
+                self._signer.release(action)
+            raise
 
     def _approval_schema(self, action: PendingAction) -> type[BaseModel]:
         """The schema of a signed proposal, if it belongs to this assistant's domain."""
@@ -203,6 +232,15 @@ class AgentEngine[T]:
             if not answer.tool_calls:
                 text = StrOutputParser().invoke(answer).strip()
                 if not text:
+                    yield self._record(
+                        turn,
+                        AgentStep(
+                            kind="guardrail",
+                            name="Empty answer",
+                            summary="The model's answer was empty; showing verified items.",
+                            status="blocked",
+                        ),
+                    )
                     yield self._fallback_reply(turn)
                     return
                 yield from self._verify(turn, messages, answer, text, started)
@@ -272,25 +310,88 @@ class AgentEngine[T]:
             messages.append(ToolMessage(content=result, tool_call_id=call_id))
             return None
         if isinstance(action, AskShopper):
+            return (yield from self._ask(turn, action, call_id, messages, started))
+        return (yield from self._propose(turn, name, call_id, action, messages, started))
+
+    def _ask(
+        self,
+        turn: Turn[T],
+        action: AskShopper,
+        call_id: str,
+        messages: list[BaseMessage],
+        started: float,
+    ) -> Iterator[AgentEvent]:
+        """Pause for the shopper's answer. The question and its quick replies are grounded
+        like an answer: a first failure goes back to the model (it may ask again or answer),
+        a second one asks a generic question without the unverified facts."""
+        # Quick replies are candidate answers, so each reads as a question of its own.
+        options = "\n".join(f"- {option.rstrip(' .!?')}?" for option in action.options)
+        report = self._grounded(turn, self._render(turn, f"{action.question}\n{options}".strip()))
+        if report.status == "fallback":
+            detail = {"issues": report.issues}
+            if turn.question_issues is None:
+                turn.question_issues = report
+                yield self._record(
+                    turn,
+                    AgentStep(
+                        kind="guardrail",
+                        name="Question grounding",
+                        summary=(
+                            f"Found {_claims(len(report.issues))} in a question; "
+                            "asking for a rewrite."
+                        ),
+                        status="error",
+                        detail=detail,
+                    ),
+                    started,
+                )
+                messages.append(
+                    ToolMessage(
+                        content=QUESTION_REPAIR.format(issues="; ".join(report.issues)),
+                        tool_call_id=call_id,
+                    )
+                )
+                return None
             yield self._record(
                 turn,
                 AgentStep(
-                    kind="approval",
-                    name="AskShopper",
-                    summary="Waiting for the shopper's answer.",
-                    status="pending",
-                    detail=action.model_dump(),
+                    kind="guardrail",
+                    name="Question grounding",
+                    summary="Question still unverified; asking a general question instead.",
+                    status="blocked",
+                    detail=detail,
                 ),
                 started,
             )
+            first = turn.question_issues
+            question = getattr(self._toolkit, "fallback_question", FALLBACK_QUESTION)
+            grounding = _with_status(first, "fallback", {})
+            clarification = Clarification(question=question, options=[])
             return self._reply(
-                turn,
-                action.question,
-                None,
-                status="needs_input",
-                clarification=Clarification(question=action.question, options=action.options),
+                turn, question, grounding, status="needs_input", clarification=clarification
             )
-        return (yield from self._propose(turn, name, call_id, action, messages, started))
+        if turn.question_issues is not None:
+            report = _with_status(turn.question_issues, "repaired", report.rendered)
+        question = self._render(turn, action.question).text
+        quick = [self._render(turn, option).text for option in action.options]
+        yield self._record(
+            turn,
+            AgentStep(
+                kind="approval",
+                name="AskShopper",
+                summary="Waiting for the shopper's answer.",
+                status="pending",
+                detail={"question": question, "options": quick},
+            ),
+            started,
+        )
+        return self._reply(
+            turn,
+            question,
+            report,
+            status="needs_input",
+            clarification=Clarification(question=question, options=quick),
+        )
 
     def _progress(
         self, turn: Turn[T], stages: Generator[AgentStep, None, ReadOutcome], started: float
@@ -353,6 +454,7 @@ class AgentEngine[T]:
             _canonical_args(action),
             turn.message,
             intent=turn.intent,
+            session=turn.context.session_id,
             action_type=self._schemas.pending_action,
             summary=f"Proposed: {outcome}",
             **self._toolkit.pending_display(items),
@@ -390,44 +492,45 @@ class AgentEngine[T]:
             started,
         )
         started = self._clock()
-        report = self._toolkit.check(turn, text)
+        rendered = self._render(turn, text)
+        report = self._grounded(turn, rendered)
         if report.status != "fallback":
             if report.status == "verified":
-                subject = self._toolkit.grounding_subject
                 yield self._record(
                     turn,
                     AgentStep(
                         kind="guardrail",
                         name="Grounding check",
-                        summary=f"Verified {report.checked} {subject} against the catalog.",
+                        summary=describe_report(report),
+                        detail={"counts": report.counts, "rendered": report.rendered},
                     ),
                     started,
                 )
-            yield self._reply(turn, text, report)
+            yield self._reply(turn, rendered.text, report)
             return
         yield self._record(
             turn,
             AgentStep(
                 kind="guardrail",
                 name="Grounding check",
-                summary=f"Found {len(report.issues)} unverified claims; asking for a rewrite.",
+                summary=f"Found {_claims(len(report.issues))}; asking for a rewrite.",
                 status="error",
                 detail={"issues": report.issues},
             ),
             started,
         )
-        final = GroundingReport(status="fallback", checked=report.checked, issues=report.issues)
         if self._out_of_time(turn):
             yield self._record(turn, _time_budget_step())
-            yield self._reply(turn, self._toolkit.fallback(turn.items, turn.extras), final)
+            yield self._fallback_after(turn, report)
             return
         started = self._clock()
         instruction = self._toolkit.repair_instruction.format(issues="; ".join(report.issues))
         repaired = self._agent.invoke([*messages, answer, HumanMessage(instruction)])
         repaired_text = "" if repaired.tool_calls else StrOutputParser().invoke(repaired).strip()
-        second = self._toolkit.check(turn, repaired_text) if repaired_text else None
-        if second is not None and second.status in ("verified", "not_applicable"):
-            final = GroundingReport(status="repaired", checked=report.checked, issues=report.issues)
+        second_text = self._render(turn, repaired_text) if repaired_text else None
+        second = self._grounded(turn, second_text) if second_text else None
+        if second_text is not None and second is not None and second.status != "fallback":
+            final = _with_status(report, "repaired", second.rendered)
             yield self._record(
                 turn,
                 AgentStep(
@@ -437,7 +540,7 @@ class AgentEngine[T]:
                 ),
                 started,
             )
-            yield self._reply(turn, repaired_text, final)
+            yield self._reply(turn, second_text.text, final)
             return
         yield self._record(
             turn,
@@ -449,7 +552,7 @@ class AgentEngine[T]:
             ),
             started,
         )
-        yield self._reply(turn, self._toolkit.fallback(turn.items, turn.extras), final)
+        yield self._fallback_after(turn, report)
 
     # --- Helpers --------------------------------------------------------------------------
 
@@ -475,16 +578,40 @@ class AgentEngine[T]:
         if started is not None:
             step.duration_ms = max(0, round((self._clock() - started) * 1000))
         turn.steps.append(step)
-        logger.info("agent step %s/%s: %s (%s)", step.kind, step.name, step.summary, step.status)
+        # Summaries quote the shopper ("Found 3 drinks for "..."") and model text: they go
+        # to DEBUG only. INFO keeps the step's kind, name, status and duration.
+        logger.info(
+            "agent step %s/%s (%s, %d ms)", step.kind, step.name, step.status, step.duration_ms
+        )
+        logger.debug("agent step %s/%s: %s", step.kind, step.name, step.summary)
         return StepEvent(step=step)
 
     def _fallback_reply(self, turn: Turn[T]) -> ReplyEvent:
-        # Built from catalog rows only, so it is grounded by construction.
+        """Catalog facts when a budget ends the turn or the model's answer is empty. They are
+        rendered and checked like an answer, so the report says what they state ("verified"
+        with its counts), or "not_applicable" when they state nothing."""
+        rendered = self._render(turn, self._toolkit.fallback(turn.items, turn.extras))
+        report = self._grounded(turn, rendered)
+        if report.status != "verified":
+            report = GroundingReport(status="not_applicable")
+        return self._reply(turn, rendered.text, report)
+
+    def _fallback_after(self, turn: Turn[T], report: GroundingReport) -> ReplyEvent:
+        """Catalog facts in place of an unverified answer: `report` (the first draft's) under
+        status "fallback", with the facts the fallback renders."""
+        rendered = self._render(turn, self._toolkit.fallback(turn.items, turn.extras))
         return self._reply(
-            turn,
-            self._toolkit.fallback(turn.items, turn.extras),
-            GroundingReport(status="verified", checked=0),
+            turn, rendered.text, _with_status(report, "fallback", dict(rendered.counts))
         )
+
+    def _render(self, turn: Turn[T], text: str) -> Rendered:
+        """`text` with its fact references rendered from this turn's evidence."""
+        return render(text, self._toolkit.facts(turn))
+
+    def _grounded(self, turn: Turn[T], rendered: Rendered) -> GroundingReport:
+        """The report of a rendered text: its rendered facts, the references that failed and
+        the backstop's check of the values the model typed itself."""
+        return checked_report(rendered, lambda text: self._toolkit.check(turn, text))
 
     def _reply(
         self, turn: Turn[T], text: str, grounding: GroundingReport | None, **fields: Any
@@ -502,6 +629,17 @@ class AgentEngine[T]:
                 **fields,
             )
         )
+
+
+def _with_status(
+    report: GroundingReport, status: str, rendered: dict[str, int] | None = None
+) -> GroundingReport:
+    """`report`'s counts and issues under another status ("repaired", "fallback"), with the
+    facts rendered in the text the client is shown instead, when given."""
+    update: dict[str, Any] = {"status": status}
+    if rendered is not None:
+        update["rendered"] = dict(rendered)
+    return report.model_copy(update=update)
 
 
 def _final(events: Iterable[AgentEvent]) -> AssistantReply:
@@ -565,3 +703,8 @@ def _union[V](current: Sequence[V], added: Iterable[V], limit: int | None) -> li
 
 def _canonical_args(action: BaseModel) -> dict:
     return action.model_dump(mode="json", exclude_defaults=True)
+
+
+def _claims(count: int) -> str:
+    """ "1 unverified claim", "3 unverified claims"."""
+    return f"{count} unverified {'claim' if count == 1 else 'claims'}"

@@ -1,16 +1,24 @@
 """End-to-end fixtures: the real API serving the React app, a browser and a scripted LLM.
 
-The suite needs prepared data (H&M sample, product photos, the Qdrant image index, the
-cocktail catalog and the books) and runs only on request:
+The suite runs only on request:
 
     uv run pytest -m e2e tests/e2e
+
+It needs prepared data. With the cocktails and the books (`scripts.prepare_cocktails`,
+`scripts.prepare_books`; no H&M download), the API serves cocktails, books and Plan my
+evening, and every test runs except those marked `fashion`, which skip. With the H&M sample,
+its photos and the Qdrant image index as well, the API serves every domain and the whole
+suite runs. CI runs the first setup (`.github/workflows/ci.yml`, job `e2e-demo`) with
+E2E_REQUIRE_DATA=1, which turns a missing cocktail or book file into an error instead of
+skipped tests.
 
 The API serves the built app (`web/dist`, see `curio.app.web`) on its own port, so every
 browser test opens the API's URL. The build is made with `npm run build` when `web/dist` is
 missing and `web/node_modules` exists; otherwise the browser tests skip.
 
 Environment: E2E_DATA_DIR (default `data`), E2E_QDRANT_PATH (default `.qdrant`),
-E2E_ARTIFACTS (screenshot folder, default `e2e-artifacts`), E2E_CHROMIUM (browser binary).
+E2E_ARTIFACTS (screenshot folder, default `e2e-artifacts`), E2E_CHROMIUM (browser binary),
+E2E_PORTS (a port range such as `8100-8199` for the servers; default: any free port).
 Embedded Qdrant allows one process, so stop any other API using the same index first.
 """
 
@@ -39,16 +47,52 @@ WEB = ROOT / "web"
 DIST = WEB / "dist"
 
 
-def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    for item in items:
-        if "tests/e2e/" in str(item.fspath).replace(os.sep, "/"):
-            item.add_marker(pytest.mark.e2e)
+DEMO_FILES = ("cocktails.parquet", "books.parquet", "book_neighbours.parquet")
+
+
+def demo_ready() -> bool:
+    """The cocktails and books are prepared (the demo's data, no H&M download)."""
+    return all((DATA_DIR / name).exists() for name in DEMO_FILES)
+
+
+def fashion_ready() -> bool:
+    """The H&M sample and its Qdrant image index are prepared."""
+    return (DATA_DIR / "products.parquet").exists() and QDRANT_PATH.exists()
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    e2e = [i for i in items if "tests/e2e/" in str(i.fspath).replace(os.sep, "/")]
+    for item in e2e:
+        item.add_marker(pytest.mark.e2e)
+        if item.get_closest_marker("fashion") and not fashion_ready():
+            item.add_marker(pytest.mark.skip(reason="Needs the H&M data and its image index"))
+    selected = [i for i in e2e if "e2e" in (config.getoption("markexpr") or "")]
+    if selected and os.environ.get("E2E_REQUIRE_DATA") == "1" and not demo_ready():
+        missing = [name for name in DEMO_FILES if not (DATA_DIR / name).exists()]
+        raise pytest.UsageError(f"E2E_REQUIRE_DATA=1 but {DATA_DIR} lacks {', '.join(missing)}")
+
+
+_TAKEN: set[int] = set()
 
 
 def _free_port() -> int:
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return probe.getsockname()[1]
+    """A free local port: from E2E_PORTS ("8100-8199") when set, else any the OS gives.
+    A port handed out once is not handed out again in this session."""
+    first, _, last = os.environ.get("E2E_PORTS", "").partition("-")
+    candidates = range(int(first), int(last or first) + 1) if first else [0] * 20
+    for candidate in candidates:
+        if candidate in _TAKEN:
+            continue
+        with socket.socket() as probe:
+            try:
+                probe.bind(("127.0.0.1", candidate))
+            except OSError:
+                continue
+            port = probe.getsockname()[1]
+        if port not in _TAKEN:
+            _TAKEN.add(port)
+            return port
+    raise RuntimeError(f"No free port in E2E_PORTS={os.environ.get('E2E_PORTS')}")
 
 
 def _wait(url: str, timeout: float, process: subprocess.Popen, log: Path) -> None:
@@ -57,7 +101,7 @@ def _wait(url: str, timeout: float, process: subprocess.Popen, log: Path) -> Non
         if process.poll() is not None:
             raise RuntimeError(f"{url} exited early:\n{log.read_text()[-3000:]}")
         try:
-            if httpx.get(url, timeout=2).is_success:
+            if httpx.get(url, timeout=2, trust_env=False).is_success:
                 return
         except httpx.HTTPError:
             pass
@@ -119,14 +163,19 @@ def _api(env: dict[str, str], log: Path, cwd: Path = ROOT) -> Iterator[str]:
 
 @pytest.fixture(scope="session")
 def api_url(llm_stub: str, artifacts: Path) -> Iterator[str]:
-    required = [DATA_DIR / "products.parquet", DATA_DIR / "cocktails.parquet", QDRANT_PATH]
-    if missing := [str(path) for path in required if not path.exists()]:
-        pytest.skip(f"E2E data not prepared: {', '.join(missing)}")
+    """The API with the scripted LLM: every domain when the H&M data is prepared, else
+    cocktails, books and Plan my evening (without its outfit)."""
+    if fashion_ready():
+        domains = ""
+    elif demo_ready():
+        domains = "cocktails,books"
+    else:
+        pytest.skip(f"E2E data not prepared in {DATA_DIR}: see tests/e2e/conftest.py")
     env = {
         "DATA_DIR": str(DATA_DIR),
         "QDRANT_PATH": str(QDRANT_PATH),
         "QDRANT_URL": "",
-        "ENABLED_DOMAINS": "",
+        "ENABLED_DOMAINS": domains,
         "LLM_PROVIDER": "openai",
         "LLM_MODEL": "curio-e2e-stub",
         "LLM_BASE_URL": llm_stub,
@@ -236,7 +285,13 @@ class Web:
         self.errors: list[str] = []
         self.chat_bodies: list[dict] = []
         page.on("pageerror", lambda error: self.errors.append(str(error)))
+        page.on("console", self._console)
         page.on("request", self._capture)
+
+    def _console(self, message) -> None:
+        # The API's Content-Security-Policy must allow everything the app loads.
+        if message.type == "error" and "Content Security Policy" in message.text:
+            self.errors.append(message.text)
 
     def _capture(self, request) -> None:
         if request.url.endswith("/chat/stream") and request.method == "POST":

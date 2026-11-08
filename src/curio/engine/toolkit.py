@@ -6,7 +6,8 @@ reply's domain fields. Everything else (budgets, approvals, resume, self-correct
 trace) is the engine's.
 
 `BaseToolkit` implements the optional hooks with no-op defaults, so a domain writes only its
-tools, prompt, READ tools, APPROVE effects, grounding check, fallback and reply fields.
+tools, prompt, READ tools, APPROVE effects, grounding check, fallback and reply fields. A
+domain whose answers cite catalog facts (cite mode) also writes `facts`, its `FactSheet`.
 
 Optional hook: a toolkit may define `vet_proposal(turn, action) -> None`, which the engine
 calls before it applies or signs an APPROVE action, to refuse one that does not fit this
@@ -22,6 +23,7 @@ from typing import Any, Protocol
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel
 
+from curio.engine.facts import FactSheet
 from curio.engine.schemas import (
     AgentStep,
     AppliedEffect,
@@ -57,6 +59,8 @@ class Turn[T]:
     resuming: bool = False
     # Domain-owned results of this turn that are not catalog items (e.g. a planned outfit).
     extras: dict[str, Any] = field(default_factory=dict)
+    # The grounding report of a question the model had to rewrite, if any.
+    question_issues: GroundingReport | None = None
 
     def show(self, items: Iterable[T], reasons: dict[int, list[str]] | None = None) -> None:
         self.items = list(items)
@@ -130,11 +134,20 @@ class Toolkit[T](Protocol):
         """Display-only PendingAction fields for the items a proposal touches."""
         ...
 
-    def check(self, turn: Turn[T], text: str) -> GroundingReport: ...
+    def check(self, turn: Turn[T], text: str) -> GroundingReport:
+        """The backstop: check the values the model typed itself against the evidence."""
+        ...
+
+    def facts(self, turn: Turn[T]) -> FactSheet:
+        """What this turn's answer may cite with fact references (`curio.engine.facts`):
+        the items of `turn.evidence` (and any other evidence `check` accepts) and the
+        attributes the domain renders."""
+        ...
 
     def fallback(self, items: Sequence[T], extras: Mapping[str, Any] | None = None) -> str:
-        """A deterministic answer built from verified catalog facts only; `extras` are the
-        turn's domain results that are not catalog items (a book turn's drink pairing)."""
+        """A deterministic answer built from verified catalog facts only, stated through
+        fact references the engine renders; `extras` are the turn's domain results that are
+        not catalog items (a book turn's drink pairing)."""
         ...
 
     def reply_fields(self, turn: Turn[T]) -> dict[str, Any]:
@@ -186,6 +199,10 @@ class BaseToolkit[T](ABC):
 
     @abstractmethod
     def reply_fields(self, turn: Turn[T]) -> dict[str, Any]: ...
+
+    def facts(self, turn: Turn[T]) -> FactSheet:
+        """No fact references: any the model writes fails verification."""
+        return FactSheet()
 
     def clean_context(self, context: TurnContext) -> TurnContext:
         """Keep the client-held context as it is."""

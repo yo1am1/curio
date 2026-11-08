@@ -21,11 +21,13 @@ from typing import Any, Protocol
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel
 
+from curio.domains.books.agent.facts import book_facts
 from curio.domains.books.agent.grounding import BookGroundingCheck
 from curio.domains.books.agent.prompts import (
     BOOK_ANSWER_PROMPT,
     BOOK_REPAIR_INSTRUCTION,
     book_line,
+    book_reference_line,
     render_books,
 )
 from curio.domains.books.agent.schemas import BookChatTurn, BookContext, BookEffect
@@ -44,6 +46,7 @@ from curio.domains.books.catalog import BookCatalog, name_key
 from curio.domains.books.models import Book, BookHit, BookPreferences, BookQuery
 from curio.domains.books.recommend import BookRecommender
 from curio.domains.books.taxonomy import MOODS
+from curio.engine.facts import FactSheet
 from curio.engine.grounding import merge_reports
 from curio.engine.schemas import AgentStep, GroundingReport, TurnContext
 from curio.engine.toolkit import BaseToolkit, ToolError, Turn
@@ -97,6 +100,14 @@ class DrinkPairing(Protocol):
 
     def check(self, turn: Turn[Book], text: str, books: Sequence[Book]) -> GroundingReport:
         """Ground the drinks the answer names against this turn's pairings."""
+        ...
+
+    def facts(self, turn: Turn[Book]) -> FactSheet:
+        """The drinks this turn's pairings returned, for fact references ({drink:N})."""
+        ...
+
+    def is_drink_name(self, name: str) -> bool:
+        """Whether `name` is a catalog drink's name (its check is the pairing's)."""
         ...
 
     def fallback(self, extras: Mapping[str, Any]) -> list[str]:
@@ -380,10 +391,17 @@ class BookToolkit(BaseToolkit[Book]):
     def check(self, turn: Turn[Book], text: str) -> GroundingReport:
         books = list(turn.evidence.values())
         paired = self._pairing.allowed_names(turn) if self._pairing is not None else []
-        report = self._grounding.check(text, books, typed=turn.message, also_allowed=paired)
+        skip = self._pairing.is_drink_name if self._pairing is not None else (lambda _: False)
+        report = self._grounding.check(
+            text, books, typed=turn.message, also_allowed=paired, skip_name=skip
+        )
         if self._pairing is None:
             return report
         return merge_reports(report, self._pairing.check(turn, text, books))
+
+    def facts(self, turn: Turn[Book]) -> FactSheet:
+        sheet = book_facts(turn.evidence.values())
+        return sheet if self._pairing is None else sheet.merged(self._pairing.facts(turn))
 
     def fallback(self, items: Sequence[Book], extras: Mapping[str, Any] | None = None) -> str:
         drinks = self._pairing.fallback(extras or {}) if self._pairing is not None else []
@@ -394,7 +412,7 @@ class BookToolkit(BaseToolkit[Book]):
             )
         parts = []
         if items:
-            lines = [f"- {book_line(b)}" for b in items]
+            lines = [f"- {book_reference_line(b)}" for b in items]
             parts.append("Here are the books I could confirm:\n" + "\n".join(lines))
         return "\n\n".join(parts + drinks)
 

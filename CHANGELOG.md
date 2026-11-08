@@ -6,12 +6,224 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-11-08
+
+### Breaking (security exceptions)
+
+Curio follows Semantic Versioning, but this minor release breaks the HTTP API in four ways,
+each to close a security or privacy problem (details under Removed and Security below):
+
+- `GET /chat/feedback` is removed (405): it returned other users' messages and answers.
+- `GET /users/{id}` no longer serves the shopper's `age`.
+- `/docs` (Swagger UI) is off by default (`API_DOCS=true` turns it on), and `/redoc` is gone.
+- New error responses: **400** for a `Host` outside `ALLOWED_HOSTS`, **409** for a
+  proposal answered twice or not issued for this session, **413** for an oversized body,
+  and **503** (with `Retry-After`) when the agent-turn cap is reached.
+
+### Added
+
+- **[Extending Curio](docs/extending.md)**, contract version 1: what a catalog item needs,
+  every `Toolkit`/`BaseToolkit` hook with its signature, tool policies, effects and
+  approvals, fact references, the grounding backstop, the files that register a domain in
+  the app, the tests a domain needs and what is not supported. `examples/hello_domain`
+  now loads its teas from `teas.csv` through a validating loader, cites names and prices
+  through fact references and checks typed prices; its tests run it end to end.
+- **Grounding: cite mode.** The model states catalog facts as fact references
+  (`{product:ID}`, `{price:ID}`, `{colour:ID}`, `{rating:book:ID}`, `{author:book:ID}`,
+  `{year:book:ID}`, `{pages:book:ID}`, `{alcohol:drink:ID}`, `{recipe:drink:ID}`,
+  `{amount:drink:ID:Gin}`, `{total:price:ID,ID}`, `{diff:rating:ID,ID}`), and the engine
+  (`curio.engine.facts`) renders each from the items this turn's tools returned, through
+  the `FactSheet` each domain supplies. A reference to anything else fails verification:
+  one rewrite, then the fallback. Answers, rewrites, fallbacks, questions and quick replies
+  are rendered on the server for `/chat` and `/chat/stream`; no reference reaches the
+  client. A rendered value is the cited item's catalog value; cite mode does not check that
+  the cited item is the one the sentence names. Prose claims ("cosy", "good for a cold") are
+  not facts that can be rendered.
+- `GroundingReport.counts` (checked facts by kind) and `GroundingReport.rendered` (rendered
+  facts by kind), both optional. `verified` means at least one fact was rendered or
+  checked. The badge says "5 facts from the catalog · 1 checked", or "Checked 3 prices and
+  2 names against the catalog" when nothing was rendered.
+- Labelled grounding sets as regression floors: a corpus (`tests/agents/grounding_corpus/`,
+  114 of 116 false answers caught, 1 of 193 correct ones flagged) and three held-out sets
+  written blind (`tests/agents/grounding_heldout/`). Held-out v3 (120 answers), scored
+  once on the final rules: 48 of 60 false answers caught (recall 0.800), 15 of 60 correct
+  ones flagged (0.250); its floor is that result.
+- **Agent evaluation.** 16 factual-reliability tasks (61 tasks, 69 turns in all); three
+  control policies (`python -m evals.controls --policy always-ask | always-refuse |
+  first-tool-echo`); the scorer freeze (`evals/FROZEN.json`: scorer version and the SHA-256
+  of `evals/tasks.yaml`, `evals/scoring.py` and `evals/tasks.py`; `run_eval --frozen`
+  refuses anything else, and a rescore with changed files needs `--rescore-note`); 95 %
+  Wilson intervals; passes split into "right first time" and "after the engine repaired a
+  draft"; a cite-mode section (not scored).
+- CI: an `e2e-demo` job runs the browser suite on the cocktails and goodbooks-10k (39 of
+  the 85 tests; the 46 marked `fashion` need the H&M data and skip) and the 15 golden
+  pairing checks on that data. A "Docker image" workflow builds and smoke-tests the image
+  on pull requests that can change it. `scripts/check_links.py` and its test keep every
+  relative link and image in the README and docs resolving.
+- The image has a `HEALTHCHECK` (`python -m curio.app.healthcheck`, which sends a Host from
+  `ALLOWED_HOSTS`); the compose demo uses the same check.
+
 ### Changed
 
-- CI: a "Docker image" workflow builds and smoke-tests the image on pull requests that can
-  change it (Dockerfile, dependencies, base images), so those bumps are proven before merge.
+- **Frozen real-model result: 59/61 tasks** (95 % CI 89–99 %) for a Claude model through the
+  file relay (no pinned model ID; one run, k=1), against 4/61, 0/61 and 0/61 for the controls and 19/61 for the scripted
+  baseline (`docs/evals/frozen-relay-1.md`). Both failures are scorer limits found by
+  reading them; the number is not rescored. The README's earlier "42/42" (42 tasks of
+  2.1.0, no model ID, a scorer changed after the run was seen) is withdrawn.
+- Eval scorer 3.1.0: `checked_facts` also counts facts rendered from references. Re-frozen
+  before any model run (reason and old fingerprint in `evals/FROZEN.json`). Tasks that a
+  refusal, a question or a raw search could pass now need a useful answer (cards, a reason,
+  a correction, a named item, a checked fact or an alcohol label), and an argument check
+  fails when its tool was not called unless marked `optional`.
+- The free-text grounding check is the backstop for values the model types itself. It runs
+  on a copy of the answer with rendered values masked, and binds each fact to its item: a
+  price, rating, page count, year or recipe amount must match the item named nearest to it
+  in its sentence, a number bound to no item must be a total, budget or remainder the tools
+  stated, and a number the shopper typed counts only as their own budget or limit or where
+  the answer contradicts it. Totals, differences and multiples of the named items are
+  verified; names in bold, italic or quotes, bylines and co-authors, alcohol labels,
+  ingredients and colours must match; allergen, diet, health, age-safety, stock, delivery
+  and discount claims, book prices and non-euro amounts are reported. Repair messages name
+  the item a wrong fact belongs to. docs/agent-architecture.md lists what is and is not
+  checked.
+- Prompts ask for fact references and computed totals, and never to confirm a price or
+  rating the shopper states unless the catalog shows it. The catalog-facts fallbacks state
+  their facts through references, so item names in them are bold.
+- **Release order:** the Release workflow builds, smoke-tests and pushes the image first,
+  and tags the commit and publishes the GitHub release only once the image is on ghcr.io.
+  Re-runs stay idempotent; `latest` moves only to the highest released version. An image
+  already on ghcr.io must carry this run's commit as its revision label, or the run fails
+  (so the tag never points at other code); `latest` is pushed in its own step, so a failed
+  push is retried; and a failed release listing fails the plan instead of moving `latest`.
+- The runtime image no longer contains `uv` (it stays in a build stage).
+- GitHub Actions are pinned by commit SHA; every workflow grants no default token
+  permissions, each job declares its own and has a timeout, and checkouts do not keep the
+  token.
+- `/chat` and `/chat/stream`: a failure inside a turn (a tool or recommender bug) is
+  **500** "The assistant failed; see server logs." instead of 502; provider and network
+  errors stay 502.
+- `GET /users/{id}`: `user` is `{"user_id": ...}` only; the shopper's **`age` is no longer
+  served**.
+- Evening copy says the outfit is planned only when fashion is served.
 - Dependabot skips TypeScript major versions in `web/` until typescript-eslint supports
   TypeScript 7.
+- The README's agent screenshot and overview animation show the cite-mode badge ("12
+  facts from the catalog"); they showed a badge the UI no longer renders.
+- Documentation corrected after the re-audit: `ALLOWED_HOSTS` next to `CURIO_HOST=0.0.0.0`,
+  the 90-second deadline is checked before each model call, no pinned model ID and one run
+  next to 59/61, relevance not graded and injections direct only, the measured relay
+  latency, the image's three stages, cocktail tie-breaks, how the engine is consumed (a
+  clone, not PyPI, torch, the `curio` name collision on PyPI), and that the README
+  screenshots contain H&M product images, book covers and drink photos. SECURITY.md keeps
+  the advisory form with a fallback contact route.
+- Documentation claims were checked against code, data and command output: the recipe CSV
+  is about 260 KB (not 400 KB), the H&M CSVs are not checksum-checked, the measured
+  goodbooks-10k preparation times, the test counts and stale test paths were corrected;
+  research notes carry a status label.
+
+### Fixed
+
+- Cite mode refuses malformed references instead of rendering or crashing on them: a value
+  reference with a digit typed next to it (`{rating:book:7}9` rendered "4.259",
+  `{pages:book:7},000` "366,000", both verified), a reference nested in braces
+  (`{drink:{drink:141}}` reached the client as `{drink:**Gin Lemon**}`), an ID that is not
+  plain ASCII digits or is over 19 digits (`{drink:²}` or a 5,000-digit ID was a 500), and
+  the same item twice in a total or difference (`{total:pages:7,7,7,7,7}` gave 1,830
+  pages). Each fails verification like any bad reference: one rewrite, then the fallback.
+- A shopper's budget or limit is no longer counted as a checked catalog price: "plan my
+  evening" answered with a question whose quick reply "Date night under €100" was reported
+  verified, "Checked 1 price against the catalogs". Such an answer is now `not_applicable`
+  (no badge).
+- A tool's `FileNotFoundError` or `PermissionError` inside a turn is a 500, not a 502
+  "LLM provider request failed": only connection, timeout and provider SDK errors are 502.
+- Web app: when the reply to an approval is lost, the drawer says the decision may already
+  have been applied; a 409 for a decision hides Approve and Decline and offers "Ask again"
+  instead of buttons that can only fail again.
+- Trace: "Found 1 unverified claim" (was "claims"). The backstop reads "EUR 19.99" (the
+  prefix form) as a price; it used to pass unchecked.
+- Fashion: popular-item reasons say "Popular as of 22 Sep 2020 (the data's last week)"
+  instead of "Popular in the last week" (the H&M data ends in 2020); the For you strategy
+  "Similar shoppers" is now "Bought together with your items"; the agent no longer calls
+  higher-priced alternatives "upgrades".
+- Grounding: the plausible false claims of the November 2026 audit (all 13 probes) are
+  caught; a bare rating at the end of a bullet followed by a dashed bullet, and a name
+  ending in a period, no longer escape binding.
+- Clarifying questions and their quick replies are grounded like answers: an unverified
+  question goes back to the model once, then becomes a general question without quick
+  replies.
+- The catalog-facts fallback after a budget or an empty answer is checked like an answer
+  (`verified` with its counts, or `not_applicable`) instead of reporting `verified` with
+  nothing checked; an empty answer adds an "Empty answer" step to the trace.
+- Tests: `tests/evals` no longer leaks the runner's turn deadline, signing key and domains
+  into the environment (two app tests failed after it); a guard fails any eval test that
+  leaves them changed. Random test order (pytest-randomly, four seeds) passes.
+- `scripts/classify_product_types.py` no longer triggers pandas' fillna deprecation; tests
+  turn `Pandas4Warning` into an error.
+- e2e: local requests bypass any HTTP proxy, servers take ports from `E2E_PORTS` when set
+  and never reuse one in a session, and a fixed 500 ms wait is gone.
+
+### Removed
+
+- `GET /chat/feedback` (now 405). It returned other users' messages, answers and comments
+  to anyone; nothing in the repository read it. `POST /chat/feedback` is unchanged on the
+  wire (204) but keeps no texts; it logs the rating and tool names only.
+
+### Security
+
+- `docker compose` publishes port 8000 on `127.0.0.1` only, as `scripts/quickstart.sh`
+  already did. `CURIO_HOST` (and `CURIO_PORT`) opt in to another address; Qdrant (no API key)
+  is no longer published at all, since only the API needs it on the compose network.
+- The eval relay (`evals/relay.py`) takes an optional bearer token (`RELAY_TOKEN` or
+  `--token`; `run_eval` sends it as the API key) and refuses to listen on a non-loopback
+  address without one.
+- Agent turns are capped per process (`MAX_CONCURRENT_TURNS`, default 8). Over the cap,
+  `/chat` and `/chat/stream` answer **503 with `Retry-After: 5`** at once (a new status for
+  these routes, documented in the OpenAPI schema) instead of queueing on the worker-thread
+  pool, which 45 slow chats used to exhaust until `/health` and search stopped answering.
+- Request bodies are limited: **413** for a body over `MAX_BODY_BYTES` (default 1 MiB) on
+  every route (`{"detail": "Request body is too large: ..."}`), and over 10 MB on
+  `POST /search/image`. The limit is enforced while the body streams in, so an oversized
+  upload is cut off at the limit instead of being spooled to disk first (it used to be read
+  in full before the existing 413), and a 200 MB JSON body is no longer parsed.
+- Uploaded images are decoded only as PNG or JPEG (what the UI offers): other formats get
+  the existing 400 "Upload a valid PNG or JPEG image." without reaching Pillow's other
+  parsers.
+- Every response carries a Content-Security-Policy (scripts, styles, fonts and requests from
+  the app's own origin; images also from the recipe and cover hosts the app shows;
+  `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin` and `X-Frame-Options: DENY`.
+- Host check against DNS rebinding: requests whose `Host` is not in `ALLOWED_HOSTS`
+  (default `localhost,127.0.0.1`) get **400**. Docker Compose passes `ALLOWED_HOSTS` through,
+  and `scripts/quickstart.sh` adds a `CURIO_HOST` that names one address.
+- The chat renders no Markdown images: model text such as `![](https://host/?q=...)` can no
+  longer make the browser call another site. Links render only for `https:` addresses
+  (`javascript:`, `data:`, `http:` and relative links show as plain text).
+- With `API_DOCS` off, the web app served at `/docs` gets the app's Content-Security-Policy;
+  only the Swagger UI routes (with `API_DOCS=true`) get the policy that allows its CDN.
+- `/docs` (Swagger UI) and `/redoc` are **off by default (404)**: they loaded an unpinned
+  `swagger-ui-dist@5` script from jsDelivr, without SRI, on the app's origin. `API_DOCS=true`
+  serves `/docs` with swagger-ui-dist 5.33.3 pinned by SRI hash and no inline script;
+  `/redoc` is gone. `/openapi.json` is unchanged.
+- Approvals are single-use and session-bound. `TurnContext` (and so `ChatRequest`) has a new
+  optional field **`session_id`** (16-128 characters of `A-Za-z0-9_-`); proposals are signed
+  over it and answer only in the same session. A proposal answered once (approved or
+  declined) gets **409 "This proposal was already answered. Please ask again."** when sent
+  again, on `/chat` and as an `error` event on `/chat/stream`; it used to be applied every
+  time within its 30 minutes. The record is an in-memory `NonceStore` per process, with a
+  documented interface for a shared store. The web app sends a random per-tab session id.
+- `AGENT_SIGNING_KEY` must be at least 32 bytes (shorter keys stop the API at startup), and
+  with `WEB_CONCURRENCY` above 1 and chat on, the API refuses to start without it.
+- Shopper text is no longer logged at INFO: agent steps log their kind, name, status and
+  duration; the summaries, which quote the request, moved to DEBUG (as did the fashion
+  intent's "Ignoring unknown value" line).
+- Dependencies: filelock 4.1.1 → 4.2.4 (17 advisories, fixed in 4.2.1) and setuptools
+  84.0.0 → 84.2.1 (GHSA-xmj3-9gf7-h52w). `pip-audit` now reports no known vulnerabilities
+  (torch's local `+cpu` build cannot be audited); `npm audit --omit=dev` reports none.
+- The Dockerfile pins every base image by exact version and digest: `node:26.12.1`,
+  `python:3.13.17-slim` (was the floating `3.13-slim`) and `uv:0.11.32` (was the floating
+  `0.11`, now the same uv as CI).
+- The web build no longer writes source maps, so the image and the API stop serving
+  `/assets/*.js.map`.
 
 ## [3.0.0] - 2026-11-07
 
@@ -116,7 +328,7 @@ and an evaluation task ([docs/agent-eval.md](docs/agent-eval.md#app-issues-found
   so a model without an API key in the environment can be evaluated by an agent answering
   each call.
 - `AGENT_TURN_DEADLINE_SECONDS` sets the agent's turn deadline (default 90 s, unchanged).
-- First results ([docs/agent-eval.md](docs/agent-eval.md#results), reports in
+- First results ([docs/agent-eval.md](docs/agent-eval.md#what-the-first-run-did-and-did-not-show), reports in
   `docs/evals/`): a Claude model answering as the chat model passed 42/42 tasks with every
   answer grounded on the first pass, 15/15 safety checks and 4/4 injections resisted; the
   scripted baseline passed 29/42. Summarised in the README.
@@ -632,7 +844,8 @@ product connections from co-purchases and Shopify categories, offline evaluation
 tool-using shopping assistant with a conversation home and floating panel. How it was
 built is summarised in [docs/how-it-was-built.md](docs/how-it-was-built.md).
 
-[Unreleased]: https://github.com/yo1am1/curio/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/yo1am1/curio/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/yo1am1/curio/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/yo1am1/curio/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/yo1am1/curio/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/yo1am1/curio/compare/v2.0.0...v2.1.0

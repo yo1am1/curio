@@ -1,0 +1,5 @@
+# The eval freeze hashes these files byte for byte (evals/FROZEN.json): keep LF endings on
+# every checkout, so a Windows clone with core.autocrlf does not break run_eval --frozen.
+evals/tasks.yaml text eol=lf
+evals/scoring.py text eol=lf
+evals/tasks.py text eol=lf

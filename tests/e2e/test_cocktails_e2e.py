@@ -26,6 +26,7 @@ def approve(web) -> None:
     expect(drawer).to_be_hidden(timeout=120_000)
 
 
+@pytest.mark.fashion
 def test_cocktail_chat_end_to_end(web):
     web.open("/drinks")
     web.page.get_by_role("navigation", name="Cocktails pages").get_by_role(

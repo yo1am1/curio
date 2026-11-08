@@ -18,9 +18,16 @@ A response file holds `{"content": "text"}` or `{"tool_calls": [{"name": "Tool",
 Run it:
 
     uv run python -m evals.relay --port 8791 --queue evals/relay_queue
+
+The relay serves 127.0.0.1 by default. Anyone who can reach it can read the queued prompts
+and answer as the model, so it can require a bearer token: set `RELAY_TOKEN` (or pass
+`--token`) and every request must carry `Authorization: Bearer <token>`; `run_eval` sends
+`RELAY_TOKEN` as the API key. It refuses to listen on a non-loopback address without one.
 """
 
 import argparse
+import hmac
+import ipaddress
 import json
 import os
 import re
@@ -194,11 +201,35 @@ def stream_chunks(payload: dict) -> list[dict]:
     ]
 
 
-def _handler(relay: Relay) -> type[BaseHTTPRequestHandler]:
+def is_loopback(host: str) -> bool:
+    """Whether `host` (a name or an address) only listens on this computer."""
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _handler(relay: Relay, token: str | None = None) -> type[BaseHTTPRequestHandler]:
+    expected = f"Bearer {token}".encode() if token else None
+
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
+        def _authorized(self) -> bool:
+            """With a token, every request must carry it; answers 401 when it does not."""
+            if expected is None:
+                return True
+            given = self.headers.get("Authorization", "").encode()
+            if hmac.compare_digest(given, expected):
+                return True
+            self._json(401, _error("Missing or wrong relay token", "invalid_api_key"))
+            return False
+
         def do_GET(self) -> None:
+            if not self._authorized():
+                return
             if self.path.rstrip("/").endswith("/models"):
                 self._json(200, {"object": "list", "data": [{"id": "relay", "object": "model"}]})
             elif self.path.rstrip("/") in ("", "/health", "/v1"):
@@ -207,6 +238,8 @@ def _handler(relay: Relay) -> type[BaseHTTPRequestHandler]:
                 self._json(404, _error("Not found", "not_found"))
 
         def do_POST(self) -> None:
+            if not self._authorized():
+                return
             if not self.path.rstrip("/").endswith("/chat/completions"):
                 self._json(404, _error("Only /v1/chat/completions is relayed", "not_found"))
                 return
@@ -265,10 +298,19 @@ def serve(
     *,
     host: str = "127.0.0.1",
     poll: float = 0.2,
+    token: str | None = None,
 ) -> ThreadingHTTPServer:
-    """Start the relay on `host:port` in a daemon thread; call `.shutdown()` to stop it."""
+    """Start the relay on `host:port` in a daemon thread; call `.shutdown()` to stop it.
+
+    With `token`, every request needs `Authorization: Bearer <token>`. A non-loopback `host`
+    without a token is refused (ValueError): the queue holds every prompt the app sends."""
+    if not token and not is_loopback(host):
+        raise ValueError(
+            f"Refusing to serve the relay on {host} without a token: set RELAY_TOKEN or pass "
+            "--token, or listen on 127.0.0.1."
+        )
     relay = Relay(RelayQueue(Path(queue)), timeout, poll)
-    server = ThreadingHTTPServer((host, port), _handler(relay))
+    server = ThreadingHTTPServer((host, port), _handler(relay, token or None))
     server.daemon_threads = True
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
@@ -285,11 +327,21 @@ def main(argv: list[str] | None = None) -> None:
         default=DEFAULT_TIMEOUT,
         help="Seconds to wait for each answer before HTTP 504 (default: %(default)s).",
     )
+    parser.add_argument(
+        "--token",
+        default=os.environ.get("RELAY_TOKEN") or None,
+        help="Require `Authorization: Bearer <token>` (default: RELAY_TOKEN). Needed for any "
+        "--host other than a loopback address.",
+    )
     args = parser.parse_args(argv)
-    server = serve(args.port, args.queue, args.timeout, host=args.host)
+    try:
+        server = serve(args.port, args.queue, args.timeout, host=args.host, token=args.token)
+    except ValueError as error:
+        parser.error(str(error))
     print(
         f"Relay on http://{args.host}:{args.port}/v1, queue {args.queue.resolve()}, "
-        f"timeout {args.timeout:.0f} s per request",
+        f"timeout {args.timeout:.0f} s per request"
+        + (", bearer token required" if args.token else ""),
         flush=True,
     )
     try:

@@ -1,5 +1,9 @@
 # Ranking iteration: latent signals and supervised scale — 2026-10-29
 
+> **Status: research record** (October 2026, fashion recommender), kept as written. Its
+> experiments changed nothing unless it says so; the serving recommender is described in the
+> [technical guide](../../technical-guide.md#fashion-engine).
+
 **No new arm passed the predeclared improvement rule on both development weeks.**
 Seven new designs tested BPR, recalled-negative sampling, more training customers
 and more labeled weeks. None justified consuming the new confirmation cohort.

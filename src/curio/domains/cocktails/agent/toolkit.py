@@ -18,6 +18,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel
 
+from curio.domains.cocktails.agent.facts import drink_facts
 from curio.domains.cocktails.agent.grounding import CocktailGroundingCheck
 from curio.domains.cocktails.agent.prompts import (
     COCKTAIL_ANSWER_PROMPT,
@@ -56,6 +57,7 @@ from curio.domains.cocktails.recommend import (
     terms,
     tokens,
 )
+from curio.engine.facts import FactSheet
 from curio.engine.schemas import AgentStep, GroundingReport
 from curio.engine.toolkit import BaseToolkit, ToolError, Turn
 
@@ -79,7 +81,7 @@ class CocktailToolkit(BaseToolkit[Cocktail]):
     policies = COCKTAIL_POLICIES
     invalid_action = INVALID_ACTION
     repair_instruction = COCKTAIL_REPAIR_INSTRUCTION
-    grounding_subject = "drinks, IDs and amounts"
+    grounding_subject = "drinks, IDs, amounts and alcohol labels"
 
     def __init__(
         self, catalog: CocktailCatalog, recommender: CocktailRecommender, top_k: int = 5
@@ -93,6 +95,7 @@ class CocktailToolkit(BaseToolkit[Cocktail]):
             (c.name for c in catalog),
             catalog.ingredients(),
             glass_names={c.glass for c in catalog},
+            categories=catalog.categories(),
         )
 
     def key(self, item: Cocktail) -> int:
@@ -309,13 +312,18 @@ class CocktailToolkit(BaseToolkit[Cocktail]):
     def check(self, turn: Turn[Cocktail], text: str) -> GroundingReport:
         return self._grounding.check(text, list(turn.evidence.values()), typed=turn.message)
 
+    def facts(self, turn: Turn[Cocktail]) -> FactSheet:
+        return drink_facts(turn.evidence.values())
+
     def fallback(self, items: Sequence[Cocktail], extras: Mapping[str, Any] | None = None) -> str:
         if not items:
             return (
                 "I couldn't confirm matching drinks. Try other ingredients, another style "
                 "or fewer filters."
             )
-        lines = [f"- {c.name} · {alcohol_label(c)} · {c.glass}" for c in items]
+        lines = [
+            f"- {{drink:{c.drink_id}}} · {{alcohol:drink:{c.drink_id}}} · {c.glass}" for c in items
+        ]
         text = "Here are the drinks I could confirm:\n" + "\n".join(lines)
         if any(not c.alcohol_free for c in items):
             text += "\n\nPlease drink responsibly."

@@ -31,11 +31,28 @@ class Clarification(BaseModel):
 
 
 class GroundingReport(BaseModel):
-    """Result of checking the final answer's claims against tool evidence."""
+    """Result of checking an answer's claims against tool evidence.
+
+    `verified`: at least one fact was rendered or checked and nothing failed.
+    `not_applicable`: nothing was rendered or checkable. `repaired`: the first draft failed
+    and the rewrite passed. `fallback`: the answer was replaced by catalog facts.
+
+    `rendered` counts the facts the server rendered from fact references in the text the
+    client shows, by kind ("name", "price", "colour", "rating", "author", "year", "pages",
+    "alcohol", "recipe", "amount", "total", "diff"). Each is the cited item's catalog value;
+    cite mode does not check that the cited item is the one the sentence names. `checked`
+    counts the values the model typed itself that the backstop check covered in the first
+    draft, and `counts` splits them by kind ("price", "id", "rating", "title", "name",
+    "author", "amount", "alcohol", "pages", "year", "claim", "fact"). A budget or limit (the
+    shopper's own, or one a question suggests) is allowed but is not a catalog value, so it
+    is not counted. Servers before cite mode send no `rendered`.
+    """
 
     status: Literal["verified", "repaired", "fallback", "not_applicable"]
     checked: int = 0
     issues: list[str] = Field(default_factory=list)
+    counts: dict[str, int] = Field(default_factory=dict)
+    rendered: dict[str, int] = Field(default_factory=dict)
 
 
 class Intent(BaseModel):
@@ -65,8 +82,16 @@ class TurnContext(BaseModel):
     Domains add their own fields (shortlists, remembered tastes).
     """
 
-    # Human-in-the-loop policy: approval tools listed here run without asking.
+    # Human-in-the-loop policy: approval tools listed here run without asking. This is the
+    # shopper's own preference, held and sent by their client like the rest of this state;
+    # nothing on the server can (or tries to) stop a client from setting it.
     auto_approve: list[str] = Field(default_factory=list, max_length=20)
+    # A random id the client keeps for its conversation. Proposals are signed over it and
+    # answer only in the session they were made for. Without one, a proposal is bound to
+    # "no session" and stays single-use.
+    session_id: str | None = Field(
+        default=None, min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"
+    )
 
 
 class PendingAction(BaseModel):

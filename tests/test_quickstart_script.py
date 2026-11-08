@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 HEALTH = (
@@ -131,6 +132,15 @@ def test_the_server_opens_to_the_network_only_on_request_and_says_so(tmp_path):
     assert option(uvicorn, "--port") == "18000"
     assert "open http://127.0.0.1:18000" in output
     assert "Warning: CURIO_HOST=0.0.0.0 serves Curio beyond this computer" in output
+
+
+def test_opening_the_network_names_the_hosts_the_api_answers(tmp_path):
+    _, output = run_quickstart(tmp_path, CURIO_HOST="0.0.0.0", ALLOWED_HOSTS=None)
+    assert "host names in ALLOWED_HOSTS (localhost,127.0.0.1)" in output
+    (tmp_path / "ip").mkdir()
+    _, output = run_quickstart(tmp_path / "ip", CURIO_HOST="192.168.1.20", ALLOWED_HOSTS=None)
+    # The address the script prints (and health-checks) is allowed.
+    assert "ALLOWED_HOSTS (localhost,127.0.0.1,192.168.1.20)" in output
     assert "LLM key" in output
 
 
@@ -204,3 +214,54 @@ def test_one_container_serves_the_api_and_the_app():
     dockerfile = (ROOT / "Dockerfile").read_text()
     assert "COPY --from=web /web/dist ./web/dist" in dockerfile
     assert "EXPOSE 8000\n" in dockerfile
+
+
+def _compose_services() -> dict:
+    return yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]
+
+
+def test_compose_publishes_ports_on_loopback_only_unless_opted_in():
+    services = _compose_services()
+    published = {name: service["ports"] for name, service in services.items() if "ports" in service}
+    assert set(published) == {"demo-api", "api"}
+    for ports in published.values():
+        # host:port:container with the host defaulting to 127.0.0.1; CURIO_HOST opts in.
+        assert ports == ["${CURIO_HOST:-127.0.0.1}:${CURIO_PORT:-8000}:8000"]
+    for name in published:
+        environment = services[name]["environment"]
+        assert environment["ALLOWED_HOSTS"] == "${ALLOWED_HOSTS:-localhost,127.0.0.1}"
+
+
+def test_compose_never_publishes_qdrant():
+    qdrant = _compose_services()["qdrant"]
+    assert "ports" not in qdrant and "expose" not in qdrant
+
+
+def test_every_base_image_is_pinned_by_version_and_digest():
+    """`uv:0.11` floated across patch releases; a tag can also be re-pushed."""
+    import re
+
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    images = re.findall(r"^FROM (\S+)", dockerfile, re.M) + re.findall(
+        r"COPY --from=(\S+:\S+)", dockerfile
+    )
+    # node, python (twice: the uv stage and the runtime stage, the same bytes) and uv.
+    assert len(images) == 4 and len(set(images)) == 3
+    for image in images:
+        name, _, digest = image.partition("@sha256:")
+        assert re.fullmatch(r"[0-9a-f]{64}", digest), image
+        assert re.search(r":\d+\.\d+\.\d+", name), image  # an exact version, not 3.13 or 0.11
+    assert "ghcr.io/astral-sh/uv:0.11.32@" in dockerfile
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    assert 'version: "0.11.32"' in ci  # CI and the image use one uv
+
+
+def test_the_runtime_image_has_a_healthcheck_and_no_uv():
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    runtime = dockerfile.rsplit("\nFROM ", 1)[1]  # the last stage is the image
+    assert "uv" not in runtime.replace("uvicorn", "")
+    assert "COPY --from=python /app/.venv ./.venv" in runtime
+    assert "HEALTHCHECK" in runtime and '"curio.app.healthcheck"' in runtime
+    assert "USER app" in runtime
+    demo_api = _compose_services()["demo-api"]
+    assert demo_api["healthcheck"]["test"] == ["CMD", "python", "-m", "curio.app.healthcheck"]

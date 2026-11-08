@@ -1,5 +1,9 @@
 # Ranking follow-up and customer-disjoint check — 2026-10-28
 
+> **Status: research record** (October 2026, fashion recommender), kept as written. Its
+> experiments changed nothing unless it says so; the serving recommender is described in the
+> [technical guide](../../technical-guide.md#fashion-engine).
+
 Observed scores increased again, but the selected challenger still fails the frozen
 promotion requirements. Development gains did not fully carry over to newly scored
 customers. **No serving model, dataset, index or configuration was changed.**

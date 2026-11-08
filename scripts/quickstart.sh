@@ -8,7 +8,7 @@
 # Needs uv (https://docs.astral.sh/uv/); uv fetches Python 3.13 itself. The web app is built
 # with npm (Node 22) when web/dist is missing or older than its sources; without npm, a build
 # that is already there is served as it is. The first run installs the dependencies and
-# downloads the pinned ~400 KB recipe file; later runs start in seconds. Chat works when
+# downloads the pinned ~260 KB recipe file; later runs start in seconds. Chat works when
 # LLM_* is set in .env (see .env.example). Fashion stays opt-in: prepare the H&M data
 # (docs/technical-guide.md#fashion-data), then run with ENABLED_DOMAINS=fashion,cocktails,books.
 # The first run also prepares the book catalog once (goodbooks-10k: a checksum-verified
@@ -17,10 +17,12 @@
 #
 # Environment: CURIO_BOOKS (1), CURIO_WEB_BUILD (1; 0 never builds the web app),
 # ENABLED_DOMAINS (default: cocktails,books; a domain whose data is not prepared is skipped),
-# DATA_DIR (data), CURIO_PORT (8000), CURIO_HOST (127.0.0.1).
+# DATA_DIR (data), CURIO_PORT (8000), CURIO_HOST (127.0.0.1), ALLOWED_HOSTS
+# (localhost,127.0.0.1, plus CURIO_HOST when it names one address).
 #
 # The server listens on this computer only. CURIO_HOST=0.0.0.0 opens Curio to your network:
-# anyone who can reach it can use the app and the API, and chat on your LLM key.
+# anyone who can reach it can use the app and the API, and chat on your LLM key. The API
+# answers only the host names in ALLOWED_HOSTS, so add the name or address others will use.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -30,6 +32,10 @@ HOST="${CURIO_HOST:-127.0.0.1}"
 export ENABLED_DOMAINS="${ENABLED_DOMAINS:-cocktails,books}"
 export DATA_DIR="${DATA_DIR:-data}"
 export WEB_DIST="web/dist"
+export ALLOWED_HOSTS="${ALLOWED_HOSTS:-localhost,127.0.0.1}"
+if [[ "$HOST" != 0.0.0.0 && "$HOST" != 127.0.0.1 && "$HOST" != localhost ]]; then
+    ALLOWED_HOSTS="${ALLOWED_HOSTS},${HOST}"  # the URL printed below names it
+fi
 # The health check talks to the local server, never through an HTTP proxy.
 export NO_PROXY="127.0.0.1,localhost${NO_PROXY:+,$NO_PROXY}"
 export no_proxy="$NO_PROXY"
@@ -49,7 +55,7 @@ say "Installing dependencies (first run only takes a while)"
 uv sync --locked --extra anthropic --quiet
 
 if [[ ! -s "$DATA_DIR/cocktails.parquet" ]]; then
-    say "Preparing the cocktail recipes (one-off ~400 KB download)"
+    say "Preparing the cocktail recipes (one-off ~260 KB download)"
     uv run --no-sync python -m scripts.prepare_cocktails
 fi
 
@@ -130,7 +136,8 @@ PY
 
 if [[ "$HOST" != 127.0.0.1 && "$HOST" != localhost ]]; then
     echo "    Warning: CURIO_HOST=${HOST} serves Curio beyond this computer; anyone who can" \
-        "reach it can use the app, the API and the chat on your LLM key." >&2
+        "reach it can use the app, the API and the chat on your LLM key. It answers the" \
+        "host names in ALLOWED_HOSTS (${ALLOWED_HOSTS}); add the one others will use." >&2
 fi
 
 say "Curio is ready: open ${URL} (Ctrl+C stops it)"

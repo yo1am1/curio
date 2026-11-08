@@ -81,9 +81,18 @@ def test_stream_searches_then_verifies_a_grounded_answer(chat_model_replying, co
     assert reply.domain == "cocktails" and reply.products == []
     assert ids(reply) == [1, 3]
     assert reply.intent.query == "A mojito please"
-    assert reply.grounding.status == "verified" and reply.grounding.checked == 4
+    assert reply.grounding.status == "verified" and reply.grounding.checked == 7
+    assert reply.grounding.counts == {
+        "id": 1,
+        "name": 1,
+        "amount": 2,
+        "alcohol": 1,
+        "ingredient": 2,
+    }
     assert reply.steps[0].summary == "No remembered filters to apply."
-    assert reply.steps[-1].summary == "Verified 4 drinks, IDs and amounts against the catalog."
+    assert reply.steps[-1].summary == (
+        "Verified 1 ID, 1 name, 2 amounts, 1 alcohol label and 2 ingredients against the catalog."
+    )
     assert reply.suggestions == [
         "Something similar to Mojito",
         "Make it alcohol-free",
@@ -258,7 +267,7 @@ def test_tool_budget_is_shared_with_the_fashion_agent(chat_model_replying, cockt
     )
     reply = build(chat_model_replying(batch), cocktail_catalog).reply("Mojitos", [])
     assert reply.steps[-1].name == "Tool budget"
-    assert reply.text.startswith("Here are the drinks I could confirm:\n- Mojito")
+    assert reply.text.startswith("Here are the drinks I could confirm:\n- **Mojito**")
     assert reply.text.endswith("Please drink responsibly.")
 
 
@@ -452,11 +461,13 @@ def test_invented_measure_falls_back_to_recipe_facts(chat_model_replying, cockta
     )
     reply = build(model, cocktail_catalog).reply("Mojito", [])
     assert reply.grounding.status == "fallback"
-    assert reply.grounding.issues == ["3 oz does not match any amount in the evidence recipes"]
+    assert reply.grounding.issues == [
+        "3 oz does not match the recipe amount of Mojito (2 oz, 1 oz, 6 leaf, 2 tsp)"
+    ]
     assert reply.text == (
         "Here are the drinks I could confirm:\n"
-        "- Mojito · contains alcohol · Highball glass\n"
-        "- Virgin Mojito · alcohol-free · Highball glass\n\n"
+        "- **Mojito** · contains alcohol · Highball glass\n"
+        "- **Virgin Mojito** · alcohol-free · Highball glass\n\n"
         "Please drink responsibly."
     )
 
@@ -473,7 +484,7 @@ def test_history_and_shortlist_drinks_count_as_evidence(chat_model_replying, coc
         "How much lime and lemon?", history, TurnContext(cocktail_shortlist=[6])
     )
     assert reply.grounding.status == "verified"
-    assert reply.grounding.checked == 4
+    assert reply.grounding.checked == 6  # two names, two amounts, two ingredients
 
 
 def test_cocktail_system_prompt_carries_safety_rules(chat_model_replying, cocktail_catalog):

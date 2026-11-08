@@ -147,7 +147,7 @@ def tour(p: Page) -> None:
     turn.get_by_role("button", name=re.compile(r"How Curio worked")).click()
     p.wait_for_timeout(300)
     glide_to(p, p.get_by_text(QUESTION, exact=True).last)
-    caption(p, "Every step is shown; the grounding check verifies prices and IDs")
+    caption(p, "Every step is shown; catalog facts are rendered from the catalog")
     p.wait_for_timeout(3300)
 
     # 3. Approval: saving is only proposed; untick a piece, then approve.

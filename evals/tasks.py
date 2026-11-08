@@ -16,7 +16,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 Domain = Literal["fashion", "cocktails", "books", "evening"]
 Status = Literal["complete", "needs_input", "needs_approval"]
 Category = Literal[
-    "straightforward", "follow_up", "clarification", "approval", "decision", "adversarial"
+    "straightforward",
+    "follow_up",
+    "clarification",
+    "approval",
+    "decision",
+    "adversarial",
+    # Questions with a single right answer in the catalog (a price, rating, total, alcohol
+    # status) or no answer at all (stock, shipping, an item the catalog lacks), each built to
+    # tempt the model into stating a fact the tools did not return.
+    "factual",
 ]
 # Grounding outcomes of a complete turn (see `scoring.grounding_outcome`).
 GroundingOutcome = Literal[
@@ -62,8 +71,9 @@ class Condition(_Strict):
 
 
 class ArgCheck(_Strict):
-    """Some call to one of `tools` this turn has arguments meeting every condition. Scored
-    only when the model called one of the tools (tool selection is scored separately).
+    """Some call to one of `tools` this turn has arguments meeting every condition. When
+    none of the tools was called the check fails, unless it is `optional`: an argument check
+    on one of several acceptable tools (`tools_any`) is scored only when that tool was used.
 
     `where` keys are argument names, dotted paths into nested arguments, or `$text`: all the
     arguments as one JSON text (for "gin is in the query or the ingredients")."""
@@ -71,6 +81,7 @@ class ArgCheck(_Strict):
     tools: list[str] = Field(min_length=1)
     where: dict[str, Condition] = Field(min_length=1)
     note: str = ""
+    optional: bool = False
 
     @field_validator("tools", mode="before")
     @classmethod
@@ -81,11 +92,24 @@ class ArgCheck(_Strict):
 class Cards(_Strict):
     """Limits on the cards a reply shows."""
 
+    # At least this many cards (products, drinks, books, outfit or evening parts) in the
+    # reply or its proposal: the helpfulness floor that a refusal or a question cannot meet.
+    min_items: int | None = Field(default=None, ge=1)
     max_price: float | None = None  # every product card
     max_pages: int | None = None  # every book card (unknown page counts fail)
     max_outfit_total: float | None = None  # an outfit's or evening outfit's total
     # Every product card is from one of these sections ("Menswear" for a men's look-alike).
     sections: list[str] | None = None
+
+
+class CheckedFacts(_Strict):
+    """The answer states at least `min` facts of these kinds that the engine's grounding
+    check verified against the catalog (the report's `counts`: author, rating, price,
+    alcohol, pages, year, ...) or that the server rendered from fact references (its
+    `rendered` counts, cite mode). A list of names alone states nothing about the items."""
+
+    kinds: list[str] = Field(min_length=1)
+    min: int = Field(default=1, ge=1)
 
 
 class Expect(_Strict):
@@ -108,6 +132,7 @@ class Expect(_Strict):
     must_match_any: list[str] = Field(default_factory=list)
     safety: list[Safety] = Field(default_factory=list)
     cards: Cards | None = None
+    checked_facts: CheckedFacts | None = None
     # Ground truth for the clarification metric; by default, whether `status` is only
     # needs_input. "either" leaves the turn out of that metric.
     clarify: bool | Literal["either"] | None = None

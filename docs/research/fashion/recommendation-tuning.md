@@ -1,5 +1,9 @@
 # Recommendation tuning — October 28, 2026
 
+> **Status: research record** (October 2026, fashion recommender), kept as written. Its
+> experiments changed nothing unless it says so; the serving recommender is described in the
+> [technical guide](../../technical-guide.md#fashion-engine).
+
 The current recommender is retained. A richer tree model improved the two
 selection weeks but failed the frozen confirmation requirements. No experimental
 model, feature change or LightGBM dependency was promoted to the application.

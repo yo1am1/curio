@@ -7,6 +7,8 @@ from typing import Annotated
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from curio.engine.signing import MIN_KEY_BYTES
+
 
 class Settings(BaseSettings):
     # env_ignore_empty: `LLM_MODEL=` in a copied .env.example must mean "not set", not "".
@@ -41,15 +43,54 @@ class Settings(BaseSettings):
     # Wall-clock budget of one agent turn, checked before every model call. Raise it only for
     # slow models (a relayed model in `evals/`); the default matches `TURN_DEADLINE_SECONDS`.
     agent_turn_deadline_seconds: float = Field(default=90.0, gt=0)
-    # Signs the agent's approval proposals. Unset: a random per-process key, so pending
-    # proposals expire on restart. Set it when running several API workers.
+    # Signs the agent's approval proposals; at least 32 bytes. Unset: a random per-process
+    # key, so pending proposals expire on restart. Required with several API workers.
     agent_signing_key: SecretStr | None = None
+    # API worker processes (uvicorn and gunicorn read the same variable for their default
+    # worker count). Above 1 with chat on, AGENT_SIGNING_KEY is required, and each worker
+    # remembers answered proposals on its own (see SECURITY.md).
+    web_concurrency: int = Field(default=1, ge=1)
+    # Agent turns running at once, across /chat and /chat/stream. A turn over the cap gets
+    # 503 with Retry-After. Keep it well below AnyIO's 40 worker threads, which every route
+    # shares, so search and /health stay responsive while turns wait on a slow model.
+    max_concurrent_turns: int = Field(default=8, ge=1, le=32)
+    # Largest request body, in bytes, for every route but the image upload (which allows
+    # 10 MB): 413 beyond it. The largest valid chat request (50 history turns of 4,000
+    # characters) fits in 1 MiB.
+    max_body_bytes: int = Field(default=1024 * 1024, ge=64 * 1024, le=64 * 1024 * 1024)
+
+    # --- HTTP -------------------------------------------------------------
+    # Host names (the Host header, without the port) the API answers; others get 400. This
+    # stops DNS rebinding: a web page cannot reach a local Curio under its own domain name.
+    # Add the names browsers use when serving a network (CURIO_HOST); "*" turns it off.
+    allowed_hosts: Annotated[tuple[str, ...], NoDecode] = ("localhost", "127.0.0.1")
+    # Swagger UI at /docs (pinned, SRI-checked assets from jsDelivr). Off by default: it is a
+    # developer aid and would run third-party script on the app's origin. /openapi.json is
+    # always served.
+    api_docs: bool = False
 
     # --- Web app ----------------------------------------------------------
     # The built React app (`npm run build` in web/). The API serves it beside its own routes
     # whenever the folder holds a build; SERVE_WEB=false turns that off.
     web_dist: Path = Path("web/dist")
     serve_web: bool = True
+
+    @field_validator("agent_signing_key")
+    @classmethod
+    def _long_enough(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and len(value.get_secret_value().encode()) < MIN_KEY_BYTES:
+            raise ValueError(
+                f"AGENT_SIGNING_KEY must be at least {MIN_KEY_BYTES} bytes; generate one with "
+                '`python -c "import secrets; print(secrets.token_hex(32))"`.'
+            )
+        return value
+
+    @field_validator("allowed_hosts", mode="before")
+    @classmethod
+    def _split_hosts(cls, value: object) -> object:
+        if isinstance(value, str):
+            return tuple(part.strip().lower() for part in value.split(",") if part.strip())
+        return value
 
     @field_validator("enabled_domains", mode="before")
     @classmethod

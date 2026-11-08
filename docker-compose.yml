@@ -1,6 +1,12 @@
 # Curio runs in one of two stacks; start one at a time (both publish port 8000). One container
 # serves the API and the React app on that port: open http://localhost:8000.
 #
+# Ports are published on 127.0.0.1 only: the API has no login and its chat spends your LLM
+# key. To serve your network on purpose, set CURIO_HOST (shell or .env) to the address to
+# publish on and ALLOWED_HOSTS to the names browsers will use, for example
+#   CURIO_HOST=0.0.0.0 ALLOWED_HOSTS=localhost,127.0.0.1,curio.lan docker compose --profile demo up
+# and read SECURITY.md first. Qdrant is never published; the API reaches it on the compose network.
+#
 #   docker compose --profile demo up --build      # quick start: cocktails, books and Plan my
 #                                                 # evening, no H&M download (~150 MB books)
 #   DEMO_BOOKS=0 docker compose --profile demo up --build   # ... cocktails only
@@ -15,7 +21,7 @@ x-curio: &curio
 services:
   # --- Quick start (profile: demo) ---------------------------------------------------------
   # Recipes and books live in the `demo-data` volume, so nothing is written to ./data and no
-  # host permissions are involved. The first run downloads the pinned ~400 KB recipe file and
+  # host permissions are involved. The first run downloads the pinned ~260 KB recipe file and
   # prepares goodbooks-10k once (~150 MB download, under a minute, about 1 GB of RAM), so the
   # demo has book pairings and Plan my evening; DEMO_BOOKS=0 (shell or .env) skips the books.
   demo-data:
@@ -42,14 +48,16 @@ services:
     environment:
       # Never loads CLIP or Qdrant, even with fashion data around; books only once prepared.
       ENABLED_DOMAINS: cocktails,books
-    ports: ["8000:8000"]
+      # The Host names the API answers (DNS-rebinding guard); add yours with CURIO_HOST.
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+    ports: ["${CURIO_HOST:-127.0.0.1}:${CURIO_PORT:-8000}:8000"]
     volumes: [demo-data:/app/data:ro]
     depends_on:
       demo-data: { condition: service_completed_successfully }
       # Only with `--profile ollama`: wait until the local model is pulled.
       ollama-pull: { condition: service_completed_successfully, required: false }
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-m", "curio.app.healthcheck"]
       interval: 3s
       timeout: 3s
       retries: 40
@@ -81,7 +89,8 @@ services:
   qdrant:
     image: qdrant/qdrant:v1.19.2   # keep in step with the qdrant-client minor version
     profiles: [fashion]
-    ports: ["6333:6333"]
+    # No `ports`: Qdrant has no API key here, so it stays on the compose network, where only
+    # the API reaches it. Debug it with `docker compose exec` or a temporary 127.0.0.1 port.
     volumes: [qdrant-data:/qdrant/storage]
 
   # The API and the app on http://localhost:8000.
@@ -91,7 +100,8 @@ services:
     profiles: [fashion]
     environment:
       QDRANT_URL: http://qdrant:6333
-    ports: ["8000:8000"]
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+    ports: ["${CURIO_HOST:-127.0.0.1}:${CURIO_PORT:-8000}:8000"]
     volumes:
       - ./data:/app/data:ro
       - hf-cache:/home/app/.cache/huggingface

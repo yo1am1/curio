@@ -11,9 +11,12 @@ approval drawer are in `test_web_e2e.py`. Screenshots go to the artifacts folder
 
 import re
 
+import pytest
 from playwright.sync_api import expect
 
 from tests.e2e.conftest import results
+
+pytestmark = pytest.mark.fashion
 
 
 def open_trace(turn) -> None:
@@ -42,9 +45,11 @@ def test_product_dialog_hands_off_to_the_assistant(web):
 def test_self_correction_of_an_invented_price(web):
     web.open("/ask/fashion")
     web.send("Black trousers under €30")
+    # The answer cites its facts; the server renders them, so nothing typed is left to check.
     expect(web.last_turn().get_by_test_id("grounding-badge")).to_have_text(
-        "Prices verified against the catalog"
+        re.compile(r"^\d+ facts from the catalog$")
     )
+    expect(web.last_turn()).not_to_contain_text(re.compile(r"\{\w+:"))
     web.send("Which is the best deal?")
     expect(web.last_turn().get_by_test_id("grounding-badge")).to_have_text(
         "Self-corrected to match the catalog"

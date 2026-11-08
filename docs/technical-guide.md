@@ -6,7 +6,8 @@ Curio has three domains, fashion, cocktails and books, behind one API, one React
 (served by that API) and one agent engine. Fashion needs the prepared H&M data and image index; cocktails need
 only `data/cocktails.parquet`; books need `data/books.parquet` and
 `data/book_neighbours.parquet`. Every domain is optional at serving time: the API serves
-whichever domains are prepared, so the [quick start](#quick-start) runs with cocktails alone.
+whichever domains are prepared. The [quick start](#quick-start) prepares and serves
+cocktails and books (cocktails alone with `CURIO_BOOKS=0`, or `DEMO_BOOKS=0` in Docker).
 
 ## Fashion engine
 
@@ -119,7 +120,9 @@ shoe type.
 
 The cocktail domain serves 425 recipes from `data/cocktails.parquet`, in memory, with no
 model, index or network call at serving time. `CocktailRecommender`
-(`domains/cocktails/recommend.py`) is deterministic, and ties go to the lower drink ID.
+(`domains/cocktails/recommend.py`) is deterministic: search and similar-drink ties go to the
+lower drink ID, a search with only filters lists drinks by name, and "What can I make?"
+breaks its ties by name, then drink ID.
 
 | Feature | How it works |
 |---|---|
@@ -142,7 +145,7 @@ The book domain serves the 10,000 most-rated Goodreads books of
 [goodbooks-10k](https://github.com/zygmuntz/goodbooks-10k), in memory, with numpy and scipy
 only: no model, index or network call at serving time. `BookRecommender`
 (`domains/books/recommend.py`) is deterministic, and ties go to the lower book ID (goodbooks-10k
-numbers books by popularity). It loads in about 2 seconds.
+numbers books by popularity). It loads in about 3 seconds (2.8 s measured, imports included).
 
 | Feature | How it works |
 |---|---|
@@ -328,9 +331,9 @@ The source is [zygmuntz/goodbooks-10k](https://github.com/zygmuntz/goodbooks-10k
 commit `6dd165b`: `books.csv`, `ratings.csv` (5,976,479 ratings), `book_tags.csv`,
 `tags.csv` and `books_xml/books_xml.zip` (page counts and descriptions). Each file is
 checked against its SHA-256 at that commit, also for a local `--source`; `--no-verify`
-skips the check for another version. It takes about 40 seconds with a ~150 MB download
-(25 seconds from a local copy) and about 1 GB of RAM at its peak, and writes two files
-of about 9 MB together:
+skips the check for another version. The download is 148.6 MB; on the machine these docs
+were checked on it took 11 seconds, preparing took 18 seconds (from a local copy too) with a
+peak of about 0.9 GB of RAM, and it writes two files of about 9 MB together:
 
 - `books.parquet`: one row per book. Titles lose the "(Series, #1)" suffix, which becomes
   `series` and `series_position`; authors are split; reader shelves are cleaned of
@@ -448,7 +451,7 @@ src/curio/
 │   ├── tools.py          # Policy (READ / ASK / APPROVE) and the shared AskShopper tool
 │   ├── schemas.py        # AgentStep, Intent, PendingAction, AppliedEffect, AssistantReply…
 │   ├── signing.py        # ActionSigner (HMAC proposals), narrow_args
-│   ├── grounding.py      # Price and ID checks, name matching, GroundingReport merging
+│   ├── grounding.py      # Facts bound to items, names, labels, GroundingReport counts
 │   ├── llm.py            # Chat model factory for any LangChain provider
 │   └── data.py           # DataFileMissingError, shared by every catalog loader
 ├── domains/              # Each imports the engine and itself only (pairings: + books,
@@ -469,7 +472,7 @@ src/curio/
     ├── api.py            # FastAPI app
     └── web.py            # Serves the built React app (web/dist) beside the API routes
 web/                      # The React app (Vite, React 19, TypeScript); see "Web app" below
-examples/hello_domain/    # A complete teas domain on the engine, in one file (teas.py)
+examples/hello_domain/    # A complete teas domain on the engine (teas.py, its catalog teas.csv)
 scripts/prepare_data.py # Sample the H&M Kaggle archive (or its unzipped CSVs) into data/
 scripts/fetch_photos.py # Download the sampled products' photos from the mirror
 scripts/fetch_query_photos.py # Example image-search photos of garments outside the catalog
@@ -523,9 +526,10 @@ dependency, and a `DomainView` with its pages in the web app's registry. Its age
 the shared engine ([agent architecture](agent-architecture.md)). The shared parts needed
 only data-driven additions: the domain's approval tools in `ApprovalTool`, its context
 fields on `TurnContext` (`book_preferences`, `book_shortlist`), its effect kinds on
-`AppliedEffect` (serialized with their own fields only), and one entry each in the engine's
-`_MEMORY_EFFECTS` and `_SHORTLIST_EFFECTS` tables. The engine loop, budgets, signing,
-grounding flow and chat code did not change.
+`AppliedEffect` (serialized with their own fields only), whose `remembers` and `adds` say
+which context fields an approved effect updates. The engine loop, budgets, signing,
+grounding flow and chat code did not change. [Extending Curio](extending.md#8-registering-the-domain-in-the-app)
+lists every file a new domain touches.
 
 A **composed domain** has no data of its own: its `DomainSpec` has `compose` instead of
 `load`, and `build_services` builds it from the loaded domains after linking. `evening` is the
@@ -633,12 +637,12 @@ scripts/quickstart.sh                      # uv, no Docker
 ```
 
 The first run prepares goodbooks-10k besides the recipes (about 150 MB to download, under a
-minute and about 1 GB of RAM; ~9 MB on disk), so the one-command demo has book pairings and
+minute on a fast connection and about 0.9 GB of RAM; ~9 MB on disk), so the one-command demo has book pairings and
 Plan my evening. Opt out with `DEMO_BOOKS=0 docker compose --profile demo up --build` or
 `CURIO_BOOKS=0 scripts/quickstart.sh` for cocktails only. Both ways serve books whenever they
 are prepared.
 
-On the first run both download the pinned recipe file (about 400 KB, SHA-256 checked) and
+On the first run both download the pinned recipe file (about 260 KB, SHA-256 checked) and
 then start one server on port 8000: the API, which also serves the web app. Open
 http://localhost:8000; later runs reuse the recipes. Expect
 a few minutes for the first Docker build or `uv sync` (PyTorch is a dependency of the
@@ -652,7 +656,7 @@ fashion engine even though the demo never loads it), then seconds to start.
 - **`scripts/quickstart.sh`**: runs `uv sync --locked --extra anthropic`, writes
   `data/cocktails.parquet` if it is missing (and the book files unless `CURIO_BOOKS=0`),
   builds the web app with `npm ci && npm run build` when `web/dist` is missing or older than
-  its sources and npm (Node 22) is installed (`CURIO_WEB_BUILD=0` skips it; without npm a
+  its sources and npm (Node 22 or newer) is installed (`CURIO_WEB_BUILD=0` skips it; without npm a
   build made before is served, and with none the script says how to get one), starts the
   server, prints which domains and chat are available and the URL; Ctrl+C stops it.
   `ENABLED_DOMAINS` (default `cocktails,books`; a domain that is not prepared is skipped)
@@ -754,9 +758,10 @@ docker compose --profile fashion up --build
 docker compose --profile fashion exec api python -m scripts.build_index --limit 3000
 ```
 
-The image is built in two stages: a `node:22` stage runs `npm ci && npm run build` in `web/`,
-and the Python image copies `web/dist` from it, so one container serves the API and the app
-on one port. It includes the `anthropic` extra, so `LLM_PROVIDER=anthropic` works in Docker;
+The image is built in three stages: a `node:26` stage runs `npm ci && npm run build` in
+`web/`, a Python stage builds the virtual environment with uv, and the final Python image
+copies the environment and `web/dist` (without uv), so one container serves the API and the
+app on one port. It includes the `anthropic` extra, so `LLM_PROVIDER=anthropic` works in Docker;
 development tools are left out. The API mounts `./data` read-only, so prepare the
 cocktail recipes with the one-off `prepare-cocktails` service, which mounts it writable,
 then restart the API so it loads the file:
@@ -789,8 +794,9 @@ Any OpenAI-compatible gateway (OmniRoute, OpenRouter, LiteLLM, Ollama, vLLM) wor
 `LLM_MODEL`, and keep the gateway key in `.env`. The API uses this configuration
 for both intent extraction and catalog-grounded replies. Without `LLM_MODEL`
 every feature except chat still works. One configuration serves the fashion, cocktail and
-book assistants. Set `AGENT_SIGNING_KEY` to a long random
-string when running several API workers, so approval proposals verify on any worker.
+book assistants. Set `AGENT_SIGNING_KEY` to at least 32 random bytes when running several
+API workers (`WEB_CONCURRENCY`), so approval proposals verify on any worker; the API refuses
+to start without it then, and refuses a shorter key at any time.
 `AGENT_TURN_DEADLINE_SECONDS` (default 90) is the wall-clock budget of one agent turn and
 `LLM_TIMEOUT_SECONDS` (default 60) the timeout of one model call. Keep the defaults in
 production; the [agent evaluation](agent-eval.md) raises both for a relayed model that can
@@ -812,7 +818,7 @@ take minutes per request.
 | POST | `/search/text` | `{"query": "red floral dress", "top_k": 10, "section": "Ladieswear"}` (section optional) |
 | POST | `/search/image` | Multipart image upload |
 | GET | `/search/examples`, `/search/examples/{id}/image` | Example query photos of garments outside the catalog |
-| GET | `/users`, `/users/{id}` | User ids; profile with purchase history |
+| GET | `/users`, `/users/{id}` | Sampled shopper ids; a shopper's id and purchase history (products and dates; no age). These are real, pseudonymous H&M shoppers: see [data and licences](data-and-licences.md) |
 | GET | `/demo/customers` | Up to ten descriptive customer examples and starting products |
 | GET | `/users/{id}/recommendations?strategy=learned\|repeat\|collaborative\|graph\|content` | Personalised recommendations; learned, repeat, collaborative and graph hits include reasons |
 | GET | `/cocktails/ingredients`, `/cocktails/categories` | Distinct ingredient names (catalog spelling) and categories |
@@ -832,7 +838,7 @@ take minutes per request.
 | POST | `/evening/swap` | `{"evening": <state>, "part": "outfit\|book\|drink", "slot": "shoes", "mode": "other\|cheaper\|alcohol_free", "refine": "", "tastes": {...}}`: the plan with that part changed and `change` saying what changed; 422 for a swap the plan cannot make (a cheaper book, an alcohol-free outfit, a slot the outfit lacks) or an out-of-bounds state |
 | POST | `/chat` | One agent turn: `{"domain": "fashion\|cocktails\|books\|evening", "message", "history", "preferences", "shopper_id", "shortlist", "outfit", "cocktail_preferences", "cocktail_shortlist", "book_preferences", "book_shortlist", "evening", "auto_approve"}`, or `{"decision": {...}}` to answer a pending proposal. `domain` defaults to `fashion`; a fashion reply carries `outfit` when the turn built or changed one, an evening reply `evening` (the plan) |
 | POST | `/chat/stream` | The same turn as NDJSON: `step` events, then `reply` (or `error`) |
-| POST, GET | `/chat/feedback` | Rate an answer; summary of ratings and recent negative feedback |
+| POST | `/chat/feedback` | Rate an answer (204); the rating and tool names go to the server log, the texts are not kept |
 | GET | `/evaluation` | Offline evaluation results saved by `scripts.evaluate --output` |
 
 Every `/cocktails` endpoint returns 503 until `scripts.prepare_cocktails` has been run,
@@ -843,7 +849,31 @@ every fashion endpoint (`/products`, `/sections`, `/search`, `/outfits`, `/users
 `/chat` returns 503 when the requested domain is not served or has no assistant (no LLM);
 the detail says which. The flat `chat_enabled`, `ranking_enabled` and catalog counts in
 `/health` describe fashion and read `false`/`0` without it. The API title and
-version shown at `http://localhost:8000/docs` come from the installed package metadata.
+version in `/openapi.json` (and at `/docs` with `API_DOCS=true`) come from the installed
+package metadata.
+
+### HTTP limits and security settings
+
+The API has no login. These settings bound what an anonymous client can do; all are read
+from the environment or `.env` (see `.env.example`), and SECURITY.md says what they do not
+cover.
+
+| Setting | Default | Effect |
+|---|---|---|
+| `CURIO_HOST`, `CURIO_PORT` | `127.0.0.1`, `8000` | Where `scripts/quickstart.sh` listens and where Docker Compose publishes the port. Qdrant is never published. |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Host names (the `Host` header, without the port) the API answers; others get 400. Stops DNS rebinding. Add the names browsers use when serving a network; `*` turns the check off. |
+| `MAX_CONCURRENT_TURNS` | `8` (1-32) | Agent turns at once per process. Over it, `/chat` and `/chat/stream` answer 503 with `Retry-After: 5`, so search and `/health` keep their worker threads. |
+| `MAX_BODY_BYTES` | 1 MiB | Largest request body; 413 beyond it, before the body is read in full. `POST /search/image` allows 10 MB, also enforced while the upload streams in. |
+| `API_DOCS` | off | Swagger UI at `/docs`, with swagger-ui-dist pinned by SRI hash. `/redoc` is not served; `/openapi.json` always is. |
+| `AGENT_SIGNING_KEY` | random per process | Approval-signing key, at least 32 bytes. Required when `WEB_CONCURRENCY` is above 1. |
+| `WEB_CONCURRENCY` | `1` | API worker processes (uvicorn reads it for `--workers`). Above 1 with chat on, the API refuses to start without `AGENT_SIGNING_KEY` and warns that each worker keeps its own record of answered proposals. |
+
+Every response carries a Content-Security-Policy (scripts, styles, fonts and requests from
+the app's origin; images also from TheCocktailDB, Goodreads, Open Library and archive.org;
+`frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: strict-origin-when-cross-origin` and `X-Frame-Options: DENY`. Uploaded
+images are decoded only as PNG or JPEG. Agent-step summaries, which quote the shopper, are
+logged at DEBUG only.
 
 ## Offline evaluation
 
@@ -976,8 +1006,8 @@ the built app.
 
 ### End-to-end tests
 
-`tests/e2e` starts the real API (real catalog, CLIP index, recommenders and ranker), which
-serves the built React app (`web/dist`, built with `npm run build` first when it is missing
+`tests/e2e` starts the real API (real catalogs, recommenders and, with the H&M data, the
+CLIP index and ranker), which serves the built React app (`web/dist`, built with `npm run build` first when it is missing
 and `web/node_modules` exists; the browser tests skip otherwise), and drives it in Chromium.
 Each test file covers one area in the browser and through the API:
 
@@ -1039,21 +1069,31 @@ with only `cocktails.parquet`, no image index, no LLM and no `.env`, serving the
 It checks that `/health` and `/domains` report fashion as not prepared, that fashion
 endpoints answer 503, and that the app lands on the cocktail pages, shows fashion as
 unavailable with its hint, says how to enable chat and sends fashion deep links back to the
-landing. It opens no Qdrant index, so it runs beside the full-data API, and it needs only the
-recipes, so CI runs it (the `e2e-quickstart` job); the rest of the suite runs locally on the
-prepared data.
+landing. It opens no Qdrant index, so it runs beside the full-data API.
+
+The suite adapts to the data it finds. With the cocktails and the books prepared (no H&M
+download), the API serves cocktails, books and Plan my evening (without the outfit), and
+every test runs except the ones marked `@pytest.mark.fashion`, which skip with "Needs the H&M
+data and its image index": 39 of the 85 run that way. With the H&M sample, its photos and
+the Qdrant index as well, the API serves every domain and all 85 run.
 
 Prepare the data as in [Fashion data](#fashion-data) (`prepare_data`, `fetch_photos`, `build_index`,
 `fetch_query_photos`, `train_ranker`, `evaluate`, `prepare_cocktails`, `prepare_books`),
 stop any API that
 holds the embedded Qdrant index, then run `uv run pytest -m e2e tests/e2e`. Screenshots of
 each step go to `e2e-artifacts/` (override with `E2E_ARTIFACTS`); `E2E_DATA_DIR`,
-`E2E_QDRANT_PATH` and `E2E_CHROMIUM` point at other data or browsers. The default
-`uv run pytest` run excludes these tests.
+`E2E_QDRANT_PATH` and `E2E_CHROMIUM` point at other data or browsers, `E2E_PORTS` (for
+example `8100-8199`) limits the ports the servers use, and `E2E_REQUIRE_DATA=1` turns missing
+cocktail or book files into an error instead of skipped tests. The default `uv run pytest`
+run excludes these tests.
 
 A second CI job, `web`, runs `npm ci`, lint (ESLint and Prettier), the type check, the
-Vitest suite and the production build of `web/` on Node 22. A third, `e2e-quickstart`,
-builds the app, installs Chromium and runs `test_quickstart_e2e.py` on the recipes alone.
+Vitest suite and the production build of `web/` on Node 26, the same as the Docker build. A third, `e2e-demo`, prepares
+the recipes and goodbooks-10k (its source files are cached per pinned commit with
+`actions/cache` and checked by SHA-256 on every use), runs the 15 golden pairing checks on
+that real data, builds the app, installs Chromium and runs `tests/e2e` with
+`E2E_REQUIRE_DATA=1`: the 39 tests that need no H&M data run, the 46 marked `fashion` skip.
+The fashion tests run locally on the prepared H&M data.
 
 CI (`.github/workflows/ci.yml`) runs `uv sync --locked`, Ruff, `scripts.prepare_cocktails`
 (so the probes on the real recipe catalog run instead of skipping), the offline test suite,
@@ -1061,18 +1101,18 @@ a startup check of the real API with only the recipes (the runner has no H&M dat
 must report cocktails served and fashion not, `/products/1` must be 503 and recipe search
 200) and `docker compose config` for every profile. It needs no secrets.
 
-The offline suite covers fashion-less serving in `tests/test_optional_domains.py` (real
+The offline suite covers fashion-less serving in `tests/app/test_optional_domains.py` (real
 `Settings` over a temporary data folder; CLIP and Qdrant fail the test if touched); the web
 app's own behaviour (the stream reader, step trace, approvals, cards, session, filters,
 pantry, Compare and the graph) is covered by its Vitest suites in `web/src`. Books
 have their own offline tests over a ten-book fixture (`tests/conftest.py`): the catalog,
 taxonomy and recommender in `tests/domains/books/`, `scripts.prepare_books` over a miniature
 goodbooks-10k checkout in `tests/test_prepare_books.py`, the agent and its grounding in
-`tests/agents/test_book_agent.py`, and loading and endpoints in `tests/test_books_api.py`.
-CI does not download goodbooks-10k. The outfit builder is
-covered by planner tests over a 13-product fixture (`tests/test_outfits.py`: plans, budget
+`tests/agents/test_book_agent.py`, and loading and endpoints in `tests/app/test_books_api.py`.
+Only CI's `e2e-demo` job downloads goodbooks-10k. The outfit builder is
+covered by planner tests over a 13-product fixture (`tests/domains/fashion/test_outfits.py`: plans, budget
 allocation, infeasible budgets, co-purchase and visual preference, swaps), agent tests with
-a scripted model (`tests/agents/test_outfit_agent.py`) and API tests in `tests/test_api.py`.
+a scripted model (`tests/agents/test_outfit_agent.py`) and API tests in `tests/app/test_api.py`.
 
 ### Releases
 
@@ -1080,16 +1120,24 @@ Releases are cut from `main` by changing the version, never by pushing tags by h
 `version` in `pyproject.toml` and `CITATION.cff`, run `uv lock`, and rename
 `## [Unreleased]` in the changelog to `## [X.Y.Z] - YYYY-MM-DD` (plus the compare links at
 the bottom). When CI passes on that `main` commit, the Release workflow
-(`.github/workflows/release.yml`) tags it `vX.Y.Z`, publishes a GitHub release whose notes are
-that changelog section, and pushes `ghcr.io/yo1am1/curio:X.Y.Z` and `:latest`. A version
-that already has a release is skipped, so re-runs are safe. Dependabot
-(`.github/dependabot.yml`) proposes grouped weekly updates for `uv.lock`, GitHub Actions and
-the Docker base image.
+(`.github/workflows/release.yml`) first checks that the changelog has that section, then
+builds the image, smoke-tests it (`.github/scripts/smoke-image.sh`: the container must turn
+healthy and serve `/health` and the app) and pushes `ghcr.io/yo1am1/curio:X.Y.Z` (and
+`:latest` when it is the highest released version). Only once the image is on ghcr.io does
+it tag the commit `vX.Y.Z` and publish the GitHub release whose notes are that changelog
+section, so a failed build leaves no release behind. An image or release that already exists
+is kept, so re-runs are safe and a later run finishes what an earlier one left undone.
+Actions are pinned by commit SHA, and Dependabot (`.github/dependabot.yml`) proposes grouped
+weekly updates for `uv.lock`, the web app and those GitHub Actions pins, and monthly ones for
+the Docker base images.
 
 ### Release scope and compatibility
 
-Version 1.0.0 covers fashion and cocktails; see the [changelog](../CHANGELOG.md). The
-installable distribution is `curio-recommendations`; the `curio` import path
+For code that builds on Curio, the stable surface is the contract in
+[Extending Curio](extending.md) (contract version 1); anything not written there is internal.
+Each release's API changes are in the [changelog](../CHANGELOG.md), and 3.1.0 makes a few
+breaking changes as security exceptions (listed there). The history below is kept for older
+clients: version 1.0.0 covered fashion and cocktails. The installable distribution is `curio-recommendations`; the `curio` import path
 remains stable for existing scripts. `ChatRequest.domain` defaults to `fashion`, so fashion
 clients written for 0.2.0 keep working. Changes in 1.1.0: `/health` and `/domains` only
 gain fields; the UI still reads an older API's `/health`. In Docker the full stack now

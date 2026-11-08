@@ -29,7 +29,7 @@ import sys
 import threading
 import time
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
@@ -40,6 +40,8 @@ import httpx
 from langchain_core.callbacks import BaseCallbackHandler
 from pydantic import TypeAdapter
 
+from evals import freeze
+from evals.freeze import short
 from evals.scoring import score_task, summarize
 from evals.tasks import Decision, Task, load_tasks, select
 
@@ -367,14 +369,109 @@ def _pct(value: float | None) -> str:
     return "n/a" if value is None else f"{value * 100:.1f} %"
 
 
-def _ratio(count: dict) -> str:
-    return f"{count['passed']}/{count['total']} ({_pct(count['rate'])})"
+def _ci(interval: list[float] | None) -> str:
+    if not interval:
+        return ""
+    return f", 95 % CI {interval[0] * 100:.0f}-{interval[1] * 100:.0f} %"
+
+
+def _ratio(count: dict | None) -> str:
+    if not count:
+        return "n/a"
+    return f"{count['passed']}/{count['total']} ({_pct(count['rate'])}{_ci(count.get('ci95'))})"
+
+
+def _short_ratio(count: dict | None) -> str:
+    if not count or not count.get("total"):
+        return "n/a"
+    return f"{count['passed']}/{count['total']}{_ci(count.get('ci95')).replace(', 95 % CI', ' ·')}"
+
+
+def slim(summary: dict) -> dict:
+    """The parts of a summary the comparison table shows (docs/evals/controls.json)."""
+    keys = (
+        "tasks",
+        "task_success",
+        "by_category",
+        "by_tag",
+        "reliability",
+        "safety",
+        "safety_with_cards",
+        "injection_resistance",
+        "clarification",
+        "tool_selection_accuracy",
+        "argument_accuracy",
+    )
+    run = summary.get("run") or {}
+    return {key: summary.get(key) for key in keys} | {
+        "run": {k: run.get(k) for k in ("run_name", "mode", "model", "commit", "scorer")}
+    }
+
+
+def comparison(summary: dict, others: dict[str, dict]) -> list[str]:
+    """This run's key numbers next to other runs' (the controls), with Wilson intervals."""
+    if not others:
+        return []
+    runs = {"this run": summary, **others}
+    rows: list[tuple[str, Any]] = [
+        ("Task success", lambda s: s.get("task_success")),
+        ("Passed, model right first time", lambda s: _get(s, "reliability.all.passed_first_time")),
+        (
+            "Passed after engine repair",
+            lambda s: _get(s, "reliability.all.passed_after_engine_repair"),
+        ),
+    ]
+    for category in (
+        "straightforward",
+        "factual",
+        "follow_up",
+        "clarification",
+        "approval",
+        "decision",
+        "adversarial",
+    ):
+        rows.append((f"Category {category}", lambda s, c=category: _get(s, f"by_category.{c}")))
+    for tag in ("safety", "injection", "catalog_gap", "price_trap"):
+        rows.append((f"Tag {tag}", lambda s, t=tag: _get(s, f"by_tag.{t}")))
+    rows.append(("Safety checks with cards shown", lambda s: s.get("safety_with_cards")))
+    lines = [
+        "## This run next to the controls",
+        "",
+        "Controls are policies that do nothing useful (docs/agent-eval.md#controls). A task a "
+        "control passes measures little; the gap between a model and the best control is the "
+        "signal. Cells: passed/total · 95 % Wilson interval.",
+        "",
+        "| Metric | " + " | ".join(runs) + " |",
+        "|---|" + "---|" * len(runs),
+    ]
+    for label, get in rows:
+        lines.append(
+            f"| {label} | " + " | ".join(_short_ratio(get(s)) for s in runs.values()) + " |"
+        )
+    mine = (summary.get("run") or {}).get("scorer")
+    stale = [name for name, s in others.items() if (s.get("run") or {}).get("scorer") != mine]
+    if stale:
+        lines += [
+            "",
+            f"Scored with a different task file or scorer than this run: {', '.join(stale)}. "
+            "Their numbers are not comparable until they are run again.",
+        ]
+    return [*lines, ""]
+
+
+def _get(data: dict, path: str) -> Any:
+    for part in path.split("."):
+        data = (data or {}).get(part)
+    return data
 
 
 def report(summary: dict, records: list[dict], tasks: list[Task]) -> str:
     """The run's report in Markdown."""
     s = summary
     run = defaultdict(lambda: "?", summary.get("run") or {})
+    rel = s["reliability"]
+    frozen = run["frozen"]
+    frozen_text = "yes (matched evals/FROZEN.json)" if frozen is True else "no"
     lines = [
         f"# Agent evaluation: {run['run_name']}",
         "",
@@ -384,31 +481,51 @@ def report(summary: dict, records: list[dict], tasks: list[Task]) -> str:
         f"{run['llm_timeout_seconds']} s (production defaults: 90 s and 60 s)",
         f"- Tasks file `{run['tasks_file']}`, commit `{run['commit']}`, "
         f"{run['started']} to {run['finished']}",
+        f"- Scorer: {short(run.get('scorer'))}",
+        f"- Frozen run: {frozen_text}",
         f"- Tasks: {s['tasks']['scored']} scored of {s['tasks']['selected']} selected; "
         f"errors {len(s['tasks']['errors'])}, skipped {len(s['tasks']['skipped'])}, "
         f"not run {len(s['tasks']['not_run'])}",
         "",
         "## Metrics",
         "",
+        "Rates carry 95 % Wilson intervals. One run of each task: the intervals are about "
+        "sampling the task set, not the model's run-to-run variance.",
+        "",
         "| Metric | Value |",
         "|---|---|",
-        f"| Task success | {s['tasks']['passed']}/{s['tasks']['scored']} "
-        f"({_pct(s['task_success_rate'])}) |",
+        f"| Task success | {_ratio(s['task_success'])} |",
+        f"| Passed, model right first time | {_ratio(rel['all']['passed_first_time'])} |",
+        f"| Passed after the engine caught and repaired a draft | "
+        f"{_ratio(rel['all']['passed_after_engine_repair'])} |",
+        f"| Factual tasks passed, right first time | "
+        f"{_ratio(rel['factual']['passed_first_time'])} |",
+        f"| Factual tasks passed after engine repair | "
+        f"{_ratio(rel['factual']['passed_after_engine_repair'])} |",
+        f"| Turns the engine did not have to correct (answers, questions, proposals) | "
+        f"{_ratio(rel['turns']['first_pass'])} |",
+        f"| Turns caught by grounding and repaired | "
+        f"{_ratio(rel['turns']['caught_and_repaired'])} |",
+        f"| Turns caught by grounding, then fallback | "
+        f"{_ratio(rel['turns']['caught_then_fallback'])} |",
         f"| Tool selection | {_ratio(s['tool_selection_accuracy'])} |",
         f"| Arguments | {_ratio(s['argument_accuracy'])} |",
         f"| Final status | {_ratio(s['status_accuracy'])} |",
-        f"| Grounding: first-pass verified | {_pct(s['grounding']['first_pass_verified_rate'])} |",
-        f"| Grounding: repaired | {_pct(s['grounding']['repaired_rate'])} |",
-        f"| Grounding: fallback | {_pct(s['grounding']['fallback_rate'])} |",
+        f"| Grounding: first-pass verified | {_ratio(s['grounding']['first_pass_verified'])} |",
+        f"| Grounding: repaired | {_ratio(s['grounding']['repaired'])} |",
+        f"| Grounding: fallback | {_ratio(s['grounding']['fallback'])} |",
         f"| Grounding outcomes | {s['grounding']['outcomes']} |",
         f"| Grounding: suspects slipped through (audit) | {s['grounding']['slipped_through']} |",
         f"| Proposals when required | "
         f"{_ratio(s['approval_discipline']['proposals_when_required'])} |",
         f"| No claim before approval | "
         f"{_ratio(s['approval_discipline']['no_claim_before_approval'])} |",
-        f"| Clarification precision / recall | {_pct(s['clarification']['precision'])} / "
-        f"{_pct(s['clarification']['recall'])} |",
+        f"| Clarification precision / recall | {_pct(s['clarification']['precision'])}"
+        f"{_ci(s['clarification'].get('precision_ci95'))} / "
+        f"{_pct(s['clarification']['recall'])}{_ci(s['clarification'].get('recall_ci95'))} |",
         f"| Safety checks | {_ratio(s['safety'])} |",
+        f"| Safety checks on replies that showed the cards they constrain | "
+        f"{_ratio(s.get('safety_with_cards'))} |",
         f"| Injection resistance | {_ratio(s['injection_resistance'])} |",
         f"| Text checks | {_ratio(s['text_checks'])} |",
         f"| Card checks | {_ratio(s['card_checks'])} |",
@@ -420,6 +537,8 @@ def report(summary: dict, records: list[dict], tasks: list[Task]) -> str:
         "",
         f"Latency: {s['latency_seconds']['note']}",
         "",
+        *comparison(s, s.get("comparison") or {}),
+        *cite_mode(records),
         "## By domain and category",
         "",
         "| Group | Passed |",
@@ -443,6 +562,8 @@ def report(summary: dict, records: list[dict], tasks: list[Task]) -> str:
         ]
         cell = "<br>".join(_cell(f) for f in failed) or record.get("reason", "")
         result = record["status"]
+        if result == "passed" and (record.get("score") or {}).get("engine_caught"):
+            result = "passed (engine repaired)"
         lines.append(f"| {task.id} | {task.domain} | {task.category} | {result} | {cell} |")
     if s["grounding"]["audit_suspects"]:
         lines += ["", "## Grounding audit suspects (review by hand)", ""]
@@ -451,7 +572,71 @@ def report(summary: dict, records: list[dict], tasks: list[Task]) -> str:
     if s["budget_hits"]["details"]:
         lines += ["", "## Budget hits", ""]
         lines += [f"- {b['task']}: {b['budget']}" for b in s["budget_hits"]["details"]]
+    if run["rescores"] != "?" and run["rescores"]:
+        lines += ["", "## Rescores", ""]
+        for entry in run["rescores"]:
+            changed = "scorer changed" if entry.get("changed") else "same scorer"
+            note = entry.get("note") or "no note"
+            lines.append(f"- {entry.get('at')}: {changed}; {note}")
     return "\n".join(lines) + "\n"
+
+
+def fact_counts(records: list[dict]) -> dict[str, Any]:
+    """Cite mode in a run: over every reply, the facts the server rendered from fact
+    references and the values the model typed that the backstop checked, by kind. Read from
+    the replies' grounding reports; replies from servers before cite mode have no
+    `rendered`. Not a scored metric: the frozen scorer does not read it."""
+    rendered: Counter[str] = Counter()
+    typed: Counter[str] = Counter()
+    replies = citing = typing = 0
+    for record in records:
+        for turn in record.get("turns") or []:
+            grounding = (turn.get("reply") or {}).get("grounding") or {}
+            if not grounding:
+                continue
+            replies += 1
+            facts = {k: v for k, v in (grounding.get("rendered") or {}).items() if v}
+            checked = {k: v for k, v in (grounding.get("counts") or {}).items() if v}
+            rendered.update(facts)
+            typed.update(checked)
+            citing += bool(facts)
+            typing += bool(checked)
+    return {
+        "replies": replies,
+        "replies_with_rendered_facts": citing,
+        "replies_with_typed_checked_values": typing,
+        "rendered": dict(rendered.most_common()),
+        "typed_checked": dict(typed.most_common()),
+    }
+
+
+def cite_mode(records: list[dict]) -> list[str]:
+    """The report's section on fact references versus values the model typed."""
+    facts = fact_counts(records)
+    if not facts["replies"]:
+        return []
+    rendered = sum(facts["rendered"].values())
+    typed = sum(facts["typed_checked"].values())
+    return [
+        "## Cite mode: references versus typed values",
+        "",
+        "Facts the server rendered from the model's fact references carry the cited item's "
+        "catalog value; cite mode does not check that the cited item is the one the sentence "
+        "names. Values the model typed itself went to the best-effort backstop. The "
+        "scorer's `checked_facts` counts both; this table itself is not scored.",
+        "",
+        "| | Replies | Facts |",
+        "|---|---|---|",
+        f"| Rendered from references | {facts['replies_with_rendered_facts']}/"
+        f"{facts['replies']} | {rendered} {_kinds(facts['rendered'])} |",
+        f"| Typed, checked by the backstop | {facts['replies_with_typed_checked_values']}/"
+        f"{facts['replies']} | {typed} {_kinds(facts['typed_checked'])} |",
+        "",
+    ]
+
+
+def _kinds(counts: dict[str, int]) -> str:
+    return "(" + ", ".join(f"{kind} {n}" for kind, n in counts.items()) + ")" if counts else ""
 
 
 def _cell(text: str) -> str:
@@ -477,7 +662,8 @@ def configure_environment(args: argparse.Namespace, domains: set[str]) -> None:
     if args.relay_url:
         env["LLM_PROVIDER"] = "openai"
         env["LLM_BASE_URL"] = args.relay_url
-        env["LLM_API_KEY"] = "relay-not-a-secret"
+        # The relay's bearer token when it requires one (RELAY_TOKEN), sent as the API key.
+        env["LLM_API_KEY"] = env.get("RELAY_TOKEN") or "relay-not-a-secret"
         env["LLM_MODEL"] = args.model or "relay"
     elif args.model:
         env["LLM_MODEL"] = args.model
@@ -532,6 +718,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_LLM_TIMEOUT,
         help="LLM_TIMEOUT_SECONDS for this run (default: %(default)s).",
     )
+    parser.add_argument(
+        "--frozen",
+        action="store_true",
+        help="Refuse to run or rescore unless the task file and scorer match evals/FROZEN.json.",
+    )
+    parser.add_argument(
+        "--rescore-note",
+        default="",
+        help="Why a run is rescored with a changed task file or scorer (required then; "
+        "recorded in run.json and the report).",
+    )
+    parser.add_argument(
+        "--compare",
+        action="append",
+        help="Runs to show next to this one: run names in the results folder or paths to a "
+        "summary.json or a controls.json (default: docs/evals/controls.json if present).",
+    )
     parser.add_argument("--port", type=int, default=0, help="API port (default: a free one).")
     parser.add_argument("--data-dir", type=Path)
     parser.add_argument("--qdrant-path", type=Path)
@@ -541,10 +744,42 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
-def finish(run_dir: Path, tasks: list[Task], records: list[dict], run: dict) -> dict:
+CONTROLS = ROOT / "docs" / "evals" / "controls.json"
+
+
+def load_comparison(names: list[str] | None, results_dir: Path, own: str) -> dict[str, dict]:
+    """The runs to compare with, by name: from `--compare`, else the committed controls."""
+    found: dict[str, dict] = {}
+    items = [n.strip() for item in names or [] for n in item.split(",") if n.strip()]
+    if not items and CONTROLS.is_file():
+        items = [str(CONTROLS)]
+    for item in items:
+        path = Path(item)
+        if not path.exists():
+            path = results_dir / item / "summary.json"
+        if not path.is_file():
+            raise FileNotFoundError(f"--compare: no run or file {item}")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if "task_success" in data:  # one run's summary
+            name = (data.get("run") or {}).get("run_name") or path.parent.name
+            found[name] = slim(data)
+        else:  # controls.json: {name: slim summary}
+            found |= data
+    found.pop(own, None)
+    return found
+
+
+def finish(
+    run_dir: Path,
+    tasks: list[Task],
+    records: list[dict],
+    run: dict,
+    compare: dict[str, dict] | None = None,
+) -> dict:
     """Write `summary.json` and `report.md` for the records; return the summary."""
     summary = summarize(tasks, records, relayed=run.get("mode") == "relay")
     summary["run"] = run
+    summary["comparison"] = compare or {}
     (run_dir / "summary.json").write_text(json.dumps(summary, indent=1, ensure_ascii=False))
     (run_dir / "report.md").write_text(report(summary, records, tasks), encoding="utf-8")
     print(
@@ -555,11 +790,31 @@ def finish(run_dir: Path, tasks: list[Task], records: list[dict], run: dict) -> 
     return summary
 
 
-def rescore(run_dir: Path, tasks: list[Task]) -> int:
-    """Score a finished run's saved traces again (after a task or scorer change)."""
+def rescore(
+    run_dir: Path,
+    tasks: list[Task],
+    current: dict,
+    note: str = "",
+    compare: dict[str, dict] | None = None,
+) -> int:
+    """Score a finished run's saved traces again. With a changed task file or scorer this
+    needs a note, which is recorded: a verdict never changes silently after a run is seen."""
     results_path = run_dir / "results.jsonl"
     if not results_path.is_file():
         print(f"No {results_path} to rescore.")
+        return 2
+    run = {}
+    for name, key in (("run.json", None), ("summary.json", "run")):
+        if not run and (path := run_dir / name).is_file():
+            data = json.loads(path.read_text())
+            run = data.get(key, {}) if key else data
+    changed = run.get("scorer") != current
+    if changed and not note.strip():
+        print(
+            "The task file or scorer differs from the one this run was scored with "
+            f"({short(run.get('scorer'))} -> {short(current)}). Rescoring would change its "
+            "verdicts after they were seen: pass --rescore-note explaining why."
+        )
         return 2
     by_id = {task.id: task for task in tasks}
     records = []
@@ -571,12 +826,19 @@ def rescore(run_dir: Path, tasks: list[Task]) -> int:
         records.append(record)
     with results_path.open("w", encoding="utf-8") as out:
         out.writelines(json.dumps(r, ensure_ascii=False) + "\n" for r in records)
-    run = {}
-    for name, key in (("run.json", None), ("summary.json", "run")):
-        if not run and (path := run_dir / name).is_file():
-            data = json.loads(path.read_text())
-            run = data.get(key, {}) if key else data
-    finish(run_dir, tasks, records, run | {"rescored": _now()})
+    entry = {"at": _now(), "changed": changed, "note": note.strip(), "scorer": current}
+    if changed:
+        entry["previous_scorer"] = run.get("scorer")
+    run = run | {
+        "rescored": entry["at"],
+        # Only a rescore that can change verdicts (or carries a note) is listed; scoring the
+        # same traces with the same files again changes nothing.
+        "rescores": [*run.get("rescores", []), *([entry] if changed or entry["note"] else [])],
+        "scorer": current,
+        "frozen": run.get("frozen", False) and not changed,
+    }
+    (run_dir / "run.json").write_text(json.dumps(run, indent=1))
+    finish(run_dir, tasks, records, run, compare)
     return 0
 
 
@@ -589,8 +851,14 @@ def main(argv: list[str] | None = None) -> int:
     tasks = select(load_tasks(args.tasks), args.only)
     run_name = args.run_name or datetime.now(UTC).strftime("run-%Y%m%d-%H%M%S")
     run_dir = args.results_dir / run_name
+    current = freeze.fingerprint(args.tasks)
+    if args.frozen and (problems := freeze.differences(current, freeze.read_frozen())):
+        print("Not the frozen task file and scorer (evals/FROZEN.json):")
+        print("\n".join(f"  - {p}" for p in problems))
+        return 2
+    compare = load_comparison(args.compare, args.results_dir, run_name)
     if args.rescore:
-        return rescore(run_dir, tasks)
+        return rescore(run_dir, tasks, current, args.rescore_note, compare)
     run_dir.mkdir(parents=True, exist_ok=True)
     results_path = run_dir / "results.jsonl"
     if not args.resume and results_path.exists():
@@ -615,6 +883,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     run_file = run_dir / "run.json"
     earlier = json.loads(run_file.read_text()) if args.resume and run_file.is_file() else {}
+    if earlier.get("scorer") and earlier["scorer"] != current:
+        print(
+            "This run was started with another task file or scorer; --resume would mix "
+            "verdicts. Rescore it first (--rescore --rescore-note ...) or start a new run."
+        )
+        return 2
     run = {
         "run_name": run_name,
         "mode": "relay" if args.relay_url else "provider",
@@ -627,7 +901,11 @@ def main(argv: list[str] | None = None) -> int:
         "llm_timeout_seconds": settings.llm_timeout_seconds,
         "long_deadline": settings.agent_turn_deadline_seconds > 90,
         "concurrency": args.concurrency,
-        "tasks_file": str(args.tasks),
+        "tasks_file": freeze.relative(args.tasks),
+        # What scored this run: the scorer version and the hashes of the task file, the
+        # scorer and the task schema; "frozen" when they matched evals/FROZEN.json.
+        "scorer": current,
+        "frozen": bool(args.frozen) and earlier.get("frozen", True),
         "selected": [task.id for task in tasks],
         "commit": _commit(),
         "started": earlier.get("started", _now()),
@@ -672,7 +950,7 @@ def main(argv: list[str] | None = None) -> int:
         api.close()
     run["finished"] = _now()
     run_file.write_text(json.dumps(run, indent=1))
-    finish(run_dir, tasks, records, run)
+    finish(run_dir, tasks, records, run, compare)
     return 0
 
 

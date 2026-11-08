@@ -4,7 +4,9 @@ from collections.abc import Sequence
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
+from curio.domains.books.agent.facts import BOOK_REFERENCES, PAIRED_DRINK_REFERENCES
 from curio.domains.books.models import Book
+from curio.engine.facts import cite_rules
 
 BOOK_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
     [
@@ -14,11 +16,11 @@ BOOK_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
             "popular books (goodbooks-10k: Goodreads metadata, reader shelves and ratings). "
             "Recommend only books supplied below or returned by tools; the latest tool result "
             "replaces earlier matches. Never invent books, authors, ratings, page counts, "
-            "series or plot details. Write titles exactly as the catalog spells them, in bold "
-            "(**Beloved**), and quote "
-            "ratings exactly as listed (e.g. ★ 4.55). For each recommended book give its title, "
-            "author and a short reason based on its tool evidence (shared readers, genres, "
-            "shelves, description), formatted in markdown.\n"
+            "series or plot details, and never confirm a rating the reader states unless the "
+            "catalog shows it. For each recommended book give its title, author and a short "
+            "reason based on its tool evidence (shared readers, genres, shelves, "
+            "description), formatted in markdown.\n"
+            "Facts: {facts}\n"
             "Tools: SearchBooks finds books by description, genres, mood, minimum rating and "
             "length; 'like <title>' in its query finds what readers of that title also liked. "
             "InspectBooks reads full details for referenced IDs. ReadersAlsoLiked finds books "
@@ -32,9 +34,9 @@ BOOK_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
             "already shown as exclude_drink_ids. Use at most five tool calls and answer once "
             "you have enough evidence.\n"
             "Drinks: name only drinks PairCocktail returned in this turn (call it again for "
-            "drinks from an earlier answer), in bold, and cite them as drink #N, never [id N], "
-            "which is for books. For each drink give its alcohol status and a reason from the "
-            "tool's evidence, and quote amounts exactly as the recipe lists them. Children's "
+            "drinks from an earlier answer), through {{drink:N}} with the drink #N it gives, "
+            "never a book's [id N]. For each drink give its alcohol status and a reason from "
+            "the tool's evidence. Children's "
             "and young-adult books always get alcohol-free drinks only; set alcohol_free when "
             "the reader asks for no alcohol, is underage, pregnant or driving. Alcohol-optional "
             "drinks are not alcohol-free. Encourage moderate, responsible drinking, never "
@@ -51,18 +53,32 @@ BOOK_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
         MessagesPlaceholder("history"),
         ("human", "{message}"),
     ]
+).partial(
+    facts=cite_rules(
+        f"{BOOK_REFERENCES}; for drinks PairCocktail returned, {PAIRED_DRINK_REFERENCES}",
+        "- {book:3} by {author:book:3} (★ {rating:book:3}, {year:book:3}, "
+        "{pages:book:3} pages): a cosy quest with a reluctant hero. It is "
+        "{diff:rating:3,5} higher rated than {book:5}.",
+    )
 )
 
 BOOK_REPAIR_INSTRUCTION = (
-    "Verification failed for your draft: {issues}. Rewrite the answer using only titles, IDs "
-    "and ratings from the tool results and book list, and only drinks, drink numbers and "
-    "amounts PairCocktail returned. Do not call tools."
+    "Verification failed for your draft: {issues}. Rewrite the answer stating titles, "
+    "authors, ratings, years and page counts only through fact references to books in the "
+    "tool results and book list, and drinks only through references to drinks PairCocktail "
+    "returned. Do not call tools."
 )
 
 
 def book_line(book: Book) -> str:
-    """Title · author · rating, as answers and fallbacks cite a book."""
+    """Title · author · rating, as the session and tool results show a book."""
     return f"{book.title} by {book.author} · ★ {book.average_rating:.2f}"
+
+
+def book_reference_line(book: Book) -> str:
+    """Title · author · rating as fact references, as fallbacks state a book."""
+    ref = f"book:{book.book_id}"
+    return f"{{{ref}}} by {{author:{ref}}} · ★ {{rating:{ref}}}"
 
 
 def render_books(

@@ -18,7 +18,7 @@ export function SetupScreen({ domains }: { domains: DomainInfo[] }) {
         <h2 id="quick-start" className={styles.title}>
           The quickest start
         </h2>
-        <p>The cocktail catalog is about 400 KB. Prepare it, then restart the API:</p>
+        <p>The cocktail catalog is about 260 KB. Prepare it, then restart the API:</p>
         <pre className={styles.code}>
           <code>{QUICK_START}</code>
         </pre>

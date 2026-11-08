@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import { book, cocktail, product } from "../test/fixtures";
-import { chatPayload, decisionPayload, historyItem, type ChatEntry } from "./chat";
+import {
+  CHAT_SESSION_KEY,
+  chatPayload,
+  decisionPayload,
+  historyItem,
+  loadChatSession,
+  newSessionId,
+  type ChatEntry,
+} from "./chat";
 import {
   applyEffects,
   buildContext,
@@ -136,6 +144,23 @@ describe("session state", () => {
       edited_args: { product_ids: [1] },
     });
     expect(decision).not.toHaveProperty("message");
+    expect(decision).not.toHaveProperty("session_id");
+    const bound = decisionPayload("fashion", entries, session, action, false, null, "f".repeat(32));
+    expect(bound.session_id).toBe("f".repeat(32));
+  });
+
+  it("keeps one random chat session id per tab", () => {
+    sessionStorage.clear();
+    const first = loadChatSession(sessionStorage);
+    expect(first).toMatch(/^[0-9a-f]{32}$/);
+    expect(loadChatSession(sessionStorage)).toBe(first);
+    expect(createAppStores(localStorage, sessionStorage).chatSession).toBe(first);
+    expect(newSessionId()).not.toBe(newSessionId());
+    sessionStorage.setItem(CHAT_SESSION_KEY, JSON.stringify("not valid!"));
+    const replaced = loadChatSession(sessionStorage);
+    expect(replaced).not.toBe("not valid!");
+    expect(replaced).toMatch(/^[0-9a-f]{32}$/);
+    expect(loadChatSession(undefined)).toMatch(/^[0-9a-f]{32}$/); // storage blocked
   });
 
   it("applies approved effects to the lists and memory", () => {
