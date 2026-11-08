@@ -583,6 +583,23 @@ def test_an_unknown_reference_is_repaired_once(chat_model_replying, search, cata
     assert reply.text == "The **Summer Dress**: €24.99."
 
 
+def test_the_trace_counts_unverified_claims_in_the_singular(chat_model_replying, search, catalog):
+    search.results = [ScoredProduct(3, 0.9)]
+    model = chat_model_replying(
+        {"query": "dress"}, "The {product:3} weighs {weight:3}.", "The {product:3}: {price:3}."
+    )
+    reply = _assistant(model, search, catalog).reply("a red dress", [])
+    summaries = [step.summary for step in reply.steps]
+    assert "Found 1 unverified claim; asking for a rewrite." in summaries
+    bad = {"question": "Like the {product:2} or the {product:4}?", "options": ["Yes", "No"]}
+    model = chat_model_replying(
+        NO_SEARCH, _action("AskShopper", bad), _action("AskShopper", bad, "tool_2")
+    )
+    reply = _assistant(model, search, catalog).reply("something", [])
+    summaries = [step.summary for step in reply.steps]
+    assert "Found 2 unverified claims in a question; asking for a rewrite." in summaries
+
+
 def test_a_reference_to_an_item_no_tool_returned_falls_back(chat_model_replying, search, catalog):
     # The Run Shoe (2) is in the catalog but not in this turn's evidence.
     search.results = [ScoredProduct(3, 0.9)]

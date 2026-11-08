@@ -46,10 +46,11 @@ from typing import Any
 
 from curio.engine.schemas import GroundingReport
 
-# "€24.99", "€ 24", "24.99 €", "24 EUR", "24.99 euros"
+# "€24.99", "€ 24", "EUR 24.99", "24.99 €", "24 EUR", "24.99 euros"
 # Signs are captured so "€-2.01" is checked (and rejected) rather than skipped.
 PRICE = re.compile(
-    r"€\s?([-\u2212]?\d{1,5}(?:[.,]\d{1,2})?)|([-\u2212]?\d{1,5}(?:[.,]\d{1,2})?)\s?(?:€|eur\b|euros?\b)",
+    r"(?:€|\beur(?![a-z]))\s?([-\u2212]?\d{1,5}(?:[.,]\d{1,2})?)"
+    r"|([-\u2212]?\d{1,5}(?:[.,]\d{1,2})?)\s?(?:€|eur\b|euros?\b)",
     re.IGNORECASE,
 )
 _NUMBER = re.compile(r"\d{1,5}(?:[.,]\d{1,2})?")

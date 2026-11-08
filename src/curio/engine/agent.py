@@ -337,7 +337,7 @@ class AgentEngine[T]:
                         kind="guardrail",
                         name="Question grounding",
                         summary=(
-                            f"Found {len(report.issues)} unverified claims in a question; "
+                            f"Found {_claims(len(report.issues))} in a question; "
                             "asking for a rewrite."
                         ),
                         status="error",
@@ -513,7 +513,7 @@ class AgentEngine[T]:
             AgentStep(
                 kind="guardrail",
                 name="Grounding check",
-                summary=f"Found {len(report.issues)} unverified claims; asking for a rewrite.",
+                summary=f"Found {_claims(len(report.issues))}; asking for a rewrite.",
                 status="error",
                 detail={"issues": report.issues},
             ),
@@ -703,3 +703,8 @@ def _union[V](current: Sequence[V], added: Iterable[V], limit: int | None) -> li
 
 def _canonical_args(action: BaseModel) -> dict:
     return action.model_dump(mode="json", exclude_defaults=True)
+
+
+def _claims(count: int) -> str:
+    """ "1 unverified claim", "3 unverified claims"."""
+    return f"{count} unverified {'claim' if count == 1 else 'claims'}"

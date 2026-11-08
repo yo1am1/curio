@@ -60,6 +60,21 @@ def test_prices_bind_to_the_item_they_describe(text, status):
     assert prices(text).status == status
 
 
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [
+        ("The Summer Dress is EUR 19.99.", "fallback"),  # the re-audit's prefix form
+        ("The Summer Dress is EUR19.99.", "fallback"),
+        ("The Summer Dress is eur 24.99.", "verified"),
+        ("The Summer Dress is EUR 24.99 and the Slim Jeans EUR 29.99.", "verified"),
+        ("The Summer Dress is 24.99 EUR.", "verified"),  # the suffix form, as before
+    ],
+)
+def test_a_eur_prefix_is_a_price(text, status):
+    assert [claim.value for claim in euro_claims(text)] and prices(text).status == status
+    assert not euro_claims("A European classic, Europe 2020.")
+
+
 def test_amounts_the_tools_stated_without_an_item_may_stand_anywhere():
     text = "With the Summer Dress (€24.99) the total is €54.98, leaving €5.02."
     assert prices(text, free=[54.98, 5.02, 60.0]).status == "verified"
