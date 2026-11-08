@@ -16,7 +16,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from tests.e2e.conftest import DATA_DIR, results
+from tests.e2e.conftest import DATA_DIR, results, type_to_pick
 
 BOOKS_READY = (DATA_DIR / "books.parquet").exists() and (DATA_DIR / "cocktails.parquet").exists()
 
@@ -317,8 +317,7 @@ def test_connections_graph_opens_a_product(web):
 def test_search_recipes_with_filters(web):
     web.open("/drinks")
     box = web.page.get_by_role("combobox", name="Must include")
-    box.fill("Lime")
-    expect(web.page.get_by_role("option", name="Lime", exact=True)).to_be_visible()
+    type_to_pick(web, box, "Lime")
     box.press("Enter")
     box.press("Escape")
     web.page.get_by_role("radio", name="Alcohol-free").click()
@@ -340,8 +339,7 @@ def test_what_can_i_make(web):
     expect(web.page.get_by_text("Add at least one ingredient")).to_be_visible()
     box = web.page.get_by_role("combobox", name="Ingredients you have")
     for name in ("Gin", "Lime Juice", "Tonic Water"):
-        box.fill(name)
-        expect(web.page.get_by_role("option", name=name, exact=True)).to_be_visible()
+        type_to_pick(web, box, name)
         box.press("Enter")
     box.press("Escape")
     with web.page.expect_request(lambda r: r.url.endswith("/cocktails/pantry")) as request:
@@ -381,8 +379,7 @@ def test_book_pages_and_the_reading_list_cocktail(web):
     box = web.page.get_by_role("combobox", name="Books you loved")
     chosen = web.page.get_by_role("list", name="Chosen books you loved")
     expect(chosen.get_by_role("listitem")).to_have_count(1)
-    box.fill("The Hobbit")
-    expect(web.page.get_by_role("option").first).to_contain_text("The Hobbit")
+    type_to_pick(web, box, "The Hobbit")
     with web.page.expect_request(lambda r: r.url.endswith("/books/because")) as request:
         box.press("Enter")
     assert len(request.value.post_data_json["liked"]) == 2

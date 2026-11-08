@@ -374,6 +374,18 @@ def results(web: Web, title: str):
     return section
 
 
+def type_to_pick(web: Web, box, text: str, option: str | None = None) -> None:
+    """Type `text` into a combobox and wait until its ACTIVE option (the one Enter picks)
+    reads `option` (default `text`); the caller then presses Enter. Waiting for any option on
+    the page is not enough: a slow runner can press Enter before this list has rendered."""
+    import re
+
+    box.fill(text)
+    expect(box).to_have_attribute("aria-activedescendant", re.compile(r".+"))
+    active = web.page.locator(f"[id='{box.get_attribute('aria-activedescendant')}']")
+    expect(active).to_contain_text(option or text)
+
+
 @contextmanager
 def _driver(browser, url: str, artifacts: Path, **context) -> Iterator[Web]:
     context = browser.new_context(**({"viewport": {"width": 1440, "height": 1000}} | context))
