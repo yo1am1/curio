@@ -18,12 +18,13 @@ subclass it.
 The code has three layers, and `tests/test_architecture.py` enforces their boundaries:
 
 - `curio.engine`: the loop, the `Toolkit` protocol and `BaseToolkit`, policies and the shared `AskShopper`,
-  signed proposals (`ActionSigner`, `narrow_args`), the generic grounding machinery (price and
-  ID checks, name matching, `merge_reports`), the chat model factory and the wire models every
-  turn shares. It imports no domain and not the app.
+  signed proposals (`ActionSigner`, `narrow_args`), cite mode (`engine/facts.py`: fact
+  references, their rendering and the report), the generic grounding machinery of the
+  backstop (price and ID checks, name matching, `merge_reports`), the chat model factory and
+  the wire models every turn shares. It imports no domain and not the app.
 - `curio.domains.<name>`: a domain's catalog and recommenders beside its `agent/` package
-  (toolkit, tools, prompts, grounding check and session schemas: its context fields, card IDs
-  and approved effects). A domain imports the engine and itself; only the composed domains
+  (toolkit, tools, prompts, fact sheet (`facts.py`: the references it renders), grounding
+  check and session schemas: its context fields, card IDs and approved effects). A domain imports the engine and itself; only the composed domains
   build on others: `pairings` on `books` and `cocktails`, and `evening` on `fashion`,
   `books`, `cocktails` and `pairings`.
 - `curio.app`: settings, the domain registry and the API, which also serves the React web
@@ -38,7 +39,8 @@ engine, without the app.
 |---|---|---|---|---|
 | Toolkit | `domains/fashion/agent/` | `domains/cocktails/agent/` | `domains/books/agent/`; PairCocktail from `domains/pairings/agent/` | `domains/evening/agent/` |
 | Planning | Structured `SearchIntent` from the LLM, then an initial catalog search | The message is the query; no extra model call before the tool loop | As cocktails | As cocktails; the plan step lists the remembered tastes of every domain |
-| Grounding | Prices and colours bound to their product, totals, differences and budgets, product IDs and names, other currencies, percentages, stock, delivery and safety claims | Drink IDs and names, recipe amounts and ingredients bound to their drink, alcohol labels, allergen and health claims | Book IDs and titles, authors, ratings, page counts (and their totals) and years bound to their book; prices, store and age-safety claims; paired drinks as in cocktails | All of these, against the plan's parts |
+| Fact references | `{product:ID}`, `{price:ID}`, `{colour:ID}`, `{total:price:…}`, `{diff:price:…}` | `{drink:ID}`, `{alcohol:drink:ID}`, `{recipe:drink:ID}`, `{amount:drink:ID:Gin}` | `{book:ID}`, `{author:book:ID}`, `{rating:book:ID}`, `{year:book:ID}`, `{pages:book:ID}`, `{total:pages:…}`, `{diff:rating:…}`; a pairing's drinks as in cocktails | All of these, for the plan's parts |
+| Backstop grounding | Prices and colours bound to their product, totals, differences and budgets, product IDs and names, other currencies, percentages, stock, delivery and safety claims | Drink IDs and names, recipe amounts and ingredients bound to their drink, alcohol labels, allergen and health claims | Book IDs and titles, authors, ratings, page counts (and their totals) and years bound to their book; prices, store and age-safety claims; paired drinks as in cocktails | All of these, against the plan's parts |
 | Reply items | `products` | `cocktails` | `books`; a pairing's drinks in `cocktails` and `pairing` | The plan in `evening`; its pieces, book and drink in `products`, `books`, `cocktails` |
 
 The engine owns everything shared: the tool-call and time budgets, policy enforcement,
@@ -94,7 +96,7 @@ flowchart TD
     L -- APPROVE --> A{Auto-approve<br/>allowed?}
     A -- no --> H[Signed proposal: approve, narrow or decline]
     A -- yes --> X[Apply effect] --> L
-    L -- answer --> V[Grounding check: domain evidence]
+    L -- answer --> V[Render fact references,<br/>backstop check of typed values]
     V -- unverified --> C[One self-correction] --> V2{Verified?}
     V2 -- no --> F[Deterministic catalog facts]
     V -- verified --> D[Reply + trace + suggestions]
@@ -310,14 +312,84 @@ one worker.
 
 ## Grounding guardrail
 
-Grounding checks the facts an answer states against what this turn's tools returned. It is
+Grounding has two parts. **Cite mode** is the main one: the model does not type catalog
+facts, it refers to them, and the server renders the catalog's values, so a fact stated this
+way is correct by construction. **The backstop** is the free-text check below, which still
+reads every value the model types itself. Every catalog fact the agent states through a fact
+reference (prices, ratings, authors, years, pages, recipe amounts, alcohol labels, totals) is
+rendered by the server from the catalog. Values the model types itself are checked by a
+best-effort backstop (blind test: 80% of false facts caught, 25% of correct answers flagged).
+
+### Cite mode: fact references
+
+Every answer prompt asks the model to state catalog facts only through references, to
+compute totals and differences with the computed references, and never to type a price,
+colour, rating, author, year, page count, recipe amount or alcohol label itself
+(`cite_rules` in `engine/facts.py` words the rule; each domain's `facts.py` lists its
+references). The grammar is one brace-delimited form:
+
+| Reference | Renders | Example |
+|---|---|---|
+| `{KIND:ID}` | The item's name, in bold (not bolded twice inside `**…**`) | `{product:843614008}` → **Basquiat blazer**; `{book:3}`, `{drink:12}` |
+| `{ATTRIBUTE:ID}` or `{ATTRIBUTE:KIND:ID}` | One catalog value; the kind is optional, since every attribute belongs to one | `{price:843614008}` → €39.99; `{colour:…}`; `{rating:book:3}` → 4.25; `{author:book:3}` (the first listed author); `{year:book:3}`; `{pages:book:3}` → 366; `{alcohol:drink:12}` → the catalog's label; `{recipe:drink:12}` → every ingredient with its measure |
+| `{ATTRIBUTE:KIND:ID:ARGUMENT}` | A value that takes an argument | `{amount:drink:12:Gin}` → the recipe's measure for gin |
+| `{total:ATTRIBUTE:ID,ID,…}` | The sum of two or more items' values, computed by the server | `{total:price:843614008,906741002}` → €79.98; `{total:pages:3,5}` |
+| `{diff:ATTRIBUTE:ID,ID}` | The difference of two (larger minus smaller) | `{diff:price:…}`, `{diff:rating:3,5}` → 0.17, `{diff:pages:…}`, `{diff:year:…}` |
+
+Names are case-insensitive, spaces around ":" and "," are ignored and an ID may carry a
+"#". A word followed by a colon between braces is always read as a reference, so a mistyped
+one is caught rather than shown. Parsing is one regular expression and a split on ":".
+
+**Resolution uses only this turn's evidence.** A toolkit's `facts(turn)` returns a
+`FactSheet`: its item kinds (with the items it may cite, by ID) and its attributes. The
+items are exactly the evidence its backstop check accepts: what this turn's tools returned
+plus the cards the client carried that the existing code already treats as evidence (the
+history's cards, the shortlist or reading list, the current outfit or evening plan); a
+book turn adds the drinks its pairings returned, an evening the drinks of its plans. An
+unknown kind or attribute, an item no tool returned, a value the item lacks (a book without
+a year, an ingredient not in the recipe or listed without a measure) or a malformed
+reference is a verification failure, listed in the report's issues: one rewrite, then the
+fallback, as for any unverified claim.
+
+**Rendering happens on the server, before anything leaves it.** The engine renders every
+text it sends: the answer and its rewrite, the catalog-facts fallback (which now states its
+facts through references too), every AskShopper question and quick reply and the trace step
+that shows them. `/chat` and the final `reply` event of `/chat/stream` carry the same
+rendered text; the stream has no partial text events (steps carry server-written summaries,
+never the model's draft), so no reference reaches the client. A reference that fails is
+dropped from the text as well as reported.
+
+**Rendered spans are trusted.** `render` returns the client's text and a copy for the
+backstop in which every rendered value is masked (a character no check reads) while item
+names stay, so a value the model typed next to a cited item still binds to it.
+`checked_report` runs the domain check on that copy and subtracts what the rendered names
+alone account for, so the backstop never counts or flags a rendered span; it reads only
+what the model typed. This removes the main source of false alarms by construction: binding
+a number to the wrong item in a sentence that names several ("Next to the **Run Shoe**, the
+**Summer Dress** costs €24.99 and the jeans €29.99" is a false alarm when typed, and
+verified when the three facts are references).
+
+### Why the design changed
+
+The free-text check was measured on three blind held-out sets (below): recall 0.846 and
+false alarms 0.171 on v1, 0.902 / 0.184 on v2, and 0.800 / 0.250 on v3, written fresh and
+scored once. Each version scored 1.0 / 0.0 on the sets it had been tuned on and then
+dropped on the next blind one: rule tuning overfits to the wordings it has seen. Many of the
+false alarms were correct answers whose number was bound to the wrong item of a sentence
+that names several. More rules would move the numbers on the next set, not fix the cause, so
+the owner chose a deterministic design: the facts the model states come from the catalog by
+construction, and the free-text check stays as a best-effort backstop for anything the model
+still types as a raw value. Its rules were left as they were, and v3 was not used to tune
+it.
+
+### The backstop: what is checked
+
+The backstop checks the facts an answer types against what this turn's tools returned. It is
 a deterministic check, not a model: regular expressions find the facts, and each fact is
 tied to the item it is about before it is compared. The engine's part (`curio.engine.grounding`)
 knows no domain: items, references, binding, number framing, names, labels and the report.
 Each domain supplies its vocabulary: how answers cite its items, which numbers its items
 carry, which labels matter and which claims no data can support.
-
-### What is checked
 
 **Facts are bound to items.** An item is referenced by its citation (`[id 3]`, `product #12`,
 `book #31`, `drink #107`) or its name (a product's display or raw name, a book's title or
@@ -433,8 +505,8 @@ Figgy Thyme → Masala Chai") is the tool's own.
 
 ### Questions, repair and fallback
 
-The final answer, every `AskShopper` question and its quick replies are checked the same
-way (each quick reply reads as a question of its own). An unverified answer gets one
+The final answer, every `AskShopper` question and its quick replies are rendered and checked
+the same way (each quick reply reads as a question of its own). An unverified answer gets one
 rewrite request listing the issues; if the rewrite still fails, or tries to call tools, the
 reply falls back to a deterministic list of catalog facts. An unverified question goes back
 to the model as a tool error (it may ask again or answer); a second unverified question is
@@ -444,18 +516,30 @@ as "Empty answer"), is checked too, so its report says what it states.
 
 ### The report and the badge
 
-`GroundingReport.status` is `verified` only when at least one fact was checked and all
-matched; `not_applicable` when the answer stated nothing checkable; `repaired` when the
-rewrite passed; `fallback` when catalog facts replaced the answer. `checked` counts the
-facts of the first check and `counts` splits them by kind (`price`, `id`, `rating`, `title`,
-`name`, `author`, `amount`, `alcohol`, `pages`, `year`, `percent`, `colour`, `ingredient`,
-`claim`; `fact` for toolkits that do not split them). The trace's "Grounding check" step and the UI badge say
-what was checked: "Checked 3 prices and 2 names against the catalog" (three kinds at most,
-then "N other facts"). Nothing is shown for `not_applicable`. "Self-corrected to match the
-catalog" and "Unverified answer replaced with catalog facts" keep their labels; their
-tooltip says how many claims did not match.
+`GroundingReport.status` is `verified` when at least one fact was rendered or checked and
+nothing failed; `not_applicable` when the answer stated nothing; `repaired` when the
+rewrite passed; `fallback` when catalog facts replaced the answer. `rendered` (new, and
+absent from older servers) counts the facts the server rendered in the text the client
+shows, by kind (`name`, `price`, `colour`, `rating`, `author`, `year`, `pages`, `alcohol`,
+`recipe`, `amount`, `total`, `diff`). `checked` counts the typed values of the first draft
+that the backstop covered and `counts` splits them by kind (`price`, `id`, `rating`,
+`title`, `name`, `author`, `amount`, `alcohol`, `pages`, `year`, `percent`, `colour`,
+`ingredient`, `claim`; `fact` for toolkits that do not split them). The trace's "Grounding
+check" step says both ("Rendered 2 names, 2 prices and 1 total from the catalog; checked 1
+price against the catalog"). The UI badge says "5 facts from the catalog · 1 checked", with
+the kinds of each in its tooltip; a report without rendered facts keeps "Checked 3 prices
+and 2 names against the catalog" (three kinds at most, then "N other facts"). Nothing is
+shown for `not_applicable`. "Self-corrected to match the catalog" and "Unverified answer
+replaced with catalog facts" keep their labels; their tooltip says how many claims did not
+match and what the shown text renders.
 
 ### Measured
+
+The figures in this section measure the backstop on typed text; rendered facts need no
+estimate. `tests/agents/test_fact_references.py` checks the rendering itself: rendered
+values equal the catalog's for random items of the prepared catalogs (property tests),
+unknown references and references to items outside the turn's evidence fail, and computed
+totals and differences add up.
 
 `tests/agents/grounding_corpus/corpus.json` is a labelled corpus; `test_grounding_corpus.py`
 gates it (recall at least 0.95 on false answers, false alarms at most 0.05 on correct ones)
@@ -505,6 +589,29 @@ data and only a regression floor (`test_grounding_heldout.py`).
 | **v2 (100 answers), blind, grounding v2.1** | **46 of 51 (recall 0.902)** | **9 of 49 (false-alarm rate 0.184)** |
 | v2, grounding v2.2, after development use, no longer blind | 51 of 51 (1.000) | 0 of 49 (0.000) |
 | v1, grounding v2.2 (no longer blind) | 39 of 39 (1.000) | 0 of 41 (0.000) |
+| **v3 (120 answers), blind, grounding v2.2, scored once** | **48 of 60 (recall 0.800)** | **15 of 60 (false-alarm rate 0.250)** |
+
+Summary of the blind results (each set measured once, before any fix on it):
+
+| Set | Check version | Recall (false answers caught) | False-alarm rate (correct answers flagged) |
+|---|---|---|---|
+| v1 | v2 | 0.846 | 0.171 |
+| v2 | v2.1 | 0.902 | 0.184 |
+| v3 | v2.2 | **0.800** | **0.250** |
+| v1, v2 after development (not estimates) | v2.2 | 1.000 | 0.000 |
+
+**v3** (`grounding_heldout/v3.json`, 40 answers per domain) is the number to quote for the
+backstop. Its twelve misses were unhedged safety and health claims ("perfectly safe for a
+3-month-old", "helps prevent back pain"), a confirmed wrong total ("about €50" for €54.98),
+ingredients swapped for near-synonyms (Cointreau for triple sec, light for dark rum), a
+wrong author and a wrong co-author, two wrong years, a page count that belongs to another
+book, a wrong rating difference and a book said to lift depression. Thirteen of its
+fifteen false alarms were correct numbers (prices, ratings, recipe amounts, a year, a page
+count) bound to the wrong item of a sentence that names several, or to none; the other two
+were a label read as a name ("Option B") and an ingredient misread. It was not used for development: its regression floor
+(`test_grounding_heldout.py`) is its blind result, and the check's rules are unchanged.
+Cite mode answers it by construction rather than by more rules (see "Why the design
+changed").
 
 **v1.** The seven false alarms were all arithmetic (a total, a difference or the shopper's
 "over €50" reported as an item's wrong price); the six misses were a colour, a
@@ -542,8 +649,7 @@ Batch 2 found "add up to 1,237 pages" read as a limit ("up to"), "with or withou
 read as alcohol-free, and "settles an upset stomach". Each was fixed by category. Even
 written by someone who knew the rules, fresh wordings missed 5–15% of false answers and
 flagged 8–9% of correct ones, so the published figure must come from a set the check has not
-seen: **a third blind set (v3) is being written, and its blind result is the number to
-quote.**
+seen: v3, above.
 
 ### Trade-offs chosen in v2.2
 
@@ -646,10 +752,16 @@ actions. Gaps addressed here:
   with no theme word becomes a cosy evening. The outfit, book and drink are chosen one after
   the other (the drink from the book), not jointly, and nothing checks that the outfit's
   colours suit the book or drink.
-- The grounding check verifies prices, IDs, names, titles, authors, ratings, page counts,
-  years, recipe amounts, ingredients, colours and alcohol labels, each bound to its item, and
-  totals and differences of them, and reports safety, stock and foreign-currency claims; it
-  does not verify other descriptive claims (see "Grounding guardrail").
+- Facts stated through fact references (names, prices, colours, ratings, authors, years,
+  pages, alcohol labels, recipes and amounts, totals and differences) are rendered from the
+  catalog. Values the model types itself go to the best-effort backstop (blind v3: 80% of
+  false facts caught, 25% of correct answers flagged), which verifies prices, IDs, names,
+  titles, authors, ratings, page counts, years, recipe amounts, ingredients, colours and
+  alcohol labels, each bound to its item, and reports safety, stock and foreign-currency
+  claims. Prose claims ("cosy", "good for a cold") are not facts a reference can render; the
+  backstop catches some of them, and other descriptive claims are not verified (see
+  "Grounding guardrail"). Whether a real model writes references reliably is measured by
+  the [agent evaluation](agent-eval.md), not yet with a real model.
 - A book title that is a single short word ("Dune") is checked only when the answer marks
   it (bold, italic or quoted); one that is also a common word ("It") never is, so the agent
   could name such a book without evidence.

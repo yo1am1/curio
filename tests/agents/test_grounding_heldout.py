@@ -17,6 +17,8 @@ written fresh and scored once, blind, on v2.2 (tuned on v1 and v2, where it scor
 it caught 48 of the 60 false answers (recall 0.800) and flagged 15 of the 60 correct ones
 (false alarms 0.250). That is the number to quote for the free-text check. v3 was not used to
 tune the check: its floor is its blind result, and the check's rules were left as they were.
+Answers now state catalog facts through fact references the server renders (cite mode,
+`curio.engine.facts`); this check is the backstop for values the model still types.
 """
 
 from pathlib import Path

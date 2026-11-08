@@ -61,16 +61,18 @@ The second and third domains forced the engine to generalise:
   one. You cannot widen it, move it to another domain or session, or answer it twice.
   Auto-approval is the shopper's own setting, held by their client: the signature stops the
   model from approving itself, not the client from opting in.
-- **Grounding.** Prices, ratings, page counts, years and recipe amounts are checked
-  against the item they are attached to, not against any number the tools returned.
-  Product, book and drink names (including bold names outside the catalog), IDs, authors
-  and alcohol labels are checked too, a number the shopper typed counts only as their own
-  budget or limit, and allergen, health, stock and foreign-currency claims are reported.
-  Clarifying questions are checked like answers. A failed check gets one self-correction,
-  then a deterministic fallback built from catalog facts. On the last blind held-out set
-  (100 answers) it caught 46 of 51 false answers and flagged 9 of 49 correct ones; a third
-  blind set is being written for the current version. Genres and descriptions are not
-  checked ([details](docs/agent-architecture.md#grounding-guardrail)).
+- **Grounding: cite mode.** Every catalog fact the agent states through a fact reference
+  (prices, ratings, authors, years, pages, recipe amounts, alcohol labels, totals) is
+  rendered by the server from the catalog. Values the model types itself are checked by a
+  best-effort backstop (blind test: 80% of false facts caught, 25% of correct answers
+  flagged). The model writes `{price:843614008}` or `{total:price:843614008,906741002}`, and
+  the server replaces it with the value of an item this turn's tools returned; a reference
+  to anything else fails, gets one self-correction, then a deterministic fallback built from
+  catalog facts. Questions, quick replies and fallbacks are rendered the same way, and no
+  reference reaches the client. Limitation: prose claims ("cosy", "good for a cold") are not
+  facts that can be rendered; the backstop catches some of them (allergen, health, stock and
+  foreign-currency claims), and genres and descriptions are not checked
+  ([details](docs/agent-architecture.md#grounding-guardrail)).
 - **Budgets and streaming.** A turn allows five tool calls and 90 seconds. Every step
   streams to the web app as NDJSON, so you see what the agent did.
 - **Stateless server.** The client holds the shortlist, memory and outfit. Client-held text
@@ -271,7 +273,7 @@ Books use TF-IDF search and item-item collaborative filtering on goodbooks-10k r
 Cocktails, books and the pairing need no model and no network call to serve. Every dataset
 is downloaded from a pinned commit and checked by SHA-256.
 
-Tests: about 1,860 offline Python tests, 63 Vitest tests of the web app, and 85 end-to-end
+Tests: about 2,090 offline Python tests, 77 Vitest tests of the web app, and 85 end-to-end
 tests that run the real API and the React app in Chromium on the real data, with a scripted
 LLM. An [agent evaluation](docs/agent-eval.md)
 measures a real model instead: 61 tasks over the four domains, scored on tool choice,

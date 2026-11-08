@@ -29,7 +29,7 @@ import sys
 import threading
 import time
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, datetime
@@ -538,6 +538,7 @@ def report(summary: dict, records: list[dict], tasks: list[Task]) -> str:
         f"Latency: {s['latency_seconds']['note']}",
         "",
         *comparison(s, s.get("comparison") or {}),
+        *cite_mode(records),
         "## By domain and category",
         "",
         "| Group | Passed |",
@@ -578,6 +579,63 @@ def report(summary: dict, records: list[dict], tasks: list[Task]) -> str:
             note = entry.get("note") or "no note"
             lines.append(f"- {entry.get('at')}: {changed}; {note}")
     return "\n".join(lines) + "\n"
+
+
+def fact_counts(records: list[dict]) -> dict[str, Any]:
+    """Cite mode in a run: over every reply, the facts the server rendered from fact
+    references and the values the model typed that the backstop checked, by kind. Read from
+    the replies' grounding reports; replies from servers before cite mode have no
+    `rendered`. Not a scored metric: the frozen scorer does not read it."""
+    rendered: Counter[str] = Counter()
+    typed: Counter[str] = Counter()
+    replies = citing = typing = 0
+    for record in records:
+        for turn in record.get("turns") or []:
+            grounding = (turn.get("reply") or {}).get("grounding") or {}
+            if not grounding:
+                continue
+            replies += 1
+            facts = {k: v for k, v in (grounding.get("rendered") or {}).items() if v}
+            checked = {k: v for k, v in (grounding.get("counts") or {}).items() if v}
+            rendered.update(facts)
+            typed.update(checked)
+            citing += bool(facts)
+            typing += bool(checked)
+    return {
+        "replies": replies,
+        "replies_with_rendered_facts": citing,
+        "replies_with_typed_checked_values": typing,
+        "rendered": dict(rendered.most_common()),
+        "typed_checked": dict(typed.most_common()),
+    }
+
+
+def cite_mode(records: list[dict]) -> list[str]:
+    """The report's section on fact references versus values the model typed."""
+    facts = fact_counts(records)
+    if not facts["replies"]:
+        return []
+    rendered = sum(facts["rendered"].values())
+    typed = sum(facts["typed_checked"].values())
+    return [
+        "## Cite mode: references versus typed values",
+        "",
+        "Facts the server rendered from the model's fact references are correct by "
+        "construction; values the model typed itself went to the best-effort backstop. Not "
+        "scored: the frozen scorer reads only the backstop's `counts` (`checked_facts`).",
+        "",
+        "| | Replies | Facts |",
+        "|---|---|---|",
+        f"| Rendered from references | {facts['replies_with_rendered_facts']}/"
+        f"{facts['replies']} | {rendered} {_kinds(facts['rendered'])} |",
+        f"| Typed, checked by the backstop | {facts['replies_with_typed_checked_values']}/"
+        f"{facts['replies']} | {typed} {_kinds(facts['typed_checked'])} |",
+        "",
+    ]
+
+
+def _kinds(counts: dict[str, int]) -> str:
+    return "(" + ", ".join(f"{kind} {n}" for kind, n in counts.items()) + ")" if counts else ""
 
 
 def _cell(text: str) -> str:

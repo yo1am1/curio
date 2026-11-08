@@ -256,3 +256,31 @@ def test_a_relay_token_is_sent_as_the_api_key(monkeypatch, isolated_process_stat
     monkeypatch.setenv("RELAY_TOKEN", "s3cret")
     configure_environment(args, {"cocktails"})
     assert os.environ["LLM_API_KEY"] == "s3cret"
+
+
+def test_the_report_counts_rendered_facts_apart_from_typed_ones():
+    from evals.run_eval import cite_mode, fact_counts
+
+    def record(*groundings):
+        return {"turns": [{"reply": {"grounding": g}} for g in groundings]}
+
+    records = [
+        record(
+            {"status": "verified", "rendered": {"name": 2, "price": 2}, "counts": {}},
+            {"status": "verified", "checked": 1, "counts": {"price": 1}},  # an older server
+        ),
+        record({"status": "repaired", "rendered": {"total": 1}, "counts": {"rating": 1}}),
+        {"turns": [{"reply": {"text": "no report"}}, {"reply": None}]},
+    ]
+    facts = fact_counts(records)
+    assert facts == {
+        "replies": 3,
+        "replies_with_rendered_facts": 2,
+        "replies_with_typed_checked_values": 2,
+        "rendered": {"name": 2, "price": 2, "total": 1},
+        "typed_checked": {"price": 1, "rating": 1},
+    }
+    lines = cite_mode(records)
+    assert "| Rendered from references | 2/3 | 5 (name 2, price 2, total 1) |" in lines
+    assert "| Typed, checked by the backstop | 2/3 | 2 (price 1, rating 1) |" in lines
+    assert cite_mode([]) == []

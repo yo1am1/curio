@@ -6,7 +6,47 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Grounding: cite mode.** Every catalog fact the agent states through a fact reference
+  (prices, ratings, authors, years, pages, recipe amounts, alcohol labels, totals) is
+  rendered by the server from the catalog. Values the model types itself are checked by a
+  best-effort backstop (blind test: 80% of false facts caught, 25% of correct answers
+  flagged). The model writes `{product:ID}`, `{price:ID}`, `{colour:ID}`,
+  `{rating:book:ID}`, `{author:book:ID}`, `{year:book:ID}`, `{pages:book:ID}`,
+  `{alcohol:drink:ID}`, `{recipe:drink:ID}`, `{amount:drink:ID:Gin}`,
+  `{total:price:ID,ID}` or `{diff:rating:ID,ID}`; the engine (`curio.engine.facts`)
+  renders each from the items this turn's tools returned, through a `FactSheet` each domain
+  supplies (`facts.py`). A reference to anything else fails verification: one rewrite, then
+  the fallback. Answers, rewrites, fallbacks, AskShopper questions and quick replies are
+  rendered on the server, for `/chat` and `/chat/stream` alike; no reference reaches the
+  client. Every answer prompt asks for references and computed totals. Prose claims
+  ("cosy", "good for a cold") are not facts that can be rendered; the backstop catches some
+  of them. Why: rule tuning overfit (blind v1 0.846 / 0.171, v2 0.902 / 0.184, v3 0.800 /
+  0.250), and many false alarms were numbers bound to the wrong item of a sentence that
+  names several, which rendered facts cannot be.
+- The free-text grounding check is now the backstop: it runs on a copy of the answer with
+  the rendered values masked and never counts or flags rendered spans. Its rules are
+  unchanged.
+- The catalog-facts fallbacks state their facts through references, so item names in them
+  are now bold.
+
 ### Added
+
+- `GroundingReport.rendered`: the facts rendered from references, by kind (`name`, `price`,
+  `colour`, `rating`, `author`, `year`, `pages`, `alcohol`, `recipe`, `amount`, `total`,
+  `diff`), next to the backstop's `checked` and `counts`. Optional, so older clients and
+  servers keep working. The badge says "5 facts from the catalog · 1 checked", with each
+  part's kinds in its tooltip; a report without rendered facts keeps "Checked 3 prices and
+  2 names against the catalog".
+- **Held-out v3** (`tests/agents/grounding_heldout/v3.json`, 120 answers, 40 per domain),
+  scored once, blind, on grounding v2.2: 48 of 60 false answers caught (recall 0.800), 15 of
+  60 correct ones flagged (0.250). Its regression floor is that blind result; the check was
+  not tuned on it.
+- Eval reports have a "Cite mode" section: facts rendered from references against values
+  typed and checked by the backstop, by kind. Not scored; the frozen files are unchanged.
+- The scripted end-to-end model cites facts through references, and keeps raw values where
+  the backstop should run (its deliberate inventions, an outfit's budget, "drink #N").
 
 - **Agent evaluation: control policies.** `python -m evals.controls --policy always-ask |
   always-refuse | first-tool-echo` answers relay requests with a policy that does nothing
