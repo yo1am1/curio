@@ -3684,6 +3684,13 @@
             },
             "type": "object",
             "title": "Counts"
+          },
+          "rendered": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Rendered"
           }
         },
         "type": "object",
@@ -3691,7 +3698,7 @@
           "status"
         ],
         "title": "GroundingReport",
-        "description": "Result of checking an answer's claims against tool evidence.\n\n`verified`: at least one fact was checked and every one matched. `not_applicable`:\nnothing checkable was found. `repaired`: the first draft failed and the rewrite passed.\n`fallback`: the answer was replaced by catalog facts. `checked` counts the facts the\nfirst check covered and `counts` splits them by kind (\"price\", \"id\", \"rating\", \"title\",\n\"name\", \"author\", \"amount\", \"alcohol\", \"pages\", \"year\", \"claim\", \"fact\")."
+        "description": "Result of checking an answer's claims against tool evidence.\n\n`verified`: at least one fact was rendered or checked and nothing failed.\n`not_applicable`: nothing was rendered or checkable. `repaired`: the first draft failed\nand the rewrite passed. `fallback`: the answer was replaced by catalog facts.\n\n`rendered` counts the facts the server rendered from fact references in the text the\nclient shows, by kind (\"name\", \"price\", \"colour\", \"rating\", \"author\", \"year\", \"pages\",\n\"alcohol\", \"recipe\", \"amount\", \"total\", \"diff\"): correct by construction. `checked`\ncounts the values the model typed itself that the backstop check covered in the first\ndraft, and `counts` splits them by kind (\"price\", \"id\", \"rating\", \"title\", \"name\",\n\"author\", \"amount\", \"alcohol\", \"pages\", \"year\", \"claim\", \"fact\"). Servers before cite\nmode send no `rendered`."
       },
       "HTTPValidationError": {
         "properties": {

@@ -267,7 +267,7 @@ def test_tool_budget_is_shared_with_the_fashion_agent(chat_model_replying, cockt
     )
     reply = build(chat_model_replying(batch), cocktail_catalog).reply("Mojitos", [])
     assert reply.steps[-1].name == "Tool budget"
-    assert reply.text.startswith("Here are the drinks I could confirm:\n- Mojito")
+    assert reply.text.startswith("Here are the drinks I could confirm:\n- **Mojito**")
     assert reply.text.endswith("Please drink responsibly.")
 
 
@@ -466,8 +466,8 @@ def test_invented_measure_falls_back_to_recipe_facts(chat_model_replying, cockta
     ]
     assert reply.text == (
         "Here are the drinks I could confirm:\n"
-        "- Mojito · contains alcohol · Highball glass\n"
-        "- Virgin Mojito · alcohol-free · Highball glass\n\n"
+        "- **Mojito** · contains alcohol · Highball glass\n"
+        "- **Virgin Mojito** · alcohol-free · Highball glass\n\n"
         "Please drink responsibly."
     )
 

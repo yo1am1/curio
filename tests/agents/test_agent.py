@@ -300,7 +300,7 @@ def test_unrepairable_answer_falls_back_to_catalog_facts(chat_model_replying, se
     model = chat_model_replying({"query": "jeans"}, "Only €5 today!", "Still €5, product #123456.")
     reply = build(model, search, catalog).reply("jeans", [])
     assert reply.grounding.status == "fallback"
-    assert "Slim Jeans · Blue · €29.99" in reply.text
+    assert "**Slim Jeans** · Blue · €29.99" in reply.text
 
 
 def test_turn_deadline_stops_before_another_model_call(chat_model_replying, search, catalog):
@@ -379,10 +379,12 @@ def test_an_empty_answer_falls_back_to_checked_catalog_facts(chat_model_replying
     model = chat_model_replying({"query": "jeans"}, "")
     reply = build(model, search, catalog).reply("jeans", [])
     assert reply.steps[-1].name == "Empty answer" and reply.steps[-1].status == "blocked"
-    assert "Slim Jeans · Blue · €29.99" in reply.text
-    # The fallback is checked like an answer, so its report says what it states.
+    assert "**Slim Jeans** · Blue · €29.99" in reply.text
+    # The fallback states its facts through references, so its report says what it rendered;
+    # nothing was typed for the backstop to check.
     assert reply.grounding.status == "verified"
-    assert reply.grounding.counts == {"price": 1, "colour": 1}
+    assert reply.grounding.rendered == {"name": 1, "colour": 1, "price": 1}
+    assert reply.grounding.counts == {} and reply.grounding.checked == 0
 
 
 def test_a_fallback_with_nothing_checkable_is_not_applicable(chat_model_replying, search, catalog):

@@ -1460,11 +1460,17 @@ export interface components {
      * GroundingReport
      * @description Result of checking an answer's claims against tool evidence.
      *
-     *     `verified`: at least one fact was checked and every one matched. `not_applicable`:
-     *     nothing checkable was found. `repaired`: the first draft failed and the rewrite passed.
-     *     `fallback`: the answer was replaced by catalog facts. `checked` counts the facts the
-     *     first check covered and `counts` splits them by kind ("price", "id", "rating", "title",
-     *     "name", "author", "amount", "alcohol", "pages", "year", "claim", "fact").
+     *     `verified`: at least one fact was rendered or checked and nothing failed.
+     *     `not_applicable`: nothing was rendered or checkable. `repaired`: the first draft failed
+     *     and the rewrite passed. `fallback`: the answer was replaced by catalog facts.
+     *
+     *     `rendered` counts the facts the server rendered from fact references in the text the
+     *     client shows, by kind ("name", "price", "colour", "rating", "author", "year", "pages",
+     *     "alcohol", "recipe", "amount", "total", "diff"): correct by construction. `checked`
+     *     counts the values the model typed itself that the backstop check covered in the first
+     *     draft, and `counts` splits them by kind ("price", "id", "rating", "title", "name",
+     *     "author", "amount", "alcohol", "pages", "year", "claim", "fact"). Servers before cite
+     *     mode send no `rendered`.
      */
     GroundingReport: {
       /**
@@ -1481,6 +1487,10 @@ export interface components {
       issues?: string[];
       /** Counts */
       counts?: {
+        [key: string]: number;
+      };
+      /** Rendered */
+      rendered?: {
         [key: string]: number;
       };
     };

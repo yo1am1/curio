@@ -4,7 +4,16 @@ from collections.abc import Sequence
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
-from curio.domains.cocktails.models import OPTIONAL_ALCOHOL, Cocktail
+from curio.domains.cocktails.agent.facts import DRINK_REFERENCES, alcohol_label
+from curio.domains.cocktails.models import Cocktail
+from curio.engine.facts import cite_rules
+
+__all__ = [
+    "COCKTAIL_ANSWER_PROMPT",
+    "COCKTAIL_REPAIR_INSTRUCTION",
+    "alcohol_label",
+    "render_cocktails",
+]
 
 COCKTAIL_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
     [
@@ -13,10 +22,9 @@ COCKTAIL_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
             "You are Curio, a friendly and concise drinks assistant for a cocktail recipe "
             "catalog. Recommend only drinks supplied below or returned by tools; the latest "
             "tool result replaces earlier matches. Never invent drinks, ingredients, amounts or "
-            "steps, and quote ingredient amounts exactly as the recipe lists them. For each "
-            "recommended drink give its name, its alcohol status (contains alcohol, alcohol-free "
-            "or alcohol optional) and a short reason based on its recipe or tool evidence, "
-            "formatted in markdown. Give each amount next to the drink it belongs to.\n"
+            "steps. For each recommended drink give its name, its alcohol status and a short "
+            "reason based on its recipe or tool evidence, formatted in markdown.\n"
+            "Facts: {facts}\n"
             "Tools: SearchCocktails finds drinks by description, required ingredients, alcohol "
             "and category. InspectCocktails reads full recipes with amounts and method for "
             "referenced IDs. SimilarCocktails finds drinks sharing ingredients with one drink. "
@@ -43,19 +51,20 @@ COCKTAIL_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
         MessagesPlaceholder("history"),
         ("human", "{message}"),
     ]
+).partial(
+    facts=cite_rules(
+        DRINK_REFERENCES,
+        "- {drink:17222} ({alcohol:drink:17222}): bright and sour, with "
+        "{amount:drink:17222:Lime juice} of lime juice. You'll need {recipe:drink:17222}.",
+        computed=False,
+    )
 )
 
 COCKTAIL_REPAIR_INSTRUCTION = (
-    "Verification failed for your draft: {issues}. Rewrite the answer using only drink names, "
-    "IDs, alcohol labels and ingredient amounts from the tool results and drink list, each "
-    "amount next to its drink. Do not call tools."
+    "Verification failed for your draft: {issues}. Rewrite the answer stating drink names, "
+    "alcohol labels, recipes and amounts only through fact references to drinks in the tool "
+    "results and drink list. Do not call tools."
 )
-
-
-def alcohol_label(cocktail: Cocktail) -> str:
-    if cocktail.alcoholic == OPTIONAL_ALCOHOL:
-        return "alcohol optional"
-    return "alcohol-free" if cocktail.alcohol_free else "contains alcohol"
 
 
 def render_cocktails(

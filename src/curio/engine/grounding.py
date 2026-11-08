@@ -148,6 +148,10 @@ KIND_NOUNS = {
     "ingredient": ("ingredient", "ingredients"),
     "claim": ("claim", "claims"),
     "fact": ("fact", "facts"),
+    # Rendered by cite mode (`curio.engine.facts`) only.
+    "recipe": ("recipe", "recipes"),
+    "total": ("total", "totals"),
+    "diff": ("difference", "differences"),
 }
 
 

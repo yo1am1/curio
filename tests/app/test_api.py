@@ -370,6 +370,28 @@ def test_chat_stream_sends_steps_then_reply(services):
     assert events[-1]["reply"]["text"] == "Hello!"
 
 
+def test_chat_and_stream_render_fact_references(services):
+    from curio.engine.facts import REFERENCE
+
+    product = next(iter(services.fashion.catalog))
+    pid = product.product_id
+    answer = {"content": f"Saved for later: {{product:{pid}}} at {{price:{pid}}}."}
+    request = {"message": "what did I save?", "shortlist": [pid]}
+    expected = f"Saved for later: **{product.display_name}** at €{product.price:.2f}."
+    agent = _agent_services(services, _intent(wants_products=False), answer)
+    with TestClient(create_app(agent)) as client:
+        reply = client.post("/chat", json=request).json()
+    assert reply["text"] == expected
+    assert reply["grounding"]["rendered"] == {"name": 1, "price": 1}
+    agent = _agent_services(services, _intent(wants_products=False), answer)
+    with TestClient(create_app(agent)) as client:
+        response = client.post("/chat/stream", json=request)
+    events = [json.loads(line) for line in response.text.splitlines()]
+    assert events[-1]["type"] == "reply" and events[-1]["reply"]["text"] == expected
+    # No raw reference anywhere in the stream: not in steps, not in the reply.
+    assert not any(match.group(2) for match in REFERENCE.finditer(response.text))
+
+
 def test_chat_stream_reports_provider_errors_as_safe_events(services):
     with TestClient(
         create_app(with_fashion(services, assistant=BrokenStreamAssistant()))

@@ -4,8 +4,10 @@ from collections.abc import Sequence
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
+from curio.domains.fashion.agent.facts import PRODUCT_REFERENCES
 from curio.domains.fashion.models import Product
 from curio.domains.fashion.outfits import Outfit
+from curio.engine.facts import cite_rules
 
 INTENT_PROMPT = ChatPromptTemplate.from_messages(
     [
@@ -37,10 +39,11 @@ ANSWER_PROMPT = ChatPromptTemplate.from_messages(
             "You are Curio, a friendly and concise fashion shopping assistant. "
             "Recommend only catalog products supplied below or returned by tools; the latest "
             "search replaces earlier matches. Never invent products, prices "
-            "or details. For each recommended product give its name, colour and price in "
-            "euros, plus a short reason based on its description or tool evidence, formatted "
-            "in markdown. Put each price right after the name of the product it belongs to, "
-            "and never confirm a price the shopper states unless the catalog shows it.\n"
+            "or details. For each recommended product give its name, colour and price, plus "
+            "a short reason based on its description or tool evidence, formatted in "
+            "markdown, and never confirm a price the shopper states unless the catalog shows "
+            "it.\n"
+            "Facts: {facts}\n"
             "Tools: SearchCatalog refines the visual query while preserving the current budget, "
             "audience, type and colour filters. InspectProducts reads exact details of "
             "referenced IDs for questions or comparisons. FindRelated finds pieces that go with "
@@ -50,8 +53,9 @@ ANSWER_PROMPT = ChatPromptTemplate.from_messages(
             "look request, passing the occasion in the shopper's words, the total budget and "
             "the audience when they gave them. SwapOutfitItem replaces one slot of the current "
             "outfit ('cheaper shoes', 'another top'). For an outfit, list every slot with the "
-            "piece's name, colour, price and the tool's reason, then the total against the "
-            "budget exactly as the tool states them; never add prices up yourself. If a slot "
+            "piece's name, colour, price and the tool's reason, then the total of its pieces' "
+            "prices ({{total:price:...}} with every piece's ID) against the budget and what is "
+            "left exactly as the tool states them. If a slot "
             "could not be filled, say which and why. To save an outfit, propose "
             "SaveToShortlist with all of its product IDs. AskShopper asks one clarifying "
             "question with quick replies when a request is too vague to search well. "
@@ -71,12 +75,20 @@ ANSWER_PROMPT = ChatPromptTemplate.from_messages(
         MessagesPlaceholder("history"),
         ("human", "{message}"),
     ]
+).partial(
+    facts=cite_rules(
+        PRODUCT_REFERENCES,
+        "- {product:843614008} ({colour:843614008}, {price:843614008}): a relaxed linen "
+        "shirt for warm days. Together with {product:906741002} that's "
+        "{total:price:843614008,906741002}.",
+    )
 )
 
 REPAIR_INSTRUCTION = (
-    "Verification failed for your draft: {issues}. Rewrite the answer using only names, "
-    "prices and IDs from the tool results and product list, each price next to the product "
-    "it belongs to. Do not call tools."
+    "Verification failed for your draft: {issues}. Rewrite the answer stating names, "
+    "prices and colours only through fact references to products in the tool results and "
+    "product list, and totals or differences only through {{total:price:...}} and "
+    "{{diff:price:...}}. Do not call tools."
 )
 
 

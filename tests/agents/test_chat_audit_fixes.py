@@ -9,6 +9,7 @@ from langchain_core.runnables import RunnableLambda
 
 from curio.app.assistants import CocktailAssistant, ShoppingAssistant
 from curio.app.schemas import ActionDecision, ShopperPreferences, TurnContext
+from curio.domains.cocktails.agent.facts import drink_facts
 from curio.domains.cocktails.agent.grounding import CocktailGroundingCheck, measures_in
 from curio.domains.cocktails.agent.prompts import COCKTAIL_ANSWER_PROMPT, alcohol_label
 from curio.domains.cocktails.agent.toolkit import CocktailToolkit
@@ -16,6 +17,7 @@ from curio.domains.cocktails.catalog import CocktailCatalog
 from curio.domains.cocktails.recommend import CocktailRecommender
 from curio.domains.fashion.models import ScoredProduct
 from curio.engine import schemas as engine
+from curio.engine.facts import render
 from curio.engine.signing import ActionSigner, InvalidActionError, narrow_args
 
 NO_SEARCH = {"query": "", "wants_products": False}
@@ -334,8 +336,11 @@ def test_alcohol_optional_drinks_are_labelled_and_get_the_responsibility_note(co
     shirley = cocktail_catalog.get(8)
     assert alcohol_label(shirley) == "alcohol optional"
     toolkit = CocktailToolkit(cocktail_catalog, CocktailRecommender(cocktail_catalog))
-    text = toolkit.fallback([shirley])
-    assert "Shirley Temple · alcohol optional" in text
+    # The fallback states facts through references the engine renders from the catalog.
+    raw = toolkit.fallback([shirley])
+    assert "{drink:8} · {alcohol:drink:8}" in raw
+    text = render(raw, drink_facts([shirley])).text
+    assert "**Shirley Temple** · alcohol optional" in text
     assert text.endswith("Please drink responsibly.")
 
 

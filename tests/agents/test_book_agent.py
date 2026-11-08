@@ -304,7 +304,9 @@ def test_an_unverified_title_falls_back_to_catalog_facts(agent):
     )
     reply = assistant.reply("Magic", [])
     assert reply.grounding.status == "fallback"
-    assert reply.text.startswith("Here are the books I could confirm:\n- The Name of the Wind by")
+    assert reply.text.startswith(
+        "Here are the books I could confirm:\n- **The Name of the Wind** by"
+    )
 
 
 def test_history_and_reading_list_books_are_evidence(agent):

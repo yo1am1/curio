@@ -7,8 +7,12 @@ One turn runs as a generator of observable events:
 2. Act: a bounded tool loop. Read tools run immediately; AskShopper pauses for a quick reply;
    approval tools pause for the shopper's decision (human in the loop) unless the shopper
    opted into auto-approval for that tool.
-3. Verify: the domain's grounding check compares the final answer with tool evidence. One
-   self-repair attempt is allowed before a deterministic, grounded fallback.
+3. Verify: the answer's fact references are rendered from the turn's evidence (cite mode,
+   `curio.engine.facts`), and the domain's grounding check (the backstop) compares the
+   values the model typed itself with tool evidence. A reference that cannot be rendered or
+   a typed value that does not match fails verification: one self-repair attempt is allowed
+   before a deterministic, grounded fallback. No reference reaches the client: every text
+   the engine sends (answers, questions, quick replies, fallbacks) is rendered first.
 
 Everything domain-specific (tools, prompts, evidence, grounding, suggestions) lives behind the
 `Toolkit` protocol; budgets, the trace, approvals and resume are shared by every domain.
@@ -30,7 +34,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMe
 from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel, ValidationError
 
-from curio.engine.grounding import describe_counts
+from curio.engine.facts import Rendered, checked_report, describe_report, render
 from curio.engine.schemas import (
     ActionDecision,
     AgentEvent,
@@ -60,7 +64,8 @@ MAX_TOOL_CALLS = 5
 FALLBACK_QUESTION = "Could you tell me a little more about what you're looking for?"
 QUESTION_REPAIR = (
     "Not asked: the question states facts no tool returned ({issues}). Ask again without "
-    "them (name only items, prices and details from the tool results), or answer instead."
+    "them (refer to items, prices and details from the tool results only through fact "
+    "references), or answer instead."
 )
 # Default wall-clock budget for one turn; checked before every model call. An app may set
 # another per engine (`turn_deadline_seconds`), e.g. for a slow model behind a relay.
@@ -320,7 +325,7 @@ class AgentEngine[T]:
         a second one asks a generic question without the unverified facts."""
         # Quick replies are candidate answers, so each reads as a question of its own.
         options = "\n".join(f"- {option.rstrip(' .!?')}?" for option in action.options)
-        report = self._toolkit.check(turn, f"{action.question}\n{options}".strip())
+        report = self._grounded(turn, self._render(turn, f"{action.question}\n{options}".strip()))
         if report.status == "fallback":
             detail = {"issues": report.issues}
             if turn.question_issues is None:
@@ -359,13 +364,15 @@ class AgentEngine[T]:
             )
             first = turn.question_issues
             question = getattr(self._toolkit, "fallback_question", FALLBACK_QUESTION)
-            grounding = _with_status(first, "fallback")
+            grounding = _with_status(first, "fallback", {})
             clarification = Clarification(question=question, options=[])
             return self._reply(
                 turn, question, grounding, status="needs_input", clarification=clarification
             )
         if turn.question_issues is not None:
-            report = _with_status(turn.question_issues, "repaired")
+            report = _with_status(turn.question_issues, "repaired", report.rendered)
+        question = self._render(turn, action.question).text
+        quick = [self._render(turn, option).text for option in action.options]
         yield self._record(
             turn,
             AgentStep(
@@ -373,16 +380,16 @@ class AgentEngine[T]:
                 name="AskShopper",
                 summary="Waiting for the shopper's answer.",
                 status="pending",
-                detail=action.model_dump(),
+                detail={"question": question, "options": quick},
             ),
             started,
         )
         return self._reply(
             turn,
-            action.question,
+            question,
             report,
             status="needs_input",
-            clarification=Clarification(question=action.question, options=action.options),
+            clarification=Clarification(question=question, options=quick),
         )
 
     def _progress(
@@ -484,7 +491,8 @@ class AgentEngine[T]:
             started,
         )
         started = self._clock()
-        report = self._toolkit.check(turn, text)
+        rendered = self._render(turn, text)
+        report = self._grounded(turn, rendered)
         if report.status != "fallback":
             if report.status == "verified":
                 yield self._record(
@@ -492,12 +500,12 @@ class AgentEngine[T]:
                     AgentStep(
                         kind="guardrail",
                         name="Grounding check",
-                        summary=f"Verified {describe_counts(report.counts)} against the catalog.",
-                        detail={"counts": report.counts},
+                        summary=describe_report(report),
+                        detail={"counts": report.counts, "rendered": report.rendered},
                     ),
                     started,
                 )
-            yield self._reply(turn, text, report)
+            yield self._reply(turn, rendered.text, report)
             return
         yield self._record(
             turn,
@@ -510,18 +518,18 @@ class AgentEngine[T]:
             ),
             started,
         )
-        final = _with_status(report, "fallback")
         if self._out_of_time(turn):
             yield self._record(turn, _time_budget_step())
-            yield self._reply(turn, self._toolkit.fallback(turn.items, turn.extras), final)
+            yield self._fallback_after(turn, report)
             return
         started = self._clock()
         instruction = self._toolkit.repair_instruction.format(issues="; ".join(report.issues))
         repaired = self._agent.invoke([*messages, answer, HumanMessage(instruction)])
         repaired_text = "" if repaired.tool_calls else StrOutputParser().invoke(repaired).strip()
-        second = self._toolkit.check(turn, repaired_text) if repaired_text else None
-        if second is not None and second.status in ("verified", "not_applicable"):
-            final = _with_status(report, "repaired")
+        second_text = self._render(turn, repaired_text) if repaired_text else None
+        second = self._grounded(turn, second_text) if second_text else None
+        if second_text is not None and second is not None and second.status != "fallback":
+            final = _with_status(report, "repaired", second.rendered)
             yield self._record(
                 turn,
                 AgentStep(
@@ -531,7 +539,7 @@ class AgentEngine[T]:
                 ),
                 started,
             )
-            yield self._reply(turn, repaired_text, final)
+            yield self._reply(turn, second_text.text, final)
             return
         yield self._record(
             turn,
@@ -543,7 +551,7 @@ class AgentEngine[T]:
             ),
             started,
         )
-        yield self._reply(turn, self._toolkit.fallback(turn.items, turn.extras), final)
+        yield self._fallback_after(turn, report)
 
     # --- Helpers --------------------------------------------------------------------------
 
@@ -579,13 +587,30 @@ class AgentEngine[T]:
 
     def _fallback_reply(self, turn: Turn[T]) -> ReplyEvent:
         """Catalog facts when a budget ends the turn or the model's answer is empty. They are
-        checked like an answer, so the report says what they state ("verified" with its
-        counts), or "not_applicable" when they state nothing checkable."""
-        text = self._toolkit.fallback(turn.items, turn.extras)
-        report = self._toolkit.check(turn, text)
+        rendered and checked like an answer, so the report says what they state ("verified"
+        with its counts), or "not_applicable" when they state nothing."""
+        rendered = self._render(turn, self._toolkit.fallback(turn.items, turn.extras))
+        report = self._grounded(turn, rendered)
         if report.status != "verified":
             report = GroundingReport(status="not_applicable")
-        return self._reply(turn, text, report)
+        return self._reply(turn, rendered.text, report)
+
+    def _fallback_after(self, turn: Turn[T], report: GroundingReport) -> ReplyEvent:
+        """Catalog facts in place of an unverified answer: `report` (the first draft's) under
+        status "fallback", with the facts the fallback renders."""
+        rendered = self._render(turn, self._toolkit.fallback(turn.items, turn.extras))
+        return self._reply(
+            turn, rendered.text, _with_status(report, "fallback", dict(rendered.counts))
+        )
+
+    def _render(self, turn: Turn[T], text: str) -> Rendered:
+        """`text` with its fact references rendered from this turn's evidence."""
+        return render(text, self._toolkit.facts(turn))
+
+    def _grounded(self, turn: Turn[T], rendered: Rendered) -> GroundingReport:
+        """The report of a rendered text: its rendered facts, the references that failed and
+        the backstop's check of the values the model typed itself."""
+        return checked_report(rendered, lambda text: self._toolkit.check(turn, text))
 
     def _reply(
         self, turn: Turn[T], text: str, grounding: GroundingReport | None, **fields: Any
@@ -605,9 +630,15 @@ class AgentEngine[T]:
         )
 
 
-def _with_status(report: GroundingReport, status: str) -> GroundingReport:
-    """`report`'s counts and issues under another status ("repaired", "fallback")."""
-    return report.model_copy(update={"status": status})
+def _with_status(
+    report: GroundingReport, status: str, rendered: dict[str, int] | None = None
+) -> GroundingReport:
+    """`report`'s counts and issues under another status ("repaired", "fallback"), with the
+    facts rendered in the text the client is shown instead, when given."""
+    update: dict[str, Any] = {"status": status}
+    if rendered is not None:
+        update["rendered"] = dict(rendered)
+    return report.model_copy(update=update)
 
 
 def _final(events: Iterable[AgentEvent]) -> AssistantReply:

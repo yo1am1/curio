@@ -17,6 +17,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel
 
+from curio.domains.fashion.agent.facts import product_facts
 from curio.domains.fashion.agent.grounding import OCCASION_WORDS, FashionGroundingCheck
 from curio.domains.fashion.agent.intent import IntentExtractor, SearchIntent
 from curio.domains.fashion.agent.prompts import (
@@ -62,6 +63,7 @@ from curio.domains.fashion.outfits import (
     audience_in,
 )
 from curio.domains.fashion.search import ProductSearch
+from curio.engine.facts import FactSheet
 from curio.engine.schemas import AgentStep, GroundingReport
 from curio.engine.toolkit import BaseToolkit, ToolError, Turn
 
@@ -431,6 +433,9 @@ class FashionToolkit(BaseToolkit[Product]):
             text, list(turn.evidence.values()), self._allowed_amounts(turn), turn.message
         )
 
+    def facts(self, turn: Turn[Product]) -> FactSheet:
+        return product_facts(turn.evidence.values())
+
     def fallback(self, items: Sequence[Product], extras: Mapping[str, Any] | None = None) -> str:
         if not items:
             return (
@@ -438,7 +443,8 @@ class FashionToolkit(BaseToolkit[Product]):
                 "filters."
             )
         return "Here are the pieces I could confirm:\n" + "\n".join(
-            f"- {p.display_name} · {p.colour} · €{p.price:.2f}" for p in items
+            f"- {{product:{p.product_id}}} · {{colour:{p.product_id}}} · {{price:{p.product_id}}}"
+            for p in items
         )
 
     def reply_fields(self, turn: Turn[Product]) -> dict[str, Any]:

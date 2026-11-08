@@ -2,9 +2,13 @@
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
+from curio.domains.books.agent.facts import BOOK_REFERENCES
+from curio.domains.cocktails.agent.facts import DRINK_REFERENCES
 from curio.domains.cocktails.agent.prompts import alcohol_label
 from curio.domains.evening.models import EveningPlan
+from curio.domains.fashion.agent.facts import PRODUCT_REFERENCES
 from curio.domains.fashion.models import Product
+from curio.engine.facts import cite_rules
 
 EVENING_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
     [
@@ -24,11 +28,12 @@ EVENING_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
             "shopper's lists; they approve it, so say you have proposed it, never that it is "
             "done. To save, pass every product, book and drink ID of the current plan.\n"
             "Answer with the theme, then the three parts in order: the outfit (each piece's "
-            "name and price, then the total against the budget exactly as the tool states "
-            "them; never add prices up yourself), the book (bold title, author and rating "
-            "exactly as listed, e.g. ★ 4.55) and the drink (bold name, its alcohol status and "
-            "the pairer's reason). Cite pieces as product #N, books as book #N and drinks as "
-            "drink #N. End with the tool's 'why it works' line, unchanged. If a part is "
+            "name and price, then the total of the pieces ({{total:price:...}} with every "
+            "piece's product number) against the budget as the tool states it), the book "
+            "(title, author and rating) and the drink (name, its alcohol status and the "
+            "pairer's reason).\n"
+            "Facts: {facts}\n"
+            "End with the tool's 'why it works' line, unchanged. If a part is "
             "missing, say so with the tool's reason. Children's and young-adult books always "
             "get alcohol-free drinks; ask to drink responsibly once at most, and never claim "
             "a drink is safe for an allergy or diet. Ratings are Goodreads averages. Prices "
@@ -41,12 +46,21 @@ EVENING_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
         MessagesPlaceholder("history"),
         ("human", "{message}"),
     ]
+).partial(
+    facts=cite_rules(
+        f"{PRODUCT_REFERENCES}; {BOOK_REFERENCES}; {DRINK_REFERENCES} (the ID is the "
+        "number after product #, book # or drink #)",
+        "- Top: {product:843614008} · {price:843614008}\n- Total: "
+        "{total:price:843614008,906741002} of your €100 budget\n"
+        "**Book**: {book:3} by {author:book:3} · ★ {rating:book:3}\n"
+        "**Drink**: {drink:12} ({alcohol:drink:12}): its smoky notes echo the story.",
+    )
 )
 
 EVENING_REPAIR_INSTRUCTION = (
-    "Verification failed for your draft: {issues}. Rewrite the answer using only the pieces, "
-    "prices, totals, books, ratings and drinks in the evening plan the tools returned, each "
-    "price, rating and amount next to the piece, book or drink it belongs to. Do not call tools."
+    "Verification failed for your draft: {issues}. Rewrite the answer stating the pieces, "
+    "prices, totals, books, authors, ratings and drinks only through fact references to the "
+    "evening plan the tools returned. Do not call tools."
 )
 
 

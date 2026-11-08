@@ -184,9 +184,11 @@ def test_an_invented_price_rating_and_drink_fall_back_to_the_plan(agent):
     assert "Manhattan was not returned by PairCocktail" in issues
     assert [s.name for s in reply.steps[-2:]] == ["Grounding check", "Self-correction"]
     plan = cosy_plan()
-    assert reply.text.startswith("A cosy evening, from the catalogs:\n- Top: Chunky Knit Sweater")
-    assert "- Book: The Name of the Wind by Patrick Rothfuss · ★ 4.55" in reply.text
-    assert "- Drink: Honey Bee · contains alcohol" in reply.text
+    assert reply.text.startswith(
+        "A cosy evening, from the catalogs:\n- Top: **Chunky Knit Sweater**"
+    )
+    assert "- Book: **The Name of the Wind** by Patrick Rothfuss · ★ 4.55" in reply.text
+    assert "- Drink: **Honey Bee** · contains alcohol" in reply.text
     assert f"Why it works: {plan.why}" in reply.text
     assert reply.evening is not None  # the plan's cards still show
 
