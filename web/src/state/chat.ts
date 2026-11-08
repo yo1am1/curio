@@ -28,8 +28,12 @@ export interface ChatEntry {
   reply?: AssistantReply;
   /** A proposal answered: "Approved." or "Declined." */
   resolution?: string;
-  /** The API did not accept the last decision: nothing was applied, so it can be retried. */
+  /** Why the last decision failed: a refusal (nothing was applied, so it can be retried),
+   * or a lost reply (it may already have been applied). */
   decisionError?: string;
+  /** The server already answered this proposal (409): it cannot be decided again, only
+   * asked again. */
+  decisionStale?: boolean;
 }
 
 export interface DomainChat {

@@ -1,4 +1,4 @@
-import { Check, ShieldQuestion, X } from "lucide-react";
+import { Check, RotateCcw, ShieldQuestion, X } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -11,18 +11,24 @@ import styles from "./ApprovalDrawer.module.css";
 /**
  * The agent proposed a change (save, remember): nothing happens until the shopper approves.
  * They can untick items or remembered values to narrow the proposal; `onDecide` gets the
- * `edited_args` the API expects (only the changed fields, or null).
+ * `edited_args` the API expects (only the changed fields, or null). A `stale` proposal was
+ * already answered on the server (409): it can no longer be approved or declined, only asked
+ * again (`onAskAgain`).
  */
 export function ApprovalDrawer({
   action,
   onDecide,
+  onAskAgain,
   busy = false,
   error,
+  stale = false,
 }: {
   action: PendingAction;
   onDecide: (approved: boolean, editedArgs: Record<string, unknown> | null) => void;
+  onAskAgain?: () => void;
   busy?: boolean;
   error?: string;
+  stale?: boolean;
 }) {
   const options = useMemo(() => approvalOptions(action), [action]);
   const [unticked, setUnticked] = useState<ReadonlySet<string>>(new Set());
@@ -63,7 +69,7 @@ export function ApprovalDrawer({
       <ApprovalOptions
         options={options}
         unticked={unticked}
-        disabled={busy}
+        disabled={busy || stale}
         onToggle={(key, kept) => {
           const next = new Set(unticked);
           if (kept) next.delete(key);
@@ -71,34 +77,50 @@ export function ApprovalDrawer({
           setUnticked(next);
         }}
       />
-      <footer className={styles.footer}>
-        <Button
-          variant="primary"
-          icon={<Check />}
-          disabled={busy || !keeps}
-          onClick={() => {
-            onDecide(true, editedArgs(action, unticked));
-          }}
-        >
-          Approve
-        </Button>
-        <Button
-          icon={<X />}
-          disabled={busy}
-          onClick={() => {
-            onDecide(false, null);
-          }}
-        >
-          Decline
-        </Button>
-        <p className={styles.hint}>
-          {busy
-            ? "Sending your decision…"
-            : options.length
-              ? "Untick anything you don't want before approving."
-              : "Nothing changes until you approve."}
-        </p>
-      </footer>
+      {stale ? (
+        <footer className={styles.footer}>
+          <Button
+            variant="primary"
+            icon={<RotateCcw />}
+            disabled={busy || !onAskAgain}
+            onClick={() => {
+              onAskAgain?.();
+            }}
+          >
+            Ask again
+          </Button>
+          <p className={styles.hint}>This proposal can no longer be answered.</p>
+        </footer>
+      ) : (
+        <footer className={styles.footer}>
+          <Button
+            variant="primary"
+            icon={<Check />}
+            disabled={busy || !keeps}
+            onClick={() => {
+              onDecide(true, editedArgs(action, unticked));
+            }}
+          >
+            Approve
+          </Button>
+          <Button
+            icon={<X />}
+            disabled={busy}
+            onClick={() => {
+              onDecide(false, null);
+            }}
+          >
+            Decline
+          </Button>
+          <p className={styles.hint}>
+            {busy
+              ? "Sending your decision…"
+              : options.length
+                ? "Untick anything you don't want before approving."
+                : "Nothing changes until you approve."}
+          </p>
+        </footer>
+      )}
     </motion.section>
   );
 }

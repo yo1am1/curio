@@ -30,6 +30,10 @@ import {
   removeProduct,
 } from "./session";
 
+/** A decision whose reply was lost (the connection dropped): the server may have applied it. */
+export const DECISION_LOST =
+  "The reply to your decision was lost, so it may already have been applied. Ask again to see where things stand.";
+
 const fetchOrNull =
   <T>(path: (id: number) => string) =>
   (id: number): Promise<T | null> =>
@@ -176,11 +180,21 @@ export function useChatActions(domain: Domain) {
           if (resolve === undefined) {
             return { ...chat, running: null, failed: { message: user.content, error: message } };
           }
+          // 409: the proposal was already answered (perhaps by this very decision, whose reply
+          // was lost), so deciding again cannot work. A lost connection: it may have been.
+          const stale = error instanceof ApiError && error.status === 409;
+          const lost = error instanceof ApiError && error.status === 0;
           return {
             ...chat,
             running: null,
             entries: chat.entries.map((entry, index) =>
-              index === resolve ? { ...entry, decisionError: message } : entry,
+              index === resolve
+                ? {
+                    ...entry,
+                    decisionError: lost ? DECISION_LOST : message,
+                    decisionStale: stale || entry.decisionStale,
+                  }
+                : entry,
             ),
           };
         });
