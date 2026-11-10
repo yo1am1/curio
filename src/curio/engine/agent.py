@@ -271,7 +271,7 @@ class AgentEngine[T]:
 
     def _call(
         self, turn: Turn[T], call: Mapping[str, Any], messages: list[BaseMessage]
-    ) -> Iterator[AgentEvent]:
+    ) -> Generator[AgentEvent, None, AgentEvent | None]:
         """Run one tool call. Returns a reply when the call ends the turn, else None."""
         name, call_id = call["name"], call["id"]
         started = self._clock()
@@ -320,7 +320,7 @@ class AgentEngine[T]:
         call_id: str,
         messages: list[BaseMessage],
         started: float,
-    ) -> Iterator[AgentEvent]:
+    ) -> Generator[AgentEvent, None, AgentEvent | None]:
         """Pause for the shopper's answer. The question and its quick replies are grounded
         like an answer: a first failure goes back to the model (it may ask again or answer),
         a second one asks a generic question without the unverified facts."""
@@ -414,7 +414,7 @@ class AgentEngine[T]:
         action: BaseModel,
         messages: list[BaseMessage],
         started: float,
-    ) -> Iterator[AgentEvent]:
+    ) -> Generator[AgentEvent, None, AgentEvent | None]:
         """An approval-gated state change: apply it if auto-approved, else ask the shopper.
 
         A toolkit may define `vet_proposal(turn, action)` to refuse a proposal in this turn's

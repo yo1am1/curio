@@ -303,6 +303,14 @@ Drive the real `AgentEngine` with a scripted chat model
 (`tests.agents.conftest.FakeToolCallingChatModel`, which replays `AIMessage`s, tool calls
 included), as `tests/test_hello_domain.py` does. At least:
 
+- **The static contract**: `check_toolkit(YourToolkit(...), YourContext())` from
+  `tests/agents/toolkit_contract.py`. It needs no model and runs no tool. It fails, naming
+  the problem, when a tool has no policy, accepts unknown fields, has no docstring or is
+  registered under another name than its schema's; when `ASK` is used for anything but
+  `AskShopper`; when `repair_instruction` lacks `{issues}`; or when a per-turn hook
+  (`clean_context`, `history`, `facts`, `reply_fields`, `suggestions`, `check`, `fallback`)
+  fails on an empty turn. `tests/agents/test_toolkit_contract.py` runs it on the toolkits
+  in this repository.
 - **The loader**: a valid file loads into items; a missing file, a duplicate ID and an
   invalid row are refused.
 - **A grounded answer with references**: the reply's text has the rendered values, no

@@ -26,9 +26,10 @@ with credit to you unless you ask otherwise.
 - The API answers only the host names in `ALLOWED_HOSTS` (default `localhost,127.0.0.1`), so
   a web page cannot reach a local Curio through DNS rebinding. Responses carry a
   Content-Security-Policy, `nosniff`, a referrer policy and frame protection. The chat never
-  renders images from model text, and links in it open only `https:` addresses (no
-  `javascript:` or `data:`), so a prompt-injected answer cannot make the browser send data
-  to another host without a click. `/docs` is off unless `API_DOCS=true`.
+  renders images from model text, and links in it open only `https:` addresses on the
+  catalogs' own sites (TheCocktailDB, Goodreads, Open Library, H&M); any other link is shown
+  as plain text. A prompt-injected answer cannot make the browser send data to another
+  host, with or without a click on a link. `/docs` is off unless `API_DOCS=true`.
 - LLM keys come from the environment (`.env`) and are never written to logs, traces or
   replies. Never commit a `.env` file. Shopper messages are not logged at INFO (the default
   level); agent-step summaries, which quote them, appear only at DEBUG. Feedback is logged

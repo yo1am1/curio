@@ -8,6 +8,7 @@ With --output the JSON is also saved; the API serves that file at GET /evaluatio
 
 import argparse
 import json
+import sys
 from collections.abc import Iterable, Sequence
 from datetime import date
 from pathlib import Path
@@ -87,6 +88,30 @@ def ranking_metrics(truth: dict, predictions: dict, user_ids: list) -> dict:
     }
 
 
+def list_makeup(predictions: dict, bought: dict, styles: dict | None, user_ids: list) -> dict:
+    """What the lists are made of, beside their accuracy: how much the customer already
+    bought, and how many slots repeat a style in another colour.
+
+    `styles` maps a product to its style (H&M's `product_code`: colourways of one piece
+    share it); None when the prepared catalog has no such column."""
+    slots = sum(len(predictions[u]) for u in user_ids)
+    makeup: dict = {
+        "already_bought_share": sum(len(set(predictions[u]) & bought[u]) for u in user_ids) / slots
+        if slots
+        else None,
+        "distinct_styles_per_list": None,
+        "lists_repeating_a_style": None,
+    }
+    lists = [predictions[u] for u in user_ids if predictions[u]]
+    if styles is not None and lists:
+        distinct = [len({styles.get(p, p) for p in row}) for row in lists]
+        makeup["distinct_styles_per_list"] = sum(distinct) / len(lists)
+        makeup["lists_repeating_a_style"] = sum(
+            n < len(row) for n, row in zip(distinct, lists, strict=True)
+        ) / len(lists)
+    return makeup
+
+
 def paired_map_gain(truth: dict, candidate: dict, baseline: dict, user_ids: list) -> dict:
     """Paired customer bootstrap over this selected cohort, not population-level uncertainty."""
     differences = np.array(
@@ -128,6 +153,12 @@ def evaluate(
     purchases = pd.read_parquet(data_dir / "purchases.parquet")
     cutoff, train, holdout = chronological_split(purchases, holdout_end)
     catalog_ids = {product.product_id for product in catalog}
+    products = pd.read_parquet(data_dir / "products.parquet")
+    styles = (
+        dict(zip(products["product_id"], products["product_code"], strict=True))
+        if "product_code" in products
+        else None
+    )
     if not catalog_ids or not set(purchases["product_id"]).issubset(catalog_ids):
         raise ValueError("Purchases must reference a nonempty prepared product catalog")
     if not set(purchases["user_id"]).issubset(set(users["user_id"])):
@@ -265,6 +296,7 @@ def evaluate(
                 / len(catalog_ids),
                 "recommendation_fill": sum(map(len, predictions.values()))
                 / (len(eligible) * TOP_K),
+                "list_makeup": list_makeup(predictions, bought, styles, eligible),
             }
         if "learned" in all_predictions:
             result["learned_vs_repeat"] = paired_map_gain(
@@ -290,6 +322,15 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     parser.add_argument("--ranker", type=Path, help="Explicit past-trained JSON ranker artifact")
     args = parser.parse_args(argv)
+    served = args.data_dir / "ranker.json"
+    if args.ranker is None and served.is_file():
+        # The API serves this ranker as "Personalized ranking": say that it is not measured.
+        print(
+            f"warning: {served} exists but --ranker was not given, so the results have no "
+            f"'learned' strategy. Pass --ranker {served} to measure the ranker the API serves "
+            "(it must be trained on purchases before the holdout).",
+            file=sys.stderr,
+        )
     try:
         result = evaluate(
             args.data_dir, args.qdrant_path, holdout_end=args.holdout_end, ranker_path=args.ranker

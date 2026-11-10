@@ -39,7 +39,7 @@ import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from curio.engine.grounding import describe_counts
 from curio.engine.schemas import GroundingReport
@@ -186,9 +186,9 @@ def render(text: str, sheet: FactSheet) -> Rendered:
     check.append(text[position:])
     for leftover in _LEFTOVER.finditer("".join(out)):
         start = leftover.group(0).strip()
-        error = f"a malformed fact reference starting “{start}” was left in the text"
-        if error not in result.errors:
-            result.errors.append(error)
+        leftover_error = f"a malformed fact reference starting “{start}” was left in the text"
+        if leftover_error not in result.errors:
+            result.errors.append(leftover_error)
     result.text = "".join(out)
     result.check_text = "".join(check)
     return result
@@ -361,6 +361,7 @@ def checked_report(rendered: Rendered, check: Callable[[str], GroundingReport]) 
     issues = [*rendered.errors, *(i for i in issues if i not in rendered.errors)]
     counts = Counter({kind: n for kind, n in counts.items() if n > 0})
     facts = dict(rendered.counts)
+    status: Literal["verified", "fallback", "not_applicable"]
     if issues:
         status = "fallback"
     elif counts or facts:

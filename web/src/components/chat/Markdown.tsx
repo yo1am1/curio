@@ -3,10 +3,31 @@ import remarkGfm from "remark-gfm";
 
 import styles from "./Markdown.module.css";
 
-/** Links in model text open only `https:` addresses. Anything else (`javascript:`, `data:`,
- * `http:`, relative or protocol-relative) is shown as plain text, not a link. */
+/** The sites the catalogs come from. A link in model text opens only on these: a link to any
+ * other host could carry whatever the model was talked into putting in its address. */
+const LINK_HOSTS = new Set([
+  "www.thecocktaildb.com",
+  "thecocktaildb.com",
+  "www.goodreads.com",
+  "goodreads.com",
+  "openlibrary.org",
+  "www2.hm.com",
+]);
+
+/** Links in model text open only `https:` addresses on the catalogs' own sites. Anything
+ * else (`javascript:`, `data:`, `http:`, relative or protocol-relative, another host, an
+ * address with a user name or a port) is shown as plain text, not a link. */
 function safeHref(url: string): string {
-  return /^https:\/\/[^/\s]/i.test(url.trim()) ? url.trim() : "";
+  const text = url.trim();
+  if (!/^https:\/\/[^/\s]/i.test(text)) return "";
+  let parsed: URL;
+  try {
+    parsed = new URL(text);
+  } catch {
+    return "";
+  }
+  if (parsed.username || parsed.password || parsed.port) return "";
+  return LINK_HOSTS.has(parsed.hostname.toLowerCase()) ? text : "";
 }
 
 const components: Components = {
@@ -25,7 +46,8 @@ const components: Components = {
  * Cards show catalog photos; chat text needs none. */
 const DISALLOWED = ["img"];
 
-/** Model text as markdown; raw HTML and images are never rendered, links only to https. */
+/** Model text as markdown; raw HTML and images are never rendered, links only to the
+ * catalogs' sites over https. */
 export function Markdown({ children }: { children: string }) {
   return (
     <div className={styles.markdown}>

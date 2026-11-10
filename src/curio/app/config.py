@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     llm_base_url: str | None = None
     llm_temperature: float = 0.2
     llm_timeout_seconds: float = 60.0
+    # The most output tokens one model call may produce (a cost cap); None = provider default.
+    llm_max_tokens: int | None = Field(default=4096, ge=256)
     # Wall-clock budget of one agent turn, checked before every model call. Raise it only for
     # slow models (a relayed model in `evals/`); the default matches `TURN_DEADLINE_SECONDS`.
     agent_turn_deadline_seconds: float = Field(default=90.0, gt=0)

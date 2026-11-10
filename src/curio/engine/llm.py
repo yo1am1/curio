@@ -1,6 +1,6 @@
 """Chat model construction from settings, for any LangChain-supported provider."""
 
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
@@ -46,11 +46,22 @@ def build_chat_model(settings: LLMSettings) -> BaseChatModel:
     if settings.llm_base_url:
         connection["base_url"] = settings.llm_base_url
 
-    return init_chat_model(
-        settings.llm_model,
-        model_provider=settings.llm_provider,
-        temperature=settings.llm_temperature,
-        timeout=settings.llm_timeout_seconds,
-        max_retries=0,
-        **connection,
+    # An optional cap on one model call's output (`llm_max_tokens`): settings without it,
+    # or with None, leave the provider's default.
+    max_tokens = getattr(settings, "llm_max_tokens", None)
+    if max_tokens is not None:
+        connection["max_tokens"] = max_tokens
+
+    # With a model name given, `init_chat_model` returns a chat model (its type also covers
+    # the configurable wrapper it returns without one).
+    return cast(
+        BaseChatModel,
+        init_chat_model(
+            settings.llm_model,
+            model_provider=settings.llm_provider,
+            temperature=settings.llm_temperature,
+            timeout=settings.llm_timeout_seconds,
+            max_retries=0,
+            **connection,
+        ),
     )

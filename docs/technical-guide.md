@@ -798,7 +798,8 @@ book assistants. Set `AGENT_SIGNING_KEY` to at least 32 random bytes when runnin
 API workers (`WEB_CONCURRENCY`), so approval proposals verify on any worker; the API refuses
 to start without it then, and refuses a shorter key at any time.
 `AGENT_TURN_DEADLINE_SECONDS` (default 90) is the wall-clock budget of one agent turn and
-`LLM_TIMEOUT_SECONDS` (default 60) the timeout of one model call. Keep the defaults in
+`LLM_TIMEOUT_SECONDS` (default 60) the timeout of one model call. `LLM_MAX_TOKENS`
+(default 4096) caps the output of one model call. Keep the defaults in
 production; the [agent evaluation](agent-eval.md) raises both for a relayed model that can
 take minutes per request.
 
@@ -891,7 +892,11 @@ and `strategy=learned` returns 503. Evaluation rejects any artifact whose traini
 reaches the holdout cutoff. On the 819-customer final week, observed MAP@12 is
 0.0302 versus 0.0248 for deterministic buy-again; hit rate is 13.9% versus 11.1%.
 The paired bootstrap interval crosses zero, so this does not establish superiority
-from that week alone. Full evidence and the three earlier validations are in the
+from that week alone. Accuracy is not variety: on the same week, 44% of the
+ranker's slots are pieces the customer already bought (63% for buy-again), and 91% of
+its lists show one style in more than one colour (9.2 distinct styles in 12 slots).
+`scripts.evaluate` reports these per strategy as `list_makeup`; the ranking itself does
+not collapse colourways or cap re-purchases. Full evidence and the three earlier validations are in the
 [recommendation audit](research/fashion/recommendation-audit.md).
 A [further BPR, sampling and training-scale iteration](research/fashion/recommendation-iteration2.md)
 tested seven new designs. More supervision reached MAP .036754 on one development
