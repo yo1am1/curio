@@ -18,6 +18,9 @@ All notable changes to Curio are recorded here. The format follows
   from 4.31:1 and 4.44:1); the evening cards are `h2` under the page's `h1`; the model
   quality and relationships tables can be reached and scrolled by keyboard; a page change
   is announced to screen readers; on a phone the current page's link scrolls into view.
+- Navigation: a page no longer fades out before the next one appears. During that fade the
+  leaving page already showed the next route and was then replaced by a fresh copy, so a
+  chat message typed in those 0.2 seconds was lost and Enter sent nothing.
 - Product connections: products that share a name (the same piece in other colours) carry
   their product number on the graph and in the relationships table.
 
