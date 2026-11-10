@@ -6,6 +6,29 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Plan my evening: an occasion chip plans at once (it used to fill the field while the page
+  still said "Pick an occasion above"). On a server without the fashion catalog, the outfit
+  budget and audience controls, the empty outfit card and the H&M credit are no longer shown.
+- Web app errors: a 5xx response shows "Something went wrong on the server. Please try
+  again." instead of its body, which could be a stack trace or a proxy's page. The API's own
+  502 and 503 explanations (provider failed, assistant busy) are still shown.
+- Accessibility: muted text and the orange badge meet WCAG AA contrast (4.85:1 and 5.1:1,
+  from 4.31:1 and 4.44:1); the evening cards are `h2` under the page's `h1`; the model
+  quality and relationships tables can be reached and scrolled by keyboard; a page change
+  is announced to screen readers; on a phone the current page's link scrolls into view.
+- Navigation: a page no longer fades out before the next one appears. During that fade the
+  leaving page already showed the next route and was then replaced by a fresh copy, so a
+  chat message typed in those 0.2 seconds was lost and Enter sent nothing.
+- Product connections: products that share a name (the same piece in other colours) carry
+  their product number on the graph and in the relationships table.
+
+### Changed
+
+- The grounding badge says "5 facts from the catalog · 1 more checked against it" (was
+  "· 1 checked", explained only in a tooltip).
+
 ## [3.1.0] - 2026-11-08
 
 ### Breaking (security exceptions)

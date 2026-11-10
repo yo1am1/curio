@@ -255,7 +255,7 @@ def test_date_night_under_100_in_chat_with_a_swap_and_an_approved_save(web):
     expect(card.get_by_text("Romantic", exact=True)).to_be_visible()
     expect(turn.get_by_test_id("grounding-badge")).to_have_text(
         # Rendered facts, and the raw "product #N" IDs and budget the answer typed, checked.
-        re.compile(r"^\d+ facts from the catalogs · \d+ checked$")
+        re.compile(r"^\d+ facts from the catalogs · \d+ more checked against them$")
     )
     web.shot("evening-04-chat-date-night", full_page=True)
     web.click_and_answer(card.get_by_role("button", name="A cheaper shoes"))
@@ -324,13 +324,23 @@ def test_quick_start_planner_page_without_fashion(demo_web):
     expect(page.get_by_text("The outfit needs the fashion catalogue", exact=False)).to_be_visible()
     fashion = page.get_by_role("navigation", name="Catalog").get_by_text("Fashion", exact=True)
     expect(fashion.locator("xpath=..")).to_have_attribute("aria-disabled", "true")
+    # Without fashion there is nothing to set for an outfit, and no H&M credit.
+    expect(page.get_by_role("switch", name="Outfit budget")).to_have_count(0)
+    expect(page.get_by_role("radiogroup", name="Outfit for")).to_have_count(0)
+    expect(page.get_by_role("contentinfo")).not_to_contain_text("H&M")
+    # A chip is a whole request: it plans at once, without the Plan button.
     page.get_by_role("group", name="Occasions").get_by_role(
         "button", name="Rainy Sunday in", exact=True
     ).click()
-    plan_now(demo_web)
-    expect(
-        page.get_by_test_id("evening-outfit").get_by_text("fashion catalogue", exact=False)
-    ).to_be_visible()
+    plan = page.get_by_test_id("evening-plan")
+    expect(plan).to_be_visible(timeout=120_000)
+    expect(page.get_by_label("Occasion", exact=True)).to_have_value("Rainy Sunday in")
+    # No empty outfit card: the note above already says the outfit needs the fashion catalogue.
+    expect(page.get_by_test_id("evening-outfit")).to_have_count(0)
     expect(page.get_by_test_id("evening-book")).to_be_visible()
     expect(page.get_by_test_id("evening-drink")).to_be_visible()
+    expect(plan.get_by_role("heading", level=2, name="Book")).to_be_visible()
+    # A client-side navigation is announced.
+    page.get_by_role("navigation", name="Catalog").get_by_role("link", name="Books").click()
+    expect(page.get_by_test_id("route-status")).to_have_text("Books: Search")
     demo_web.shot("evening-09-quickstart-no-fashion", full_page=True)

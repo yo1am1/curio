@@ -50,7 +50,8 @@
   align-items: stretch;
 }
 
-.inChat .parts {
+.inChat .parts,
+.parts.twoParts {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
@@ -284,6 +285,7 @@
 
 @media (max-width: 640px) {
   .parts,
+  .parts.twoParts,
   .inChat .parts {
     grid-template-columns: 1fr;
   }

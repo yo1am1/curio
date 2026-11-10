@@ -124,16 +124,34 @@ export function graphView(graph: ProductGraph, productId: number): GraphView {
         KIND_ORDER[a.node.kind] - KIND_ORDER[b.node.kind] ||
         (a.node.kind === "product" ? a.rank - b.rank : a.node.id.localeCompare(b.node.id)),
     );
-  const point = (node: GraphNode, x: number, y: number, focus: boolean): GraphPoint => ({
-    id: node.id,
-    kind: node.kind,
-    productId: node.product_id ?? null,
-    focus,
-    label: node.label,
-    ...displayLabel(node),
-    x,
-    y,
-  });
+  // Products often share a name (the same piece in other colours): those shown together
+  // carry their product number, on the drawing and in the relationships table.
+  const named = new Map<string, number>();
+  for (const { node } of visible.values()) {
+    if (node.kind === "product") named.set(node.label, (named.get(node.label) ?? 0) + 1);
+  }
+  const number = (node: GraphNode): string | null =>
+    node.kind === "product" && node.product_id != null && (named.get(node.label) ?? 0) > 1
+      ? `no. ${String(node.product_id)}`
+      : null;
+  const fullName = (node: GraphNode): string => {
+    const no = number(node);
+    return no ? `${node.label} (${no})` : node.label;
+  };
+  const point = (node: GraphNode, x: number, y: number, focus: boolean): GraphPoint => {
+    const shown = displayLabel(node);
+    return {
+      id: node.id,
+      kind: node.kind,
+      productId: node.product_id ?? null,
+      focus,
+      label: fullName(node),
+      title: shown.title,
+      caption: number(node) ?? shown.caption,
+      x,
+      y,
+    };
+  };
   const points = neighbors.map(({ node }, index) => {
     const angle = -Math.PI / 2 + (2 * Math.PI * index) / neighbors.length;
     const round = (value: number) => Math.round(value * 1e6) / 1e6;
@@ -152,8 +170,8 @@ export function graphView(graph: ProductGraph, productId: number): GraphView {
       target: edge.target,
       relation: edge.relation,
       weight: edge.weight,
-      sourceLabel: source.label,
-      targetLabel: target.label,
+      sourceLabel: fullName(source),
+      targetLabel: fullName(target),
     });
   }
   return { focus, points: focus ? [focus, ...points] : points, links };

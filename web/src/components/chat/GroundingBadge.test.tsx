@@ -34,7 +34,7 @@ describe("GroundingBadge", () => {
       />,
     );
     const badge = screen.getByTestId("grounding-badge");
-    expect(badge).toHaveTextContent(/^5 facts from the catalog · 1 checked$/);
+    expect(badge).toHaveTextContent(/^5 facts from the catalog · 1 more checked against it$/);
     expect(badge.querySelector("[title]")?.getAttribute("title")).toBe(
       "Rendered by the server from the catalog: 2 prices, 2 names and 1 total. " +
         "Typed by the model and checked: 1 price",

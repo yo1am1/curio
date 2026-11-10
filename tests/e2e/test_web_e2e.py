@@ -31,7 +31,9 @@ def test_a_visit_lands_on_plan_my_evening(web):
     for label in ("Fashion", "Cocktails", "Books", "Evening"):
         expect(switch.get_by_role("link", name=label)).to_be_visible()
     expect(switch.get_by_role("link", name="Evening")).to_have_attribute("aria-current", "page")
-    expect(web.page.get_by_text("Pick an occasion above to see a plan.")).to_be_visible()
+    expect(
+        web.page.get_by_text("Pick an occasion above, or describe your own", exact=False)
+    ).to_be_visible()
     web.shot("01-landing")
     # The switch opens each domain on its main page, with the domain's pages beside its chat.
     for label, path, heading in (

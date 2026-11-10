@@ -29,13 +29,23 @@ export function errorDetail(body: unknown, fallback: string): string {
   return fallback;
 }
 
+export const SERVER_ERROR = "Something went wrong on the server. Please try again.";
+/** 5xx statuses whose `detail` the API writes for the shopper (the model provider failed,
+ * the assistant is busy). Any other 5xx body may be a stack trace or a proxy's page. */
+const READABLE_5XX = new Set([502, 503]);
+
 export async function readError(response: Response): Promise<ApiError> {
   const text = await response.text().catch(() => "");
-  let detail = text || response.statusText || `Request failed (${response.status}).`;
+  const server = response.status >= 500;
+  const fallback = server
+    ? SERVER_ERROR
+    : text || response.statusText || `Request failed (${response.status}).`;
+  let detail = fallback;
   try {
-    detail = errorDetail(JSON.parse(text), detail);
+    const body: unknown = JSON.parse(text);
+    if (!server || READABLE_5XX.has(response.status)) detail = errorDetail(body, fallback);
   } catch {
-    // A plain-text error (e.g. a crashed worker): keep the text.
+    // A plain-text error: shown for a 4xx; a 5xx (e.g. a crashed worker) stays generic.
   }
   return new ApiError(response.status, detail);
 }

@@ -227,7 +227,13 @@ function Report({ evaluation }: { evaluation: Evaluation }) {
         ) : null}
       </section>
       <MapChart rows={rows} baseline={baseline} />
-      <div className={styles.tableWrap}>
+      {/* Scrolls sideways on a phone, so the keyboard must be able to reach it. */}
+      <div
+        className={styles.tableWrap}
+        role="region"
+        aria-label="Every strategy's results"
+        tabIndex={0}
+      >
         <table className={styles.table}>
           <caption className="visually-hidden">Every strategy's results</caption>
           <thead>

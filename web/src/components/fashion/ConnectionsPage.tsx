@@ -87,7 +87,8 @@ function Relationships({
         This view shows up to 12 nodes and 24 relationships. Node spacing does not measure
         similarity.
       </p>
-      <div className={styles.tableWrap}>
+      {/* Scrolls sideways on a phone, so the keyboard must be able to reach it. */}
+      <div className={styles.tableWrap} role="region" aria-label="Relationships" tabIndex={0}>
         <table className={styles.table}>
           <thead>
             <tr>

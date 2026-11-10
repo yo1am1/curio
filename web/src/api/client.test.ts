@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, postForm } from "./client";
+import { ApiError, SERVER_ERROR, getJson, postForm } from "./client";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -39,5 +39,37 @@ describe("postForm", () => {
     expect(error).toBeInstanceOf(ApiError);
     expect((error as ApiError).status).toBe(400);
     expect((error as ApiError).message).toBe("Upload an image file.");
+  });
+});
+
+describe("server errors", () => {
+  async function failure(response: Response): Promise<ApiError> {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(response)),
+    );
+    return (await getJson("/cocktails").catch((e: unknown) => e)) as ApiError;
+  }
+
+  it("never shows a 500's body, which may be a stack trace", async () => {
+    const json = await failure(
+      Response.json({ detail: "Traceback boom KeyError('x')" }, { status: 500 }),
+    );
+    expect(json.status).toBe(500);
+    expect(json.message).toBe(SERVER_ERROR);
+    const html = await failure(new Response("<html>Bad Gateway</html>", { status: 502 }));
+    expect(html.message).toBe(SERVER_ERROR);
+  });
+
+  it("keeps the explanations the API writes for a failed provider or a busy assistant", async () => {
+    const busy = await failure(
+      Response.json({ detail: "The assistant is busy. Please try again." }, { status: 503 }),
+    );
+    expect(busy.message).toBe("The assistant is busy. Please try again.");
+  });
+
+  it("keeps a plain-text 4xx explanation", async () => {
+    const error = await failure(new Response("Nope", { status: 404 }));
+    expect(error.message).toBe("Nope");
   });
 });
