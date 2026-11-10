@@ -35,6 +35,7 @@ def test_openai_compatible_gateway_gets_key_base_url_and_options() -> None:
     assert model.temperature == 0.1
     assert model.request_timeout == 12.0
     assert model.max_retries == 0
+    assert model.max_tokens == 4096  # the default cap on one call's output
 
 
 def test_base_url_is_not_passed_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -53,3 +54,11 @@ def test_native_provider_is_supported() -> None:
 
     assert isinstance(model, langchain_anthropic.ChatAnthropic)
     assert model.anthropic_api_key.get_secret_value() == "sk-test"
+
+
+def test_the_output_cap_is_configurable_and_optional() -> None:
+    assert build_chat_model(make_settings(llm_max_tokens=900)).max_tokens == 900
+    # None leaves the provider's default.
+    assert build_chat_model(make_settings(llm_max_tokens=None)).max_tokens is None
+    with pytest.raises(ValueError, match="llm_max_tokens"):
+        make_settings(llm_max_tokens=10)

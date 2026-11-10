@@ -287,3 +287,34 @@ def test_paired_bootstrap_preserves_identical_and_known_customer_gains():
     assert (zero["mean_delta"], zero["lower_95"], zero["upper_95"]) == (0, 0, 0)
     gain = evaluate.paired_map_gain(truth, candidate, baseline, [1, 2])
     assert (gain["mean_delta"], gain["lower_95"], gain["upper_95"]) == (1, 1, 1)
+
+
+def test_list_makeup_counts_re_purchases_and_colourways_of_one_style():
+    predictions = {1: [10, 11, 20], 2: [30, 40], 3: []}
+    bought = {1: {10}, 2: set(), 3: set()}
+    styles = {10: "A", 11: "A", 20: "B", 30: "C", 40: "D"}
+    makeup = evaluate.list_makeup(predictions, bought, styles, [1, 2, 3])
+    assert makeup["already_bought_share"] == pytest.approx(1 / 5)
+    # Customer 1's list repeats style A; an empty list counts for neither figure.
+    assert makeup["distinct_styles_per_list"] == pytest.approx(2.0)
+    assert makeup["lists_repeating_a_style"] == pytest.approx(0.5)
+    without = evaluate.list_makeup(predictions, bought, None, [1, 2, 3])
+    assert without["already_bought_share"] == pytest.approx(1 / 5)
+    assert without["distinct_styles_per_list"] is None
+
+
+def test_every_strategy_reports_its_list_makeup(prepared_evaluation):
+    data_dir, _ = prepared_evaluation
+    for metrics in evaluate.evaluate(data_dir)["results"].values():
+        assert 0 <= metrics["list_makeup"]["already_bought_share"] <= 1
+
+
+def test_cli_warns_when_the_served_ranker_is_not_measured(prepared_evaluation, capsys):
+    data_dir, _ = prepared_evaluation
+    evaluate.main(["--data-dir", str(data_dir)])
+    assert "warning" not in capsys.readouterr().err
+    (data_dir / "ranker.json").write_text("{}")
+    evaluate.main(["--data-dir", str(data_dir)])
+    captured = capsys.readouterr()
+    assert "ranker.json exists but --ranker was not given" in captured.err
+    assert "learned" not in json.loads(captured.out)["results"]

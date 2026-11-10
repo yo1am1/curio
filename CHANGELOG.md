@@ -21,8 +21,32 @@ All notable changes to Curio are recorded here. The format follows
 - Navigation: a page no longer fades out before the next one appears. During that fade the
   leaving page already showed the next route and was then replaced by a fresh copy, so a
   chat message typed in those 0.2 seconds was lost and Enter sent nothing.
+- Engine types: the nine mypy errors in `curio.engine` are fixed (generators that return a
+  reply are typed as such, `EngineSchemas.pending_action` is a `type[PendingAction]`, the
+  grounding status is a `Literal`).
 - Product connections: products that share a name (the same piece in other colours) carry
   their product number on the graph and in the relationships table.
+
+### Added
+
+- `check_toolkit` (`tests/agents/toolkit_contract.py`): the static part of the Toolkit
+  contract as one call for a new domain's tests. It names what is wrong when a tool has no
+  policy, accepts unknown fields, has no docstring or is registered under another name;
+  when `ASK` is used for anything but `AskShopper`; when `repair_instruction` lacks
+  `{issues}`; or when a per-turn hook fails on an empty turn. The fashion, cocktail, book
+  and example toolkits pass it.
+- `LLM_MAX_TOKENS` (default 4096): a cap on the output of one model call.
+- `scripts.evaluate` reports `list_makeup` per strategy (the share of slots the customer
+  already bought, distinct styles per list, lists repeating a style in another colour), and
+  warns when `data/ranker.json` exists but `--ranker` was not given, so the ranker the API
+  serves is not left unmeasured by accident.
+- CI type-checks `curio.engine` with mypy.
+
+### Security
+
+- Links in chat answers open only on the catalogs' own sites (TheCocktailDB, Goodreads,
+  Open Library, H&M) over https; a link to any other host, or one with a user name or a
+  port, is shown as plain text. Before, any https link was clickable.
 
 ### Changed
 

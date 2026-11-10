@@ -168,5 +168,5 @@ class Schemas:
 
     intent: Callable[..., Intent] = Intent
     context: Callable[[], TurnContext] = TurnContext
-    pending_action: Callable[..., PendingAction] = PendingAction
+    pending_action: type[PendingAction] = PendingAction
     reply: Callable[..., AssistantReply] = AssistantReply
