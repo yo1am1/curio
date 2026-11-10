@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Every Monday: a change upstream (a dependency's data, a download) is noticed without a
+  # push. The Release workflow acts on pushes only, so a scheduled run releases nothing.
+  schedule:
+    - cron: "47 4 * * 1"
 
 # A newer push to the same pull request cancels the older run; runs on main always finish.
 concurrency:

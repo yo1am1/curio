@@ -2,11 +2,20 @@ name: Docker image
 
 # Builds and smoke-tests the image on pull requests that can change it, so a Dockerfile,
 # dependency or base-image bump is proven before merge (the Release workflow only builds
-# after merge, on main).
+# after merge, on main). The `demo` job runs the README's one-command quick start from
+# nothing. Both also run every Monday, so a change upstream (a base image, a data source)
+# is noticed without a push.
 on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
   pull_request:
     paths:
       - Dockerfile
+      - docker-compose.yml
+      - scripts/prepare_cocktails.py
+      - scripts/prepare_books.py
+      - .github/scripts/smoke-demo.sh
       - .dockerignore
       - pyproject.toml
       - uv.lock
@@ -34,3 +43,17 @@ jobs:
         run: docker build -t curio:ci .
       - name: Smoke test
         run: .github/scripts/smoke-image.sh curio:ci
+
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Free disk space for the PyTorch layer
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - name: Quick start from nothing (docker compose --profile demo up --build)
+        run: .github/scripts/smoke-demo.sh

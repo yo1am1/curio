@@ -11,10 +11,11 @@ anything.**
 ![Python 3.13](https://img.shields.io/badge/python-3.13-3776ab)
 ![FastAPI · React](https://img.shields.io/badge/FastAPI-React-009688)
 
-[Why three domains](#why-three-domains) · [The engine](#the-engine) ·
-[Add a domain](#add-a-domain) · [Plan my evening](#plan-my-evening) ·
-[The domains](#the-domains) · [Quick start](#quick-start) ·
-[Data and licences](#data-and-licences) · [Changelog](CHANGELOG.md)
+[Quick start](#quick-start) · [Why three domains](#why-three-domains) ·
+[The engine](#the-engine) · [Add a domain](#add-a-domain) ·
+[Plan my evening](#plan-my-evening) · [The domains](#the-domains) ·
+[Data and licences](#data-and-licences) · [Contributing](CONTRIBUTING.md) ·
+[Changelog](CHANGELOG.md)
 
 </div>
 
@@ -25,8 +26,65 @@ a book and a drink paired with that book.
 
 ![A tour: Plan my evening for a date night, the agent's step trace and grounding check, a save narrowed in the approval drawer, a drink paired with The Great Gatsby, and dark mode](docs/screenshots/curio-overview.webp)
 
-Try it in one command, with no H&M download: `docker compose --profile demo up --build` serves
-cocktails, books and Plan my evening at http://localhost:8000 ([quick start](#quick-start)).
+**Who it is for.** Curio is a portfolio and community project, not a product or a hosted
+service. Read it as a reference for how to build an agent that cites its facts and asks
+before it changes anything, or clone it and [add your own dataset and domain](#add-a-domain).
+It has no login and is meant to run on your own computer. The extension contract is
+versioned ([docs/extending.md](docs/extending.md), version 1); the HTTP API and the web app
+may change between minor versions, and the [changelog](CHANGELOG.md) says when they do.
+
+## Quick start
+
+One command gives you Curio with cocktails, books and Plan my evening (without the outfit),
+and no 3.7 GB H&M download. With Docker:
+
+```bash
+git clone https://github.com/yo1am1/curio.git && cd curio
+docker compose --profile demo up --build
+```
+
+Or with [uv](https://docs.astral.sh/uv/) and no Docker, in the same clone:
+
+```bash
+scripts/quickstart.sh
+```
+
+Then open http://localhost:8000. CI runs the Docker command from nothing on every change to
+it and every Monday, and checks a recipe search, a book search and a planned evening.
+
+Both prepare the cocktail recipes (a checksum-verified ~260 KB download) and goodbooks-10k
+(~150 MB, under a minute) on the first run. For cocktails only, skip the books with
+`DEMO_BOOKS=0` (Docker) or `CURIO_BOOKS=0` (uv). Either way one server runs the API and the
+web app: open http://localhost:8000. `scripts/quickstart.sh` builds the web app first when
+npm (Node 22 or newer) is installed. Both quick starts serve this computer only (Docker publishes
+port 8000 on 127.0.0.1); `CURIO_HOST=0.0.0.0` opens them to your network, and add the name
+or address others will use to `ALLOWED_HOSTS` (other names get 400).
+[SECURITY.md](SECURITY.md) says what that exposes.
+
+Search and recommendations work without an LLM. Chat needs one: copy `.env.example` to
+`.env` and set `LLM_MODEL` (plus `LLM_API_KEY` / `LLM_BASE_URL`). The Docker demo can also
+run a local model with Ollama ([details](docs/technical-guide.md#quick-start)).
+
+Every release is also a container image. It holds the code and the web app but no data, so
+give it a prepared `data` folder. `scripts/quickstart.sh` makes one for cocktails and
+books (the Docker quick start keeps its data in a volume instead):
+
+```bash
+docker run --rm -p 127.0.0.1:8000:8000 -v "$PWD/data:/app/data:ro" ghcr.io/yo1am1/curio:latest
+```
+
+Fashion is opt-in because its data is large: [prepare the H&M data and image
+index](docs/technical-guide.md#fashion-data), then run the full stack:
+
+```bash
+uv sync --all-extras
+cp .env.example .env
+(cd web && npm ci && npm run build)               # the web app, served by the API
+uv run uvicorn curio.app.api:create_app --factory # http://localhost:8000
+```
+
+With Docker, `docker compose --profile fashion up --build` starts it. Every domain is
+optional: the API serves whichever domains are prepared.
 
 ## Why three domains
 
@@ -224,53 +282,6 @@ from what that book's readers also loved, and each result says how many did. The
 remembers genres and authors you avoid. Ratings are Goodreads averages; genres and moods
 come from readers' shelves.
 
-## Quick start
-
-One command gives you Curio with cocktails, books and Plan my evening (without the outfit),
-and no 3.7 GB H&M download. With Docker:
-
-```bash
-docker compose --profile demo up --build
-```
-
-Or with [uv](https://docs.astral.sh/uv/) and no Docker:
-
-```bash
-scripts/quickstart.sh
-```
-
-Both prepare the cocktail recipes (a checksum-verified ~260 KB download) and goodbooks-10k
-(~150 MB, under a minute) on the first run. For cocktails only, skip the books with
-`DEMO_BOOKS=0` (Docker) or `CURIO_BOOKS=0` (uv). Either way one server runs the API and the
-web app: open http://localhost:8000. `scripts/quickstart.sh` builds the web app first when
-npm (Node 22 or newer) is installed. Both quick starts serve this computer only (Docker publishes
-port 8000 on 127.0.0.1); `CURIO_HOST=0.0.0.0` opens them to your network, and add the name
-or address others will use to `ALLOWED_HOSTS` (other names get 400).
-[SECURITY.md](SECURITY.md) says what that exposes.
-
-Search and recommendations work without an LLM. Chat needs one: copy `.env.example` to
-`.env` and set `LLM_MODEL` (plus `LLM_API_KEY` / `LLM_BASE_URL`). The Docker demo can also
-run a local model with Ollama ([details](docs/technical-guide.md#quick-start)).
-
-Every release is also a container image:
-
-```bash
-docker pull ghcr.io/yo1am1/curio:latest
-```
-
-Fashion is opt-in because its data is large: [prepare the H&M data and image
-index](docs/technical-guide.md#fashion-data), then run the full stack:
-
-```bash
-uv sync --all-extras
-cp .env.example .env
-(cd web && npm ci && npm run build)               # the web app, served by the API
-uv run uvicorn curio.app.api:create_app --factory # http://localhost:8000
-```
-
-With Docker, `docker compose --profile fashion up --build` starts it. Every domain is
-optional: the API serves whichever domains are prepared.
-
 ## Under the hood
 
 Fashion uses CLIP search in Qdrant, co-purchase and graph recommenders, collaborative
@@ -281,8 +292,8 @@ goodbooks-10k are downloaded from a pinned commit and checked by SHA-256; the H&
 the ones you download from Kaggle (or the Hugging Face mirror at a pinned revision, not
 checksum-checked), and product photos come from that pinned mirror.
 
-Tests: 2,169 offline Python tests (with the data prepared here, 2,166 pass and 3 skip that need
-a local Shopify taxonomy cache or the H&M articles as Parquet), 79 Vitest tests of the web app, and 85 end-to-end tests that run the
+Tests: 2,185 offline Python tests (with the data prepared here, 2,182 pass and 3 skip that need
+a local Shopify taxonomy cache or the H&M articles as Parquet), 85 Vitest tests of the web app, and 85 end-to-end tests that run the
 real API and the React app in Chromium on the real data with a scripted LLM (CI runs the 39
 that need no H&M data). An [agent evaluation](docs/agent-eval.md)
 measures a real model instead: 61 tasks over the three domains and Evening, which composes them, scored on tool choice,
@@ -303,12 +314,13 @@ so one process (or one container) is the whole app
 
 ## How it's built and released
 
-On every pull request and every push to `main`, CI runs lint, format, the offline tests,
-the web app's checks and build, and the browser suite in Chromium on the cocktails and
+On every pull request and every push to `main`, and every Monday, CI runs lint, format, a
+type check of the engine, the offline tests, the web app's checks and build, and the browser suite in Chromium on the cocktails and
 books (the tests that need the H&M data run locally). When CI passes on `main` with a new
 version, the container image is built, smoke-tested and pushed, and then the tag and the
 GitHub release are published.
-[How it was built](docs/how-it-was-built.md) · [Security policy](SECURITY.md).
+[How it was built](docs/how-it-was-built.md) · [Contributing](CONTRIBUTING.md) ·
+[Security policy](SECURITY.md).
 
 ## Data and licences
 

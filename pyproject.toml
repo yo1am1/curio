@@ -1,6 +1,6 @@
 [project]
 name = "curio-recommendations"
-version = "3.1.0"
+version = "3.2.0"
 description = "Curio: an engine for trustworthy, tool-using recommendation agents, with three deliberately different reference domains (fashion, cocktails, books)."
 keywords = ["recommendations", "agent", "llm", "grounding", "human-in-the-loop", "fashion", "cocktails", "books", "clip", "qdrant", "fastapi", "react"]
 readme = "README.md"

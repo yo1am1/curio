@@ -6,6 +6,11 @@ All notable changes to Curio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-11-10
+
+A stabilisation release: fixes to what a visitor sees first, the engine's contract checked
+by tools, and a first-run path that CI exercises. No new product features.
+
 ### Fixed
 
 - Plan my evening: an occasion chip plans at once (it used to fill the field while the page
@@ -50,6 +55,13 @@ All notable changes to Curio are recorded here. The format follows
 
 ### Changed
 
+- CI and the "Docker image" workflow also run every Monday. The image workflow's new `demo`
+  job runs the README's `docker compose --profile demo up --build` from nothing and checks
+  the domains, a recipe search, a book search and a planned evening.
+- README: the quick start comes first, with the `git clone` and `docker run` commands and a
+  "who it is for" note. New [CONTRIBUTING.md](CONTRIBUTING.md). The November 2026 review
+  findings moved from agent-architecture.md to
+  [docs/research/review-findings-2026-11.md](docs/research/review-findings-2026-11.md).
 - The grounding badge says "5 facts from the catalog · 1 more checked against it" (was
   "· 1 checked", explained only in a tooltip).
 
@@ -891,7 +903,8 @@ product connections from co-purchases and Shopify categories, offline evaluation
 tool-using shopping assistant with a conversation home and floating panel. How it was
 built is summarised in [docs/how-it-was-built.md](docs/how-it-was-built.md).
 
-[Unreleased]: https://github.com/yo1am1/curio/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/yo1am1/curio/compare/v3.2.0...HEAD
+[3.2.0]: https://github.com/yo1am1/curio/compare/v3.1.0...v3.2.0
 [3.1.0]: https://github.com/yo1am1/curio/compare/v3.0.0...v3.1.0
 [3.0.0]: https://github.com/yo1am1/curio/compare/v2.1.1...v3.0.0
 [2.1.1]: https://github.com/yo1am1/curio/compare/v2.1.0...v2.1.1
