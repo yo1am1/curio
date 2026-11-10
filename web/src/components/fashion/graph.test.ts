@@ -22,6 +22,23 @@ function star(products: number, attributes: number): ProductGraph {
 }
 
 describe("graphView", () => {
+  it("tells apart products that share a name by their product number", () => {
+    const graph = star(2, 0);
+    for (const node of graph.nodes) node.label = "Mona";
+    const view = graphView(graph, 1);
+    expect(view.points.map((p) => [p.title, p.caption])).toEqual([
+      ["Mona", "no. 1"],
+      ["Mona", "no. 101"],
+      ["Mona", "no. 100"],
+    ]);
+    expect(view.links[0]).toMatchObject({
+      sourceLabel: "Mona (no. 1)",
+      targetLabel: "Mona (no. 101)",
+    });
+    // Unique names stay as they are.
+    expect(graphView(star(2, 0), 1).points.map((p) => p.caption)).toEqual([null, null, null]);
+  });
+
   it("puts the focus in the middle and its neighbors on a circle, products first", () => {
     const view = graphView(star(3, 2), 1);
     expect(view.focus).toMatchObject({ id: "product:1", x: 0, y: 0, focus: true });

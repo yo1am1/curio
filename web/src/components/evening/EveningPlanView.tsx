@@ -14,6 +14,7 @@ import { AnimatePresence, motion, type Variants } from "motion/react";
 import type { ReactNode } from "react";
 
 import { productImageUrl } from "../../api/client";
+import { useServed } from "../../api/queries";
 import type { EveningPlan } from "../../api/types";
 import {
   budgetLine,
@@ -71,11 +72,14 @@ function PartCard({
   part,
   icon,
   title,
+  heading: Heading,
   children,
 }: {
   part: Part;
   icon: ReactNode;
   title: string;
+  /** The card's heading level: h2 under the page's h1, h3 inside a chat answer. */
+  heading: "h2" | "h3";
   children: ReactNode;
 }) {
   return (
@@ -90,9 +94,9 @@ function PartCard({
         <span className={styles.cardIcon} aria-hidden="true">
           {icon}
         </span>
-        <h3 id={`evening-${part}-title`} className={styles.cardTitle}>
+        <Heading id={`evening-${part}-title`} className={styles.cardTitle}>
           {title}
-        </h3>
+        </Heading>
       </header>
       {children}
     </motion.article>
@@ -380,6 +384,10 @@ export function EveningPlanView({
   const note = !said.toLowerCase().includes("responsibl");
   const chat = actions.kind === "chat";
   const active = actions.kind === "page" || actions.active;
+  // No fashion catalog on this server: the plan never has an outfit, so no empty card.
+  const fashion = useServed().get("fashion")?.enabled ?? false;
+  const showOutfit = plan.outfit != null || fashion;
+  const heading = chat ? "h3" : "h2";
   return (
     <motion.div
       key={planKey}
@@ -403,14 +411,16 @@ export function EveningPlanView({
           </p>
         </motion.div>
       ) : null}
-      <div className={styles.parts}>
-        <PartCard part="outfit" icon={<Shirt size={17} />} title="Outfit">
-          <OutfitPart plan={plan} actions={actions} />
-        </PartCard>
-        <PartCard part="book" icon={<BookOpen size={17} />} title="Book">
+      <div className={`${styles.parts} ${showOutfit ? "" : styles.twoParts}`}>
+        {showOutfit ? (
+          <PartCard part="outfit" heading={heading} icon={<Shirt size={17} />} title="Outfit">
+            <OutfitPart plan={plan} actions={actions} />
+          </PartCard>
+        ) : null}
+        <PartCard part="book" heading={heading} icon={<BookOpen size={17} />} title="Book">
           <BookPart plan={plan} actions={actions} />
         </PartCard>
-        <PartCard part="drink" icon={<Wine size={17} />} title="Drink">
+        <PartCard part="drink" heading={heading} icon={<Wine size={17} />} title="Drink">
           <DrinkPart plan={plan} actions={actions} note={note} />
         </PartCard>
       </div>

@@ -30,7 +30,10 @@ export function EveningPage() {
   const stores = useStores();
   const plan = useStore(stores.plan, (p) => p);
   const toast = useToast();
-  const served = useServed().get("evening");
+  const domains = useServed();
+  const served = domains.get("evening");
+  // Without the fashion catalog the plan has no outfit, so its controls are not offered.
+  const outfits = domains.get("fashion")?.enabled ?? false;
   const [occasion, setOccasion] = useState("");
   const [useBudget, setUseBudget] = useState(false);
   const [budget, setBudget] = useState(100);
@@ -68,9 +71,9 @@ export function EveningPage() {
     },
   });
 
-  function submit(event?: { preventDefault: () => void }) {
+  function submit(event?: { preventDefault: () => void }, chosen?: string) {
     event?.preventDefault();
-    const text = occasion.trim();
+    const text = (chosen ?? occasion).trim();
     if (text.length < 2) {
       setError("Tell Curio the occasion first, e.g. “date night”.");
       return;
@@ -80,8 +83,8 @@ export function EveningPage() {
       occasion: text.slice(0, 200),
       ...eveningTastes(stores.session.get()),
     };
-    if (useBudget) body.budget = budget || 100;
-    if (audience) body.audience = audience;
+    if (outfits && useBudget) body.budget = budget || 100;
+    if (outfits && audience) body.audience = audience;
     if (alcoholFree) body.alcohol_free = true;
     planning.mutate(body);
   }
@@ -117,8 +120,9 @@ export function EveningPage() {
               size="sm"
               pressed={occasion === chip}
               onClick={() => {
+                // A chip is a whole request: it fills the field and plans at once.
                 setOccasion(chip);
-                setError(null);
+                submit(undefined, chip);
               }}
             >
               {chip}
@@ -142,45 +146,49 @@ export function EveningPage() {
           />
         </div>
         <div className={styles.controls}>
-          <div className={styles.budget}>
-            <Toggle checked={useBudget} onChange={setUseBudget}>
-              Outfit budget
-            </Toggle>
-            <label htmlFor={budgetId} className="visually-hidden">
-              Budget (€)
-            </label>
-            <div className={styles.money} data-disabled={useBudget ? undefined : "true"}>
-              <span aria-hidden="true">€</span>
-              <input
-                id={budgetId}
-                type="number"
-                inputMode="numeric"
-                min={10}
-                max={5000}
-                step={10}
-                value={budget}
-                disabled={!useBudget}
-                onChange={(event) => {
-                  setBudget(Math.min(5000, Math.max(0, Number(event.target.value))));
-                }}
-              />
-            </div>
-          </div>
-          <div className={styles.audience}>
-            <span className={styles.controlLabel} id={`${budgetId}-for`}>
-              Outfit for
-            </span>
-            <Segmented
-              label="Outfit for"
-              options={AUDIENCES}
-              value={audience}
-              allowNone
-              size="sm"
-              onChange={(value) => {
-                setAudience(audience === value ? null : value);
-              }}
-            />
-          </div>
+          {outfits ? (
+            <>
+              <div className={styles.budget}>
+                <Toggle checked={useBudget} onChange={setUseBudget}>
+                  Outfit budget
+                </Toggle>
+                <label htmlFor={budgetId} className="visually-hidden">
+                  Budget (€)
+                </label>
+                <div className={styles.money} data-disabled={useBudget ? undefined : "true"}>
+                  <span aria-hidden="true">€</span>
+                  <input
+                    id={budgetId}
+                    type="number"
+                    inputMode="numeric"
+                    min={10}
+                    max={5000}
+                    step={10}
+                    value={budget}
+                    disabled={!useBudget}
+                    onChange={(event) => {
+                      setBudget(Math.min(5000, Math.max(0, Number(event.target.value))));
+                    }}
+                  />
+                </div>
+              </div>
+              <div className={styles.audience}>
+                <span className={styles.controlLabel} id={`${budgetId}-for`}>
+                  Outfit for
+                </span>
+                <Segmented
+                  label="Outfit for"
+                  options={AUDIENCES}
+                  value={audience}
+                  allowNone
+                  size="sm"
+                  onChange={(value) => {
+                    setAudience(audience === value ? null : value);
+                  }}
+                />
+              </div>
+            </>
+          ) : null}
           <Toggle checked={alcoholFree} onChange={setAlcoholFree}>
             Alcohol-free
           </Toggle>
@@ -239,7 +247,11 @@ export function EveningPage() {
                 <span />
                 <span />
               </div>
-              <p>Pick an occasion above to see a plan.</p>
+              <p>
+                {planning.isPending
+                  ? "Planning your evening…"
+                  : "Pick an occasion above, or describe your own, to see a plan."}
+              </p>
             </motion.div>
           )}
         </AnimatePresence>

@@ -13,7 +13,7 @@ export type GroundingStatus = "verified" | "repaired" | "fallback";
 export type Badge = { label: string; tone: Tone };
 /**
  * A verified badge says what the server rendered from where ("5 facts from the catalog · 1
- * checked"), or, without rendered facts, what was checked ("Checked 3 prices and 2 names
+ * more checked against it"), or, without rendered facts, what was checked ("Checked 3 prices and 2 names
  * against the catalog").
  */
 export type CheckedBadge = { against: string; tone: Tone };
@@ -43,7 +43,8 @@ export interface DomainView {
   copy: DomainCopy;
   badges: { verified: CheckedBadge; repaired: Badge; fallback: Badge };
   approvalTools: Partial<Record<PolicySetting, ApprovalTool>>;
-  credit: (health: Health | undefined) => string;
+  /** `fashion`: whether the fashion catalog is served (the evening credits it only then). */
+  credit: (health: Health | undefined, fashion: boolean) => string;
 }
 
 export const LLM_HINT =
@@ -53,9 +54,13 @@ export const BOOK_SOURCE = "Book data: goodbooks-10k from Goodreads (CC BY-SA 4.
 export const BOOK_RATINGS = "Ratings are Goodreads averages, not Curio's.";
 export const COVER_CREDIT = "Some covers: Open Library";
 export const BOOK_CREDIT = `${BOOK_SOURCE} · ${BOOK_RATINGS}`;
-export const EVENING_CREDIT =
-  "Outfits: H&M research catalog · Books: goodbooks-10k (Goodreads ratings) · " +
-  "Drinks: TheCocktailDB · Please drink responsibly.";
+const EVENING_SOURCES =
+  "Books: goodbooks-10k (Goodreads ratings) · Drinks: TheCocktailDB · Please drink responsibly.";
+export const EVENING_CREDIT = `Outfits: H&M research catalog · ${EVENING_SOURCES}`;
+/** The evening's sources; H&M is credited only when the fashion catalog is served. */
+export function eveningCredit(fashion: boolean): string {
+  return fashion ? EVENING_CREDIT : EVENING_SOURCES;
+}
 export const FASHION_NOTE =
   "H&M research catalog, 2020. Prices are approximate; current stock is unknown.";
 export const QUICK_START = "uv run python -m scripts.prepare_cocktails";
@@ -219,7 +224,7 @@ export const DOMAINS: Record<Domain, DomainView> = {
       fallback: { label: "Unverified answer replaced with catalog facts", tone: "red" },
     },
     approvalTools: { ask_shortlist: "SaveEvening" },
-    credit: () => EVENING_CREDIT,
+    credit: (_health, fashion) => eveningCredit(fashion),
   },
 };
 
@@ -275,6 +280,16 @@ export function landingPath(domain: Domain): string {
 
 export function askPath(domain: Domain): string {
   return `/ask/${domain}`;
+}
+
+/** The name of the page at `pathname`, as a screen reader hears it after a navigation. */
+export function pageName(domain: Domain | null, pathname: string): string {
+  if (!domain) return "Curio";
+  const label = DOMAINS[domain].label;
+  if (pathname === askPath(domain)) return `${label}: Ask Curio`;
+  if (pathname === QUALITY_PATH) return `${label}: Model quality`;
+  const page = DOMAIN_PAGES[domain].find((p) => p.to === pathname);
+  return page ? `${label}: ${page.label}` : label;
 }
 
 /** Friendly names for the agent's steps. */

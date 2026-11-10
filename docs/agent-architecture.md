@@ -528,7 +528,7 @@ that the backstop covered and `counts` splits them by kind (`price`, `id`, `rati
 `title`, `name`, `author`, `amount`, `alcohol`, `pages`, `year`, `percent`, `colour`,
 `ingredient`, `claim`; `fact` for toolkits that do not split them). The trace's "Grounding
 check" step says both ("Rendered 2 names, 2 prices and 1 total from the catalog; checked 1
-price against the catalog"). The UI badge says "5 facts from the catalog · 1 checked", with
+price against the catalog"). The UI badge says "5 facts from the catalog · 1 more checked against it", with
 the kinds of each in its tooltip; a report without rendered facts keeps "Checked 3 prices
 and 2 names against the catalog" (three kinds at most, then "N other facts"). Nothing is
 shown for `not_applicable`. "Self-corrected to match the catalog" and "Unverified answer

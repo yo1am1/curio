@@ -11,7 +11,7 @@ const ICONS = { verified: ShieldCheck, repaired: Wand2, fallback: ShieldAlert } 
 /**
  * What grounding did with the answer. In cite mode the server renders catalog facts from the
  * model's fact references, and a backstop checks the values the model typed itself: "5 facts
- * from the catalog · 1 checked", with the kinds in the tooltip. A report without rendered
+ * from the catalog · 1 more checked against it", with the kinds in the tooltip. A report without rendered
  * facts (an older server, or nothing cited) says what was checked ("Checked 3 prices and 2
  * names against the catalog"). It also says when the answer was rewritten, or replaced with
  * catalog facts. Nothing when the answer stated nothing.
@@ -61,7 +61,9 @@ function describe(
     return {
       label:
         `${facts(rendered)} from ${against}` +
-        (grounding.checked > 0 ? ` · ${grounding.checked} checked` : ""),
+        (grounding.checked > 0
+          ? ` · ${grounding.checked} more checked against ${against.endsWith("s") ? "them" : "it"}`
+          : ""),
       title:
         `Rendered by the server from ${against}: ${fromCatalog}` +
         (checked ? `. Typed by the model and checked: ${checked}` : ""),

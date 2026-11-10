@@ -16,7 +16,8 @@
   --surface-raised: #ffffff;
   --ink: #252723;
   --ink-soft: #4a4c46;
-  --ink-muted: #6f706a;
+  /* 4.85:1 on --bg-sunk, 5.3:1 on --bg (WCAG AA for small text). */
+  --ink-muted: #676862;
   --line: #d8d5cd;
   --line-soft: #e7e4dd;
   --photo-bg: #ecebe8;
@@ -32,7 +33,7 @@
   /* Status tones (badges, step statuses) */
   --green: #1d7a46;
   --green-soft: #e3f2e8;
-  --orange: #a85a07;
+  --orange: #9a5206; /* 5.1:1 on --orange-soft */
   --orange-soft: #fbeedb;
   --red: #b3261e;
   --red-soft: #fbe5e3;
