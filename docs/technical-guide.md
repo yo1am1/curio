@@ -1092,13 +1092,20 @@ example `8100-8199`) limits the ports the servers use, and `E2E_REQUIRE_DATA=1` 
 cocktail or book files into an error instead of skipped tests. The default `uv run pytest`
 run excludes these tests.
 
-A second CI job, `web`, runs `npm ci`, lint (ESLint and Prettier), the type check, the
+The `checks` job also type-checks `curio.engine` with mypy (`uv run mypy`). A second CI job, `web`, runs `npm ci`, lint (ESLint and Prettier), the type check, the
 Vitest suite and the production build of `web/` on Node 26, the same as the Docker build. A third, `e2e-demo`, prepares
 the recipes and goodbooks-10k (its source files are cached per pinned commit with
 `actions/cache` and checked by SHA-256 on every use), runs the 15 golden pairing checks on
 that real data, builds the app, installs Chromium and runs `tests/e2e` with
 `E2E_REQUIRE_DATA=1`: the 39 tests that need no H&M data run, the 46 marked `fashion` skip.
 The fashion tests run locally on the prepared H&M data.
+
+The "Docker image" workflow builds and smoke-tests the image, and its `demo` job runs the
+README's quick start from nothing (`.github/scripts/smoke-demo.sh`): `docker compose
+--profile demo up --build` in a fresh volume, then the domains, a recipe search, a book
+search and a planned evening over HTTP. It reports the cold-start time in the job summary.
+Both workflows also run every Monday, so a change upstream is noticed without a push; a
+scheduled run releases nothing.
 
 CI (`.github/workflows/ci.yml`) runs `uv sync --locked`, Ruff, `scripts.prepare_cocktails`
 (so the probes on the real recipe catalog run instead of skipping), the offline test suite,

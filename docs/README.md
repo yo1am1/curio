@@ -43,3 +43,8 @@ A gain on one validation week does not mean a model was promoted to the app.
 - [Candidate provenance](research/fashion/recommendation-provenance.md)
 
 The JSON results and charts behind these notes sit beside them in `research/fashion/`.
+
+## Review records
+
+- [Review findings, November 2026](research/review-findings-2026-11.md): what the review
+  before the agent rewrite found in the recommender and the earlier assistant.
